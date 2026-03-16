@@ -1,5 +1,6 @@
 """Informational endpoints for the web UI."""
 import os
+import uuid
 import shutil
 import subprocess
 import tempfile
@@ -69,8 +70,8 @@ def compile_beacon(req: CompileRequest, _: User = Depends(require_auth)):
         if not os.path.exists(binary):
             raise HTTPException(status_code=500, detail="Binary not found after compilation")
 
-        # Copy to a path that survives tmpdir deletion during response streaming
-        out_path = os.path.join(tempfile.gettempdir(), f"xolo_beacon_{req.platform}{ext}")
+        # Copy to a unique path to avoid race conditions between concurrent compilations
+        out_path = os.path.join(tempfile.gettempdir(), f"xolo_beacon_{uuid.uuid4().hex}{ext}")
         shutil.copy2(binary, out_path)
 
         media = "application/octet-stream"

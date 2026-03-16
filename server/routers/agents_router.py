@@ -1,4 +1,5 @@
 import os
+import re
 import base64
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
@@ -214,11 +215,30 @@ def download_exfil(
         raise HTTPException(status_code=404, detail="Exfiltrated file not found")
 
     # Format: __b64file__:{filename}:{base64data}
-    _, filename, b64data = task.output.split(":", 2)
-    data = base64.b64decode(b64data)
+    parts = task.output.split(":", 2)
+    if len(parts) != 3:
+        raise HTTPException(status_code=500, detail="Malformed exfil record")
+
+    _, filename, b64data = parts
+
+    # Sanitize filename — strip path separators and control characters
+    filename = os.path.basename(filename).replace('"', '').replace("'", "")
+    filename = "".join(c for c in filename if c.isprintable() and c not in "/\\")
+    if not filename:
+        filename = "exfil"
+
+    # Limit size to 500 MB before allocating
+    MAX_EXFIL = 500 * 1024 * 1024
+    if len(b64data) > (MAX_EXFIL * 4 // 3):
+        raise HTTPException(status_code=413, detail="File exceeds 500 MB limit")
+
+    try:
+        data = base64.b64decode(b64data)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Invalid file data")
 
     return Response(
         content=data,
         media_type="application/octet-stream",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"},
     )

@@ -27,7 +27,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="XoloC2", docs_url=None, redoc_url=None, lifespan=lifespan)
+app = FastAPI(title="XoloC2", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
 
 _BASE = os.path.dirname(__file__)
 
@@ -41,6 +41,26 @@ app.include_router(info_router)
 app.include_router(settings_router)
 app.include_router(pty_router)
 app.include_router(tunnel_router)
+
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    # CSP: allow self + jsdelivr for xterm.js CDN
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' cdn.jsdelivr.net fonts.googleapis.com; "
+        "font-src 'self' fonts.gstatic.com cdn.jsdelivr.net; "
+        "img-src 'self' data:; "
+        "connect-src 'self' wss: ws:; "
+        "frame-ancestors 'none';"
+    )
+    return response
 
 
 @app.middleware("http")

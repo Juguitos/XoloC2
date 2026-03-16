@@ -2,6 +2,8 @@
 Beacon protocol endpoints — called by agents, NOT by the web UI.
 Authentication: shared secret in X-Agent-Secret header.
 """
+import os
+import uuid as _uuid_mod
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from fastapi.responses import FileResponse
@@ -60,6 +62,13 @@ async def checkin(
         req = CheckinRequest(**_decrypt_body(await request.body()))
     except Exception:
         raise HTTPException(status_code=422, detail="Invalid checkin body")
+
+    # Validate agent_id is a proper UUID to prevent log injection / DB abuse
+    try:
+        _uuid_mod.UUID(req.agent_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="agent_id must be a valid UUID")
+
     agent = db.query(Agent).filter(Agent.id == req.agent_id).first()
 
     is_new = agent is None
@@ -160,10 +169,24 @@ def fetch_staged_file(
         raise HTTPException(status_code=404, detail="Staged file not found")
 
     # command format: __upload__:{filename}:{dest_path}
-    _, filename, _ = task.command.split(":", 2)
-    file_path = UPLOADS_DIR / agent_id / task_id / filename
+    parts = task.command.split(":", 2)
+    if len(parts) != 3:
+        raise HTTPException(status_code=404, detail="Staged file not found")
 
-    if not file_path.exists():
+    _, filename, _ = parts
+
+    # Sanitize filename and verify path stays within UPLOADS_DIR
+    filename = os.path.basename(filename)
+    if not filename:
+        raise HTTPException(status_code=404, detail="Invalid filename")
+
+    file_path = (UPLOADS_DIR / agent_id / task_id / filename).resolve()
+    uploads_root = UPLOADS_DIR.resolve()
+
+    if not str(file_path).startswith(str(uploads_root)):
+        raise HTTPException(status_code=403, detail="Path traversal detected")
+
+    if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="File missing from staging area")
 
     return FileResponse(path=str(file_path), filename=filename)
