@@ -8,6 +8,53 @@
 
 ---
 
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center"><b>Login</b></td>
+    <td align="center"><b>Sessions</b></td>
+  </tr>
+  <tr>
+    <td><img src="img/1.png" width="480"/></td>
+    <td><img src="img/2.png" width="480"/></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Generate Beacon</b></td>
+    <td align="center"><b>Beacon Code Output</b></td>
+  </tr>
+  <tr>
+    <td><img src="img/3.png" width="480"/></td>
+    <td><img src="img/4.png" width="480"/></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Session Shell + SOCKS5 Tunnel</b></td>
+    <td align="center"><b>Command Execution</b></td>
+  </tr>
+  <tr>
+    <td><img src="img/6.png" width="480"/></td>
+    <td><img src="img/7.png" width="480"/></td>
+  </tr>
+  <tr>
+    <td align="center"><b>PTY Interactive Shell (sudo su → root)</b></td>
+    <td align="center"><b>Screenshot Exfil (Windows agent)</b></td>
+  </tr>
+  <tr>
+    <td><img src="img/8.png" width="480"/></td>
+    <td><img src="img/9.png" width="480"/></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Redirector Config Generator</b></td>
+    <td align="center"><b>Settings (Password + IP Whitelist)</b></td>
+  </tr>
+  <tr>
+    <td><img src="img/5.png" width="480"/></td>
+    <td><img src="img/11.png" width="480"/></td>
+  </tr>
+</table>
+
+---
+
 <a name="english"></a>
 # 🇬🇧 English
 
