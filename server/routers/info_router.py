@@ -50,7 +50,7 @@ def compile_beacon(req: CompileRequest, _: User = Depends(require_auth)):
         ]
 
         if req.platform == "windows":
-            cmd += ["--target-arch", "x86_64"]
+            cmd += ["--noconsole", "--target-arch", "x86_64"]
             # Wine-based cross-compilation: try wine python if available
             wine_python = shutil.which("wine")
             if not wine_python:

