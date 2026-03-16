@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="/static/css/style.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
   <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
 <body>
 <div class="layout">
@@ -1045,7 +1045,7 @@ async function renderSettingsView() {
             Escanea el código QR con tu autenticador y luego ingresa el código de 6 dígitos para confirmar.
           </p>
           <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px">
-            <canvas id="mfa-qr-canvas"></canvas>
+            <div id="mfa-qr-canvas" style="background:#fff;padding:6px;border-radius:4px;display:inline-block"></div>
             <div>
               <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Clave manual</div>
               <div id="mfa-secret-display" style="font-family:var(--font-mono);font-size:12px;color:var(--accent2);word-break:break-all;max-width:200px"></div>
@@ -1233,9 +1233,11 @@ async function mfaStartSetup() {
   document.getElementById('mfa-setup-error').style.display = 'none';
   document.getElementById('mfa-confirm-code').value = '';
 
-  // Render QR code using canvas (qrcode.js)
+  // Render QR code using qrcodejs
+  const qrDiv = document.getElementById('mfa-qr-canvas');
+  qrDiv.innerHTML = '';
   if (window.QRCode) {
-    QRCode.toCanvas(document.getElementById('mfa-qr-canvas'), uri, { width: 180, margin: 1 }, () => {});
+    new QRCode(qrDiv, { text: uri, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
   }
   document.getElementById('mfa-confirm-code').focus();
 }
