@@ -15,6 +15,7 @@ from routers.agents_router import router as agents_router
 from routers.beacon_router import router as beacon_router
 from routers.info_router import router as info_router
 from routers.settings_router import router as settings_router, load_whitelist
+from config import TRUST_PROXY
 from routers.pty_router import router as pty_router
 from routers.tunnel_router import router as tunnel_router
 from websocket_manager import manager as ws_manager
@@ -75,12 +76,17 @@ async def ip_whitelist_middleware(request: Request, call_next):
         return await call_next(request)
 
     allowed = {e["ip"] for e in wl.get("entries", [])}
-    client_ip = (
-        request.headers.get("X-Real-IP")
-        or request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
-        or (request.client.host if request.client else "")
-    )
-    if client_ip not in allowed:
+
+    # IP extraction strategy depends on deployment mode:
+    # - TRUST_PROXY=True  → behind nginx/Caddy: trust X-Real-IP (nginx sets it to $remote_addr)
+    # - TRUST_PROXY=False → uvicorn exposed directly: X-Real-IP is attacker-controlled,
+    #                        use client.host which is the real TCP peer and cannot be spoofed.
+    if TRUST_PROXY:
+        client_ip = request.headers.get("X-Real-IP") or (request.client.host if request.client else "")
+    else:
+        client_ip = request.client.host if request.client else ""
+
+    if not client_ip or client_ip not in allowed:
         return JSONResponse({"detail": "Access denied — IP not whitelisted"}, status_code=403)
 
     return await call_next(request)

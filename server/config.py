@@ -30,6 +30,11 @@ JWT_EXPIRE_MINUTES = 180  # 3 hours
 # Agent shared secret for beacon auth
 AGENT_SECRET = get("agent_secret") or os.urandom(16).hex()
 
+# Trust proxy headers (X-Real-IP) only when running behind nginx/Caddy.
+# When uvicorn is exposed directly, X-Real-IP is attacker-controlled → bypass risk.
+# Set env var XOLO_TRUST_PROXY=1 to enable (install.sh does this when a reverse proxy is used).
+TRUST_PROXY: bool = os.getenv("XOLO_TRUST_PROXY", "0") == "1"
+
 # Persist secrets if not already saved
 if not get("jwt_secret"):
     cfg = load_config()
