@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/static/css/style.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
   <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 </head>
 <body>
 <div class="layout">
@@ -1027,6 +1028,84 @@ async function renderSettingsView() {
         <button class="btn btn-sm" onclick="settingsChangePw()">Actualizar contraseña</button>
       </div>
 
+      <!-- MFA -->
+      <div class="info-card" style="margin:0">
+        <h3>Autenticación de dos factores (MFA)</h3>
+        <p style="font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.6">
+          Compatible con Google Authenticator y Microsoft Authenticator.
+        </p>
+        <div id="mfa-status-row" style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <span id="mfa-badge" style="font-size:12px">Cargando...</span>
+          <button id="mfa-toggle-btn" class="btn btn-sm" onclick="mfaToggle()" style="display:none"></button>
+        </div>
+
+        <!-- Setup flow (hidden until user clicks Activar) -->
+        <div id="mfa-setup-box" style="display:none">
+          <p style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.6">
+            Escanea el código QR con tu autenticador y luego ingresa el código de 6 dígitos para confirmar.
+          </p>
+          <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px">
+            <canvas id="mfa-qr-canvas"></canvas>
+            <div>
+              <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Clave manual</div>
+              <div id="mfa-secret-display" style="font-family:var(--font-mono);font-size:12px;color:var(--accent2);word-break:break-all;max-width:200px"></div>
+            </div>
+          </div>
+          <div class="error-msg" id="mfa-setup-error"></div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="text" id="mfa-confirm-code" inputmode="numeric" maxlength="6"
+                   placeholder="000000"
+                   style="width:120px;font-family:var(--font-mono);font-size:18px;letter-spacing:4px;text-align:center"
+                   onkeydown="if(event.key==='Enter') mfaConfirm()">
+            <button class="btn btn-sm" onclick="mfaConfirm()">Confirmar y activar</button>
+            <button class="btn btn-sm btn-ghost" onclick="mfaCancelSetup()">Cancelar</button>
+          </div>
+        </div>
+
+        <!-- Disable flow -->
+        <div id="mfa-disable-box" style="display:none">
+          <p style="font-size:11px;color:var(--warning);margin-bottom:10px">
+            Ingresa tu código MFA actual para desactivarlo.
+          </p>
+          <div class="error-msg" id="mfa-disable-error"></div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="text" id="mfa-disable-code" inputmode="numeric" maxlength="6"
+                   placeholder="000000"
+                   style="width:120px;font-family:var(--font-mono);font-size:18px;letter-spacing:4px;text-align:center"
+                   onkeydown="if(event.key==='Enter') mfaDisableConfirm()">
+            <button class="btn btn-sm btn-danger" onclick="mfaDisableConfirm()">Desactivar MFA</button>
+            <button class="btn btn-sm btn-ghost" onclick="mfaCancelDisable()">Cancelar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Users -->
+      <div class="info-card" style="margin:0">
+        <h3>Gestión de usuarios</h3>
+        <table style="width:100%;margin-bottom:14px">
+          <thead>
+            <tr>
+              <th>Usuario</th>
+              <th style="width:80px;text-align:center">MFA</th>
+              <th style="width:40px"></th>
+            </tr>
+          </thead>
+          <tbody id="users-tbody"></tbody>
+        </table>
+        <div class="error-msg" id="users-error"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end">
+          <div class="form-group" style="margin:0">
+            <label>Usuario</label>
+            <input type="text" id="new-user-name" placeholder="operador1">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label>Contraseña (min 12)</label>
+            <input type="password" id="new-user-pass" placeholder="••••••••••••">
+          </div>
+          <button class="btn btn-sm btn-ghost" style="margin-bottom:1px" onclick="createUser()">+ Crear</button>
+        </div>
+      </div>
+
       <!-- IP Whitelist -->
       <div class="info-card" style="margin:0">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
@@ -1102,6 +1181,160 @@ async function renderSettingsView() {
   } else {
     document.getElementById('wl-myip-val').textContent = 'No disponible';
   }
+
+  // Load MFA status
+  loadMfaStatus();
+  // Load users
+  loadUsers();
+}
+
+// ── MFA ───────────────────────────────────────────────────────────────────────
+let _mfaSetupSecret = null;
+
+async function loadMfaStatus() {
+  const res = await apiFetch('/api/settings/mfa/status');
+  if (!res || !res.ok) return;
+  const { enabled } = await res.json();
+  const badge = document.getElementById('mfa-badge');
+  const btn   = document.getElementById('mfa-toggle-btn');
+  if (!badge || !btn) return;
+  if (enabled) {
+    badge.innerHTML = '<span style="color:var(--online)">● Activado</span>';
+    btn.textContent = 'Desactivar';
+    btn.className = 'btn btn-sm btn-danger';
+  } else {
+    badge.innerHTML = '<span style="color:var(--text3)">○ Desactivado</span>';
+    btn.textContent = 'Activar MFA';
+    btn.className = 'btn btn-sm';
+  }
+  btn.style.display = 'inline-block';
+  btn.dataset.enabled = enabled ? '1' : '0';
+}
+
+function mfaToggle() {
+  const btn = document.getElementById('mfa-toggle-btn');
+  if (btn.dataset.enabled === '1') {
+    document.getElementById('mfa-disable-box').style.display = 'block';
+    document.getElementById('mfa-setup-box').style.display = 'none';
+    document.getElementById('mfa-disable-code').focus();
+  } else {
+    mfaStartSetup();
+  }
+}
+
+async function mfaStartSetup() {
+  const res = await apiFetch('/api/settings/mfa/setup', { method: 'POST' });
+  if (!res || !res.ok) return;
+  const { secret, uri } = await res.json();
+  _mfaSetupSecret = secret;
+  document.getElementById('mfa-secret-display').textContent = secret;
+  document.getElementById('mfa-setup-box').style.display = 'block';
+  document.getElementById('mfa-disable-box').style.display = 'none';
+  document.getElementById('mfa-setup-error').style.display = 'none';
+  document.getElementById('mfa-confirm-code').value = '';
+
+  // Render QR code using canvas (qrcode.js)
+  if (window.QRCode) {
+    QRCode.toCanvas(document.getElementById('mfa-qr-canvas'), uri, { width: 180, margin: 1 }, () => {});
+  }
+  document.getElementById('mfa-confirm-code').focus();
+}
+
+async function mfaConfirm() {
+  const errEl = document.getElementById('mfa-setup-error');
+  errEl.style.display = 'none';
+  const code = document.getElementById('mfa-confirm-code').value.trim();
+  if (!code) { errEl.textContent = 'Ingresa el código.'; errEl.style.display = 'block'; return; }
+  const res = await apiFetch('/api/settings/mfa/enable', {
+    method: 'POST',
+    body: JSON.stringify({ secret: _mfaSetupSecret, code }),
+  });
+  if (!res || !res.ok) {
+    const d = await res.json().catch(() => ({}));
+    errEl.textContent = d.detail || 'Código incorrecto.';
+    errEl.style.display = 'block';
+    document.getElementById('mfa-confirm-code').value = '';
+    return;
+  }
+  document.getElementById('mfa-setup-box').style.display = 'none';
+  _mfaSetupSecret = null;
+  loadMfaStatus();
+}
+
+function mfaCancelSetup() {
+  document.getElementById('mfa-setup-box').style.display = 'none';
+  _mfaSetupSecret = null;
+}
+
+async function mfaDisableConfirm() {
+  const errEl = document.getElementById('mfa-disable-error');
+  errEl.style.display = 'none';
+  const code = document.getElementById('mfa-disable-code').value.trim();
+  if (!code) { errEl.textContent = 'Ingresa el código.'; errEl.style.display = 'block'; return; }
+  const res = await apiFetch('/api/settings/mfa', {
+    method: 'DELETE',
+    body: JSON.stringify({ code }),
+  });
+  if (!res || !res.ok) {
+    const d = await res.json().catch(() => ({}));
+    errEl.textContent = d.detail || 'Código incorrecto.';
+    errEl.style.display = 'block';
+    document.getElementById('mfa-disable-code').value = '';
+    return;
+  }
+  document.getElementById('mfa-disable-box').style.display = 'none';
+  loadMfaStatus();
+}
+
+function mfaCancelDisable() {
+  document.getElementById('mfa-disable-box').style.display = 'none';
+  document.getElementById('mfa-disable-code').value = '';
+}
+
+// ── Users ─────────────────────────────────────────────────────────────────────
+async function loadUsers() {
+  const res = await apiFetch('/api/settings/users');
+  if (!res || !res.ok) return;
+  const users = await res.json();
+  const tbody = document.getElementById('users-tbody');
+  if (!tbody) return;
+  const me = localStorage.getItem('xolo_user') || '';
+  tbody.innerHTML = users.length === 0
+    ? `<tr><td colspan="3" style="color:var(--text3);font-size:12px;text-align:center;padding:14px">Sin usuarios</td></tr>`
+    : users.map(u => `
+      <tr>
+        <td style="font-size:12px;font-family:var(--font-mono)">${escapeHtml(u.username)}${u.username===me?' <span style="color:var(--text3);font-size:10px">(tú)</span>':''}</td>
+        <td style="text-align:center;font-size:12px">${u.totp_enabled ? '<span style="color:var(--online)">●</span>' : '<span style="color:var(--text3)">○</span>'}</td>
+        <td style="text-align:right">${u.username !== me
+          ? `<button class="btn btn-sm btn-danger" style="padding:3px 8px;font-size:11px" onclick="deleteUser('${escapeHtml(u.username)}')">✕</button>`
+          : ''}</td>
+      </tr>`).join('');
+}
+
+async function createUser() {
+  const errEl = document.getElementById('users-error');
+  errEl.style.display = 'none';
+  const username = document.getElementById('new-user-name').value.trim();
+  const password = document.getElementById('new-user-pass').value;
+  if (!username || !password) { errEl.textContent = 'Completa usuario y contraseña.'; errEl.style.display = 'block'; return; }
+  const res = await apiFetch('/api/settings/users', {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
+  });
+  if (!res || !res.ok) {
+    const d = await res.json().catch(() => ({}));
+    errEl.textContent = d.detail || 'Error al crear usuario.';
+    errEl.style.display = 'block'; return;
+  }
+  document.getElementById('new-user-name').value = '';
+  document.getElementById('new-user-pass').value = '';
+  loadUsers();
+}
+
+async function deleteUser(username) {
+  if (!confirm(`¿Eliminar al usuario "${username}"?`)) return;
+  const res = await apiFetch(`/api/settings/users/${encodeURIComponent(username)}`, { method: 'DELETE' });
+  if (res && res.ok) loadUsers();
 }
 
 function useMyIp() {

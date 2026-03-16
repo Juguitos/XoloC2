@@ -21,6 +21,8 @@ class User(Base):
     username = Column(String, unique=True, nullable=False)
     password_hash = Column(String, nullable=False)
     must_change_password = Column(Boolean, default=True)
+    totp_secret = Column(String, nullable=True, default=None)
+    totp_enabled = Column(Boolean, default=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
@@ -70,6 +72,8 @@ def init_db():
         for stmt in [
             "ALTER TABLE agents ADD COLUMN cwd TEXT DEFAULT ''",
             "ALTER TABLE agents ADD COLUMN tags TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN totp_secret TEXT DEFAULT NULL",
+            "ALTER TABLE users ADD COLUMN totp_enabled INTEGER DEFAULT 0",
         ]:
             try:
                 conn.execute(text(stmt))

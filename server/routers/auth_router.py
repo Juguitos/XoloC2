@@ -2,11 +2,13 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
+from typing import Optional
 from database import get_db, User
 from auth import hash_password, verify_password, create_token, require_auth
 import config
 import time
 import threading
+import pyotp
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -49,6 +51,7 @@ def _clear_failures(ip: str):
 class LoginRequest(BaseModel):
     username: str
     password: str
+    totp_code: Optional[str] = None
 
 
 class ChangePasswordRequest(BaseModel):
@@ -70,6 +73,23 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
     if not user or not verify_password(req.password, user.password_hash):
         _record_failure(ip)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    # ── MFA check ────────────────────────────────────────────────────────────
+    # If MFA is enabled, TOTP code is mandatory — no bypass possible.
+    # We intentionally don't reveal whether MFA is active until after the
+    # password is verified, to avoid user enumeration via MFA status.
+    if user.totp_enabled:
+        if not req.totp_code:
+            # Password was correct but MFA code not provided yet.
+            # Return a sentinel that tells the frontend to ask for the code.
+            # We do NOT issue a token here.
+            return {"mfa_required": True}
+
+        totp = pyotp.TOTP(user.totp_secret)
+        # valid_window=1 allows ±30s clock skew
+        if not totp.verify(req.totp_code.strip(), valid_window=1):
+            _record_failure(ip)
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid MFA code")
 
     _clear_failures(ip)
 
