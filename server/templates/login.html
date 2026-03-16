@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>XoloC2 — Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="/static/xolo.png">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div class="login-page">
+
+  <!-- Left: branding -->
+  <div class="login-left">
+    <img src="/static/xolo.png" alt="XoloC2" class="login-logo-img">
+    <div class="login-brand-name">XoloC2</div>
+    <div class="login-brand-tag">Command &amp; Control Framework</div>
+  </div>
+
+  <!-- Right: form -->
+  <div class="login-right">
+    <div class="login-box">
+
+      <!-- Change password panel -->
+      <div id="change-pw-panel" style="display:none">
+        <h2 class="login-form-title">Set New Password</h2>
+        <p style="color:var(--warning);font-size:11px;margin-bottom:20px;line-height:1.6;">
+          ⚠ First login — you must set a new password before continuing.
+        </p>
+        <div class="error-msg" id="cp-error"></div>
+        <div class="form-group">
+          <label>Current Password</label>
+          <input type="password" id="cp-current" autocomplete="current-password">
+        </div>
+        <div class="form-group">
+          <label>New Password (min 12 chars)</label>
+          <input type="password" id="cp-new" autocomplete="new-password">
+        </div>
+        <div class="form-group">
+          <label>Confirm New Password</label>
+          <input type="password" id="cp-confirm" autocomplete="new-password"
+                 onkeydown="if(event.key==='Enter') doChangePassword()">
+        </div>
+        <button class="btn btn-full" onclick="doChangePassword()">Set New Password</button>
+      </div>
+
+      <!-- Login panel -->
+      <div id="login-panel">
+        <h2 class="login-form-title">Login</h2>
+        <div class="error-msg" id="login-error"></div>
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" id="username" autocomplete="username" value="admin">
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="password" autocomplete="current-password"
+                 onkeydown="if(event.key==='Enter') doLogin()">
+        </div>
+        <button class="btn btn-full" onclick="doLogin()">Login</button>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+let _token = null;
+
+function showError(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+function hideError(id) { document.getElementById(id).style.display = 'none'; }
+
+async function doLogin() {
+  hideError('login-error');
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
+  if (!username || !password) { showError('login-error', 'Fill in all fields.'); return; }
+
+  const res = await fetch('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  const data = await res.json();
+  if (!res.ok) { showError('login-error', data.detail || 'Login failed.'); return; }
+
+  localStorage.setItem('xolo_token', data.access_token);
+  localStorage.setItem('xolo_user', username);
+  if (data.expires_at) localStorage.setItem('xolo_exp', data.expires_at);
+
+  if (data.must_change_password) {
+    _token = data.access_token;
+    document.getElementById('cp-current').value = password;
+    document.getElementById('login-panel').style.display = 'none';
+    document.getElementById('change-pw-panel').style.display = 'block';
+  } else {
+    window.location.href = '/dashboard';
+  }
+}
+
+async function doChangePassword() {
+  hideError('cp-error');
+  const current = document.getElementById('cp-current').value;
+  const newPw   = document.getElementById('cp-new').value;
+  const confirm = document.getElementById('cp-confirm').value;
+
+  if (newPw.length < 12) { showError('cp-error', 'Password must be at least 12 characters.'); return; }
+  if (newPw !== confirm)  { showError('cp-error', 'Passwords do not match.'); return; }
+
+  const res = await fetch('/api/auth/change-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _token },
+    body: JSON.stringify({ current_password: current, new_password: newPw }),
+  });
+  const data = await res.json();
+  if (!res.ok) { showError('cp-error', data.detail || 'Error changing password.'); return; }
+  window.location.href = '/dashboard';
+}
+
+// Redirect if already logged in
+(function() {
+  const token = localStorage.getItem('xolo_token');
+  if (token) {
+    fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + token } })
+      .then(r => { if (r.ok) window.location.href = '/dashboard'; })
+      .catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>

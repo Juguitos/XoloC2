@@ -1,0 +1,11 @@
+.venv/
+server/certs/
+server/xolo.db
+server/uploads/
+server/allowed_ips.json
+__pycache__/
+*.pyc
+*.pyo
+.beacon_id
+.beacon_cwd
+start.sh

