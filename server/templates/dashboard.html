@@ -713,7 +713,7 @@ async function exportTasks(agentId, format) {
     mime = 'application/json';
   } else {
     content = tasks.map(t => [
-      `[${t.created_at || ''}] CMD: ${t.command}`,
+      `[${fmtDate(t.created_at)}] CMD: ${t.command}`,
       `STATUS: ${t.status}`,
       t.output && !t.output.startsWith('__b64file__') ? `OUTPUT:\n${t.output}` : '(binary file)',
       '─'.repeat(60),
@@ -3549,7 +3549,7 @@ async function loadAuditLog() {
     </thead>
     <tbody>
       ${logs.map(l => {
-        const ts = l.timestamp ? new Date(l.timestamp).toLocaleString() : '—';
+        const ts = fmtDate(l.timestamp);
         const color = _ACTION_COLORS[l.action] || 'var(--text2)';
         return `<tr>
           <td style="color:var(--text3);font-family:var(--font-mono)">${escapeHtml(ts)}</td>
@@ -3570,6 +3570,18 @@ async function clearAuditLog() {
 }
 
 // ── Helpers ──────────────────────────────────────────────
+function fmtDate(iso) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleString('es-MX', {
+      timeZone: 'America/Mexico_City',
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false,
+    }).replace(',', '');
+  } catch (e) { return iso; }
+}
+
 function escapeHtml(str) {
   if (str == null) return '';
   return String(str)
