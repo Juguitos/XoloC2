@@ -282,6 +282,7 @@ const LANG = {
 };
 
 let _lang = localStorage.getItem('xolo_lang') || 'en';
+let _tz   = localStorage.getItem('xolo_tz')   || 'America/Mexico_City';
 
 function t(key) {
   return (LANG[_lang] && LANG[_lang][key]) || (LANG.en && LANG.en[key]) || key;
@@ -1521,6 +1522,52 @@ async function renderSettingsView() {
         <div class="st-panel" id="stpanel-account">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:860px;margin:0 auto">
 
+            <!-- Timezone -->
+            <div class="info-card" style="margin:0;grid-column:1/-1">
+              <h3>🌍 ${_lang==='es'?'Zona horaria':'Timezone'}</h3>
+              <p style="font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.6">
+                ${_lang==='es'?'Zona horaria para mostrar fechas y logs en la interfaz. No afecta al servidor.':'Timezone used to display dates and logs. Does not affect the server.'}
+              </p>
+              <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                <select id="tz-select" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:12px;padding:8px 12px;outline:none;min-width:280px">
+                  <optgroup label="── México ──">
+                    <option value="America/Mexico_City">México — CDMX / Centro (UTC−6)</option>
+                    <option value="America/Monterrey">México — Monterrey (UTC−6)</option>
+                    <option value="America/Chihuahua">México — Chihuahua (UTC−7)</option>
+                    <option value="America/Tijuana">México — Tijuana / Noroeste (UTC−8)</option>
+                  </optgroup>
+                  <optgroup label="── Estados Unidos ──">
+                    <option value="America/New_York">EE.UU. — Este / New York (UTC−5)</option>
+                    <option value="America/Chicago">EE.UU. — Centro / Chicago (UTC−6)</option>
+                    <option value="America/Denver">EE.UU. — Montaña / Denver (UTC−7)</option>
+                    <option value="America/Los_Angeles">EE.UU. — Pacífico / Los Angeles (UTC−8)</option>
+                  </optgroup>
+                  <optgroup label="── Centroamérica ──">
+                    <option value="America/Guatemala">Guatemala / El Salvador (UTC−6)</option>
+                    <option value="America/Costa_Rica">Costa Rica (UTC−6)</option>
+                    <option value="America/Panama">Panamá (UTC−5)</option>
+                  </optgroup>
+                  <optgroup label="── Sudamérica ──">
+                    <option value="America/Bogota">Colombia / Perú / Ecuador (UTC−5)</option>
+                    <option value="America/Caracas">Venezuela (UTC−4)</option>
+                    <option value="America/Santiago">Chile (UTC−3/−4)</option>
+                    <option value="America/Sao_Paulo">Brasil — São Paulo (UTC−3)</option>
+                    <option value="America/Argentina/Buenos_Aires">Argentina (UTC−3)</option>
+                  </optgroup>
+                  <optgroup label="── Europa ──">
+                    <option value="Europe/Madrid">España — Madrid (UTC+1/+2)</option>
+                    <option value="Europe/London">Reino Unido (UTC+0/+1)</option>
+                    <option value="Europe/Paris">Francia / Alemania (UTC+1/+2)</option>
+                  </optgroup>
+                  <optgroup label="── UTC ──">
+                    <option value="UTC">UTC (UTC+0)</option>
+                  </optgroup>
+                </select>
+                <button class="btn btn-sm" onclick="saveTz()">${_lang==='es'?'Guardar':'Save'}</button>
+                <span id="tz-status" style="font-size:12px;color:var(--text3)"></span>
+              </div>
+            </div>
+
             <!-- Change Password -->
             <div class="info-card" style="margin:0">
               <h3>🔑 ${t('st_changepw')}</h3>
@@ -1760,6 +1807,10 @@ async function renderSettingsView() {
     document.getElementById('wl-myip-val').textContent = t('no_available');
   }
 
+  // Init timezone selector
+  const tzSel = document.getElementById('tz-select');
+  if (tzSel) { tzSel.value = _tz; }
+
   // Load MFA status
   loadMfaStatus();
   // Load users
@@ -1985,6 +2036,15 @@ async function saveWhitelist() {
   statusEl.textContent = t('wl_saved');
   statusEl.style.color = 'var(--online)';
   setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
+}
+
+function saveTz() {
+  const sel = document.getElementById('tz-select');
+  if (!sel) return;
+  _tz = sel.value;
+  localStorage.setItem('xolo_tz', _tz);
+  const st = document.getElementById('tz-status');
+  if (st) { st.textContent = _lang === 'es' ? '✓ Guardado' : '✓ Saved'; setTimeout(() => { st.textContent = ''; }, 2000); }
 }
 
 async function settingsChangePw() {
@@ -3573,8 +3633,10 @@ async function clearAuditLog() {
 function fmtDate(iso) {
   if (!iso) return '—';
   try {
-    return new Date(iso).toLocaleString('es-MX', {
-      timeZone: 'America/Mexico_City',
+    // SQLite stores naive datetimes (no timezone suffix) — force UTC interpretation
+    const utc = /Z$|[+-]\d{2}:\d{2}$/.test(iso) ? iso : iso + 'Z';
+    return new Date(utc).toLocaleString('es-MX', {
+      timeZone: _tz,
       day: '2-digit', month: '2-digit', year: 'numeric',
       hour: '2-digit', minute: '2-digit', second: '2-digit',
       hour12: false,
