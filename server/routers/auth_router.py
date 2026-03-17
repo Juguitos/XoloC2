@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session  # noqa: F401 (used via Depends)
 from pydantic import BaseModel
 from typing import Optional
 from database import get_db, User
@@ -9,6 +9,7 @@ import config
 import time
 import threading
 import pyotp
+from routers.audit_router import log_event
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -72,6 +73,7 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == req.username).first()
     if not user or not verify_password(req.password, user.password_hash):
         _record_failure(ip)
+        log_event(db, req.username, "LOGIN_FAIL", detail=f"Bad credentials", ip=ip)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     # ── MFA check ────────────────────────────────────────────────────────────
@@ -89,9 +91,11 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
         # valid_window=1 allows ±30s clock skew
         if not totp.verify(req.totp_code.strip(), valid_window=1):
             _record_failure(ip)
+            log_event(db, req.username, "LOGIN_FAIL", detail="Bad MFA code", ip=ip)
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid MFA code")
 
     _clear_failures(ip)
+    log_event(db, user.username, "LOGIN", ip=ip)
 
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=config.JWT_EXPIRE_MINUTES)
     token = create_token({"sub": user.username})
@@ -118,12 +122,15 @@ def change_password(
     user.password_hash = hash_password(req.new_password)
     user.must_change_password = False
     db.commit()
+    log_event(db, user.username, "PASSWORD_CHANGED")
     return {"message": "Password changed successfully"}
 
 
 @router.get("/me")
-def me(user: User = Depends(require_auth)):
+def me(current_user: User = Depends(require_auth), db: Session = Depends(get_db)):
+    row = db.query(User).filter(User.username == current_user.username).first()
     return {
-        "username": user.username,
-        "must_change_password": user.must_change_password,
+        "username": current_user.username,
+        "must_change_password": current_user.must_change_password,
+        "is_admin": bool(row and row.is_admin),
     }

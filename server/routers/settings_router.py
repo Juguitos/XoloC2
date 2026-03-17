@@ -7,6 +7,7 @@ import pyotp
 from sqlalchemy.orm import Session
 from database import get_db, User as DBUser
 from auth import require_auth, User, hash_password
+from routers.audit_router import log_event
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -145,6 +146,7 @@ def create_user(req: CreateUserRequest, current_user: User = Depends(require_aut
     user = DBUser(username=req.username, password_hash=hash_password(req.password), must_change_password=True)
     db.add(user)
     db.commit()
+    log_event(db, current_user.username, "USER_CREATED", detail=req.username)
     return {"message": "Usuario creado", "username": req.username}
 
 
@@ -155,6 +157,7 @@ def delete_user(username: str, current_user: User = Depends(require_auth), db: S
     user = db.query(DBUser).filter(DBUser.username == username).first()
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    log_event(db, current_user.username, "USER_DELETED", detail=username)
     db.delete(user)
     db.commit()
     return {"message": "Usuario eliminado"}

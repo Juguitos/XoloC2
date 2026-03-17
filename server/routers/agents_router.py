@@ -10,6 +10,7 @@ from typing import Optional
 from datetime import datetime, timezone
 from database import get_db, Agent, Task
 from auth import require_auth, User
+from routers.audit_router import log_event
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 
@@ -61,10 +62,12 @@ def get_agent(agent_id: str, db: Session = Depends(get_db), _: User = Depends(re
 
 
 @router.delete("/{agent_id}")
-def delete_agent(agent_id: str, db: Session = Depends(get_db), _: User = Depends(require_auth)):
+def delete_agent(agent_id: str, db: Session = Depends(get_db), current_user: User = Depends(require_auth)):
     agent = db.query(Agent).filter(Agent.id == agent_id).first()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
+    log_event(db, current_user.username, "AGENT_DELETED",
+              detail=f"{agent.hostname} ({agent.ip_internal})")
     db.query(Task).filter(Task.agent_id == agent_id).delete()
     db.delete(agent)
     db.commit()
@@ -108,7 +111,7 @@ def create_task(
     agent_id: str,
     req: TaskRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(require_auth),
+    current_user: User = Depends(require_auth),
 ):
     agent = db.query(Agent).filter(Agent.id == agent_id).first()
     if not agent:
@@ -118,6 +121,10 @@ def create_task(
     db.add(task)
     db.commit()
     db.refresh(task)
+    # Don't log internal protocol commands (__ls__, __upload__, __pty__, etc.)
+    if not req.command.startswith("__"):
+        log_event(db, current_user.username, "TASK_SENT",
+                  detail=f"[{agent.hostname}] {req.command[:200]}")
     return {"task_id": task.id, "command": task.command, "status": task.status}
 
 
@@ -166,7 +173,7 @@ async def upload_file(
     dest_path: str = Form(...),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    _: User = Depends(require_auth),
+    current_user: User = Depends(require_auth),
 ):
     agent = db.query(Agent).filter(Agent.id == agent_id).first()
     if not agent:
@@ -192,6 +199,8 @@ async def upload_file(
     task.command = f"__upload__:{safe_name}:{dest_path}"
     db.commit()
 
+    log_event(db, current_user.username, "FILE_UPLOAD",
+              detail=f"[{agent.hostname}] {safe_name} → {dest_path}")
     return {
         "task_id": task.id,
         "filename": safe_name,

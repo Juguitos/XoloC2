@@ -23,6 +23,7 @@ class User(Base):
     must_change_password = Column(Boolean, default=True)
     totp_secret = Column(String, nullable=True, default=None)
     totp_enabled = Column(Boolean, default=False)
+    is_admin = Column(Boolean, default=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
@@ -57,6 +58,17 @@ class Task(Base):
     completed_at = Column(DateTime, nullable=True)
 
 
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    actor = Column(String, nullable=False)   # username
+    action = Column(String, nullable=False)  # LOGIN, TASK_SENT, AGENT_DELETED, etc.
+    detail = Column(Text, default="")        # JSON extra context
+    ip = Column(String, default="")
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 def get_db():
     db = SessionLocal()
     try:
@@ -74,6 +86,9 @@ def init_db():
             "ALTER TABLE agents ADD COLUMN tags TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN totp_secret TEXT DEFAULT NULL",
             "ALTER TABLE users ADD COLUMN totp_enabled INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0",
+            # Grant admin to the first-created user named 'admin' on upgrade
+            "UPDATE users SET is_admin = 1 WHERE username = 'admin' AND is_admin = 0",
         ]:
             try:
                 conn.execute(text(stmt))

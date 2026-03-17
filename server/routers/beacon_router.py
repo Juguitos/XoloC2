@@ -15,6 +15,7 @@ from database import get_db, Agent, Task
 import config
 import json as _json_mod
 from websocket_manager import manager as ws_manager
+from routers.webhook_router import notify as wh_notify
 
 
 def _decrypt_body(raw: bytes) -> dict:
@@ -103,6 +104,13 @@ async def checkin(
         "hostname": req.hostname,
         "is_new": is_new,
     }))
+    if is_new:
+        asyncio.create_task(wh_notify("new_agent", {
+            "hostname": req.hostname,
+            "ip": req.ip_internal,
+            "os": req.os_info,
+            "user": req.username,
+        }))
 
     # Return next pending task (FIFO)
     task = (
