@@ -376,7 +376,13 @@ tr.clickable:hover td { background: var(--bg3); cursor: pointer; }
 .session-info {
   width: 260px;
   flex-shrink: 0;
+  overflow-y: auto;
+  min-height: 0;
 }
+
+.session-info::-webkit-scrollbar { width: 4px; }
+.session-info::-webkit-scrollbar-track { background: transparent; }
+.session-info::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
 .info-card {
   background: var(--bg2);
