@@ -1519,7 +1519,7 @@ async function renderSettingsView() {
 
         <!-- ── ACCOUNT ── -->
         <div class="st-panel" id="stpanel-account">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:860px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:860px;margin:0 auto">
 
             <!-- Change Password -->
             <div class="info-card" style="margin:0">
@@ -1584,7 +1584,7 @@ async function renderSettingsView() {
 
         <!-- ── USERS ── -->
         <div class="st-panel" id="stpanel-users" style="display:none">
-          <div style="max-width:560px">
+          <div style="max-width:560px;margin:0 auto">
             <div class="info-card" style="margin:0">
               <h3>👥 ${t('users_title')}</h3>
               <table style="width:100%;margin-bottom:14px">
@@ -1613,7 +1613,7 @@ async function renderSettingsView() {
 
         <!-- ── SECURITY ── -->
         <div class="st-panel" id="stpanel-security" style="display:none">
-          <div style="max-width:620px">
+          <div style="max-width:620px;margin:0 auto">
             <div class="info-card" style="margin:0">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
                 <h3 style="margin:0">🛡 ${t('wl_title')}</h3>
@@ -1662,7 +1662,7 @@ async function renderSettingsView() {
 
         <!-- ── NOTIFICATIONS ── -->
         <div class="st-panel" id="stpanel-notifications" style="display:none">
-          <div style="max-width:600px">
+          <div style="max-width:600px;margin:0 auto">
             <div class="info-card" style="margin:0">
               <h3>🔔 Webhook</h3>
               <p style="font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.6">
@@ -1713,7 +1713,7 @@ async function renderSettingsView() {
         ${_isAdmin ? `
         <!-- ── AUDIT ── -->
         <div class="st-panel" id="stpanel-audit" style="display:none">
-          <div class="info-card" style="margin:0">
+          <div class="info-card" style="margin:0 auto;max-width:900px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
               <h3 style="margin:0">🔍 ${_lang==='es'?'Registro de auditoría':'Audit Log'}</h3>
               <div style="display:flex;gap:8px;align-items:center">

@@ -70,6 +70,25 @@ body {
   text-transform: uppercase;
 }
 
+.login-credit {
+  font-size: 11px;
+  color: var(--text3);
+  letter-spacing: 1px;
+  margin-top: 32px;
+}
+
+.login-legal {
+  font-size: 10px;
+  color: #7f1d1d;
+  text-align: center;
+  line-height: 1.7;
+  max-width: 300px;
+  border: 1px solid #3a0000;
+  border-radius: 6px;
+  padding: 10px 16px;
+  background: rgba(127, 29, 29, 0.08);
+}
+
 /* Right form panel */
 .login-right {
   width: 420px;
