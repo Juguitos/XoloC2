@@ -982,22 +982,64 @@ async function quickSleep(agentId) {
 // ── File Browser ──────────────────────────────────────────
 let _fbAgentId = null;
 let _fbCurrentPath = null;
+let _fbHistory = [];
+let _fbHistoryIdx = -1;
+
+// Returns parent path or null if already at root. Handles both Windows and Unix.
+function fbGetParent(path) {
+  if (path.includes('\\')) {
+    // Windows path
+    const idx = path.lastIndexOf('\\');
+    if (idx <= 2) return null;           // at drive root: C:\ (backslash at index 2)
+    const parent = path.substring(0, idx);
+    return /^[A-Za-z]:$/.test(parent) ? parent + '\\' : parent;
+  } else {
+    if (path === '/') return null;
+    const idx = path.lastIndexOf('/');
+    if (idx === 0) return '/';
+    return path.substring(0, idx);
+  }
+}
+
+function _fbUpdateNavButtons() {
+  const backBtn = document.getElementById('fb-back');
+  const fwdBtn  = document.getElementById('fb-fwd');
+  if (backBtn) backBtn.disabled = _fbHistoryIdx <= 0;
+  if (fwdBtn)  fwdBtn.disabled  = _fbHistoryIdx >= _fbHistory.length - 1;
+}
+
+function fbBack() {
+  if (_fbHistoryIdx > 0) {
+    _fbHistoryIdx--;
+    fbNavigate(_fbHistory[_fbHistoryIdx], false);
+  }
+}
+
+function fbForward() {
+  if (_fbHistoryIdx < _fbHistory.length - 1) {
+    _fbHistoryIdx++;
+    fbNavigate(_fbHistory[_fbHistoryIdx], false);
+  }
+}
 
 async function openFileBrowser(agentId) {
   _fbAgentId = agentId;
-  // Get agent info to determine OS and cwd
+  _fbHistory = [];
+  _fbHistoryIdx = -1;
   const res = await apiFetch('/api/agents/' + agentId);
   const agent = res && res.ok ? await res.json() : {};
   const isWin = (agent.os_info || '').toLowerCase().includes('windows');
   _fbCurrentPath = agent.cwd || (isWin ? 'C:\\' : '/');
-  showFileBrowserPanel(agentId, isWin);
+  showFileBrowserPanel(agentId);
 }
 
-function showFileBrowserPanel(agentId, isWin) {
+function showFileBrowserPanel(agentId) {
   const content = document.getElementById('content');
   content.innerHTML = `
     <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px">
       <button class="btn btn-ghost btn-sm" onclick="showView('session','${escapeHtml(agentId)}')">${t('back')}</button>
+      <button class="btn btn-ghost btn-sm" id="fb-back" onclick="fbBack()" disabled title="${_lang==='es'?'Atrás':'Back'}">←</button>
+      <button class="btn btn-ghost btn-sm" id="fb-fwd"  onclick="fbForward()" disabled title="${_lang==='es'?'Adelante':'Forward'}">→</button>
       <span style="color:var(--text3);font-size:12px">📂 File Browser</span>
     </div>
     <div class="info-card" style="margin:0">
@@ -1008,7 +1050,7 @@ function showFileBrowserPanel(agentId, isWin) {
         <button class="btn btn-sm" onclick="fbNavigate(document.getElementById('fb-path-input').value)">
           ${_lang==='es'?'Ir':'Go'}
         </button>
-        <button class="btn btn-sm btn-ghost" onclick="openFileBrowser('${escapeHtml(agentId)}')">↻</button>
+        <button class="btn btn-sm btn-ghost" onclick="openFileBrowser('${escapeHtml(agentId)}')" title="${_lang==='es'?'Recargar':'Refresh'}">↻</button>
       </div>
       <div id="fb-content" style="min-height:200px">
         <div style="color:var(--text3);font-size:12px">${_lang==='es'?'Enviando comando...':'Sending command...'}</div>
@@ -1017,15 +1059,23 @@ function showFileBrowserPanel(agentId, isWin) {
   fbNavigate(_fbCurrentPath);
 }
 
-async function fbNavigate(path) {
+async function fbNavigate(path, addToHistory = true) {
   if (!_fbAgentId || !path) return;
+  path = path.trim();
+  if (addToHistory) {
+    // Truncate any forward history, then push
+    _fbHistory = _fbHistory.slice(0, _fbHistoryIdx + 1);
+    _fbHistory.push(path);
+    _fbHistoryIdx = _fbHistory.length - 1;
+  }
   _fbCurrentPath = path;
   const pathInput = document.getElementById('fb-path-input');
   if (pathInput) pathInput.value = path;
+  _fbUpdateNavButtons();
+
   const fbContent = document.getElementById('fb-content');
   if (fbContent) fbContent.innerHTML = `<div style="color:var(--text3);font-size:12px">${_lang==='es'?'Listando...':'Listing...'}</div>`;
 
-  // Send __ls__ command
   const r = await apiFetch('/api/agents/' + _fbAgentId + '/tasks', {
     method: 'POST',
     body: JSON.stringify({ command: `__ls__:${path}` }),
@@ -1033,7 +1083,6 @@ async function fbNavigate(path) {
   if (!r || !r.ok) { if (fbContent) fbContent.innerHTML = `<div style="color:var(--danger)">Error</div>`; return; }
   const task = await r.json();
 
-  // Poll for result
   let attempts = 0;
   const poll = setInterval(async () => {
     attempts++;
@@ -1060,11 +1109,40 @@ function renderFileListing(output, agentId) {
     fbContent.innerHTML = `<div style="color:var(--danger);font-size:12px">${escapeHtml(output)}</div>`;
     return;
   }
-  const isWin = data.path && data.path.includes('\\');
-  const sep = isWin ? '\\' : '/';
-  const parentPath = data.path.includes(sep)
-    ? data.path.substring(0, data.path.lastIndexOf(sep)) || sep
-    : data.path;
+  const sep = data.path.includes('\\') ? '\\' : '/';
+  const parentPath = fbGetParent(data.path);
+
+  // Build rows — use data-* attrs so Windows backslashes are never mis-parsed as JS escapes
+  const parentRow = parentPath !== null ? `
+    <tr>
+      <td colspan="3">
+        <button class="btn btn-sm btn-ghost" style="font-family:var(--font-mono);font-size:11px;width:100%;text-align:left"
+          data-path="${escapeHtml(parentPath)}" onclick="fbNavigate(this.dataset.path)">📁 ..</button>
+      </td>
+    </tr>` : '';
+
+  const entryRows = data.entries.map(e => {
+    const fullPath = data.path.endsWith(sep) ? data.path + e.name : data.path + sep + e.name;
+    const icon = e.type === 'dir' ? '📁' : '📄';
+    const sizeStr = e.type === 'dir' ? '—' : formatSize(e.size);
+    return `<tr>
+      <td>
+        ${e.type === 'dir'
+          ? `<button class="btn btn-sm btn-ghost" style="font-family:var(--font-mono);font-size:11px;text-align:left;width:100%;justify-content:flex-start"
+              data-path="${escapeHtml(fullPath)}" onclick="fbNavigate(this.dataset.path)">${icon} ${escapeHtml(e.name)}</button>`
+          : `<span style="font-family:var(--font-mono);font-size:11px;color:var(--text2)">${icon} ${escapeHtml(e.name)}</span>`
+        }
+      </td>
+      <td style="text-align:right;color:var(--text3);font-family:var(--font-mono);font-size:11px">${sizeStr}</td>
+      <td style="text-align:right">
+        ${e.type !== 'dir'
+          ? `<button class="btn btn-sm btn-ghost" style="padding:2px 8px;font-size:10px"
+              data-agent="${escapeHtml(agentId)}" data-path="${escapeHtml(fullPath)}" data-name="${escapeHtml(e.name)}"
+              onclick="fbDownload(this.dataset.agent, this.dataset.path, this.dataset.name)">⬇</button>`
+          : ''}
+      </td>
+    </tr>`;
+  }).join('');
 
   fbContent.innerHTML = `
     <table style="width:100%;font-size:12px">
@@ -1075,36 +1153,7 @@ function renderFileListing(output, agentId) {
           <th style="width:60px"></th>
         </tr>
       </thead>
-      <tbody>
-        ${data.path !== parentPath ? `
-        <tr>
-          <td colspan="3">
-            <button class="btn btn-sm btn-ghost" style="font-family:var(--font-mono);font-size:11px;width:100%;text-align:left"
-              onclick="fbNavigate('${escapeHtml(parentPath)}')">📁 ..</button>
-          </td>
-        </tr>` : ''}
-        ${data.entries.map(e => {
-          const fullPath = data.path.endsWith(sep) ? data.path + e.name : data.path + sep + e.name;
-          const icon = e.type === 'dir' ? '📁' : '📄';
-          const sizeStr = e.type === 'dir' ? '—' : formatSize(e.size);
-          return `<tr>
-            <td>
-              ${e.type === 'dir'
-                ? `<button class="btn btn-sm btn-ghost" style="font-family:var(--font-mono);font-size:11px;text-align:left;width:100%;justify-content:flex-start"
-                    onclick="fbNavigate('${escapeHtml(fullPath)}')">${icon} ${escapeHtml(e.name)}</button>`
-                : `<span style="font-family:var(--font-mono);font-size:11px;color:var(--text2)">${icon} ${escapeHtml(e.name)}</span>`
-              }
-            </td>
-            <td style="text-align:right;color:var(--text3);font-family:var(--font-mono);font-size:11px">${sizeStr}</td>
-            <td style="text-align:right">
-              ${e.type !== 'dir'
-                ? `<button class="btn btn-sm btn-ghost" style="padding:2px 8px;font-size:10px"
-                    onclick="fbDownload('${escapeHtml(agentId)}','${escapeHtml(fullPath)}','${escapeHtml(e.name)}')">⬇</button>`
-                : ''}
-            </td>
-          </tr>`;
-        }).join('')}
-      </tbody>
+      <tbody>${parentRow}${entryRows}</tbody>
     </table>`;
 }
 
