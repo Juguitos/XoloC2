@@ -719,19 +719,41 @@ async function loadAgentInfo(agentId) {
 }
 
 
+function _exportFilterCmd(cmd) {
+  // Returns null to skip, or a human-readable label
+  if (!cmd) return null;
+  if (cmd.startsWith('__ls__:'))       return null;
+  if (cmd.startsWith('__pty__:'))      return null;
+  if (cmd === '__pty_tick__')          return null;
+  if (cmd === '__tunnel_tick__')       return null;
+  if (cmd.startsWith('__upload__:')) {
+    const p = cmd.split(':', 3);
+    return `[UPLOAD] ${p[1]} → ${p[2] || '?'}`;
+  }
+  if (cmd.startsWith('__download__:')) {
+    return `[DOWNLOAD] ${cmd.slice(13)}`;
+  }
+  return cmd;
+}
+
 async function exportTasks(agentId, format) {
   const res = await apiFetch('/api/agents/' + agentId + '/tasks');
   if (!res || !res.ok) return;
-  const tasks = await res.json();
+  const rawTasks = await res.json();
+
+  // Filter internal protocol commands
+  const tasks = rawTasks
+    .map(t => ({ ...t, _label: _exportFilterCmd(t.command) }))
+    .filter(t => t._label !== null);
 
   let content, filename, mime;
   if (format === 'json') {
-    content = JSON.stringify(tasks, null, 2);
+    content = JSON.stringify(tasks.map(({ _label, ...t }) => ({ ...t, command: _label })), null, 2);
     filename = `tasks_${agentId.slice(0,8)}.json`;
     mime = 'application/json';
   } else {
     content = tasks.map(t => [
-      `[${fmtDate(t.created_at)}] CMD: ${t.command}`,
+      `[${fmtDate(t.created_at)}] CMD: ${t._label}`,
       `STATUS: ${t.status}`,
       t.output && !t.output.startsWith('__b64file__') ? `OUTPUT:\n${t.output}` : '(binary file)',
       '─'.repeat(60),
