@@ -55,6 +55,8 @@ async def security_headers_middleware(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
     # CSP: allow self + jsdelivr for xterm.js CDN
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
