@@ -1107,12 +1107,12 @@ function showFileBrowserPanel(agentId) {
 
     <!-- File reader modal -->
     <div id="fb-read-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:200;align-items:center;justify-content:center">
-      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;width:720px;max-width:92vw;max-height:82vh;display:flex;flex-direction:column;overflow:hidden">
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;width:min(1200px,94vw);max-height:90vh;display:flex;flex-direction:column;overflow:hidden">
         <div style="display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border);flex-shrink:0">
           <span id="fb-read-title" style="flex:1;font-size:13px;font-weight:600;color:var(--text);font-family:var(--font-mono)"></span>
           <button class="btn btn-sm btn-ghost" onclick="document.getElementById('fb-read-modal').style.display='none'">✕</button>
         </div>
-        <pre id="fb-read-content" style="flex:1;overflow-y:auto;padding:16px;font-size:12px;line-height:1.7;color:var(--text);margin:0;white-space:pre-wrap;word-break:break-all;font-family:var(--font-mono)"></pre>
+        <div id="fb-read-content" style="flex:1;overflow:auto;padding:16px;font-size:12px;line-height:1.7;color:var(--text);margin:0;font-family:var(--font-mono)"></div>
       </div>
     </div>`;
 
@@ -1282,17 +1282,16 @@ function fbSetView(mode, rerender = true) {
 }
 
 function fbIsReadable(name) {
-  // Binary / media / archive extensions that should NOT be opened as text
-  const binary = new Set([
+  // True if the file can be previewed (text OR image). Excludes only real binaries.
+  const nonViewable = new Set([
     'exe','dll','so','dylib','obj','o','bin','class','jar','pyc','pyd',
-    'png','jpg','jpeg','gif','bmp','webp','ico','svg','tiff','tif',
     'mp3','wav','ogg','flac','aac','mp4','avi','mkv','mov','wmv','webm',
     'zip','gz','tar','rar','7z','bz2','xz','lz','zst',
     'pdf','doc','docx','xls','xlsx','ppt','pptx',
     'db','sqlite','sqlite3','mdb','accdb',
   ]);
   const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
-  return !binary.has(ext); // no extension = likely text (e.g. Makefile, Dockerfile)
+  return !nonViewable.has(ext); // images (.png/.jpg/etc.) and text files pass through
 }
 
 function getFileIcon(name) {
@@ -1314,29 +1313,60 @@ async function fbRead(agentId, fullPath, filename) {
   const titleEl   = document.getElementById('fb-read-title');
   const contentEl = document.getElementById('fb-read-content');
   if (!modal) return;
-  titleEl.textContent   = filename;
-  contentEl.textContent = _lang === 'es' ? 'Leyendo archivo...' : 'Reading file...';
-  modal.style.display   = 'flex';
+  titleEl.textContent = filename;
+  contentEl.innerHTML = `<span style="color:var(--text2)">${_lang === 'es' ? 'Leyendo archivo...' : 'Reading file...'}</span>`;
+  modal.style.display = 'flex';
 
-  const isWin = fullPath.includes('\\');
-  const cmd   = isWin ? `type "${fullPath}"` : `cat "${fullPath}"`;
-  const r = await apiFetch('/api/agents/' + agentId + '/tasks', {
-    method: 'POST', body: JSON.stringify({ command: cmd }),
-  });
-  if (!r || !r.ok) { contentEl.textContent = 'Error sending command'; return; }
-  const task = await r.json();
+  const isImg = /\.(png|jpg|jpeg|gif|bmp|webp|ico|svg|tiff?)$/i.test(filename);
 
-  let attempts = 0;
-  const poll = setInterval(async () => {
-    attempts++;
-    if (attempts > 40) { clearInterval(poll); contentEl.textContent = 'Timeout'; return; }
-    const tr = await apiFetch(`/api/agents/${agentId}/tasks/${task.task_id}`);
-    if (!tr || !tr.ok) return;
-    const td = await tr.json();
-    if (td.status !== 'done' && td.status !== 'error') return;
-    clearInterval(poll);
-    contentEl.textContent = td.output || '(vacío / empty)';
-  }, 1500);
+  if (isImg) {
+    // Download as binary and show as image
+    const r = await apiFetch('/api/agents/' + agentId + '/tasks', {
+      method: 'POST', body: JSON.stringify({ command: `download ${fullPath}` }),
+    });
+    if (!r || !r.ok) { contentEl.innerHTML = '<span style="color:var(--danger)">Error sending command</span>'; return; }
+    const task = await r.json();
+    let attempts = 0;
+    const poll = setInterval(async () => {
+      attempts++;
+      if (attempts > 40) { clearInterval(poll); contentEl.innerHTML = '<span style="color:var(--danger)">Timeout</span>'; return; }
+      const tr = await apiFetch(`/api/agents/${agentId}/tasks/${task.task_id}`);
+      if (!tr || !tr.ok) return;
+      const td = await tr.json();
+      if (td.status !== 'done' && td.status !== 'error') return;
+      clearInterval(poll);
+      if (td.output && td.output.startsWith('__b64file__:')) {
+        const parts = td.output.split(':', 3);
+        const ext = filename.split('.').pop().toLowerCase();
+        const mime = (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' : ext === 'svg' ? 'image/svg+xml' : `image/${ext}`;
+        contentEl.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;min-height:200px;padding:8px">
+          <img src="data:${mime};base64,${parts[2]}" style="max-width:100%;max-height:calc(90vh - 80px);object-fit:contain;border-radius:4px">
+        </div>`;
+      } else {
+        contentEl.innerHTML = `<span style="color:var(--danger)">${escapeHtml(td.output || 'Error')}</span>`;
+      }
+    }, 1500);
+  } else {
+    // Read as text
+    const isWin = fullPath.includes('\\');
+    const cmd   = isWin ? `type "${fullPath}"` : `cat "${fullPath}"`;
+    const r = await apiFetch('/api/agents/' + agentId + '/tasks', {
+      method: 'POST', body: JSON.stringify({ command: cmd }),
+    });
+    if (!r || !r.ok) { contentEl.innerHTML = '<span style="color:var(--danger)">Error sending command</span>'; return; }
+    const task = await r.json();
+    let attempts = 0;
+    const poll = setInterval(async () => {
+      attempts++;
+      if (attempts > 40) { clearInterval(poll); contentEl.innerHTML = '<span style="color:var(--danger)">Timeout</span>'; return; }
+      const tr = await apiFetch(`/api/agents/${agentId}/tasks/${task.task_id}`);
+      if (!tr || !tr.ok) return;
+      const td = await tr.json();
+      if (td.status !== 'done' && td.status !== 'error') return;
+      clearInterval(poll);
+      contentEl.innerHTML = `<pre style="margin:0;white-space:pre-wrap;word-break:break-all;font-family:var(--font-mono);font-size:12px;line-height:1.7">${escapeHtml(td.output || '(vacío / empty)')}</pre>`;
+    }, 1500);
+  }
 }
 
 async function fbLoadThumbnail(agentId, fullPath, imgEl) {
