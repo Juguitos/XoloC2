@@ -1229,7 +1229,6 @@ function _fbRenderIcons(data, agentId) {
   const fbContent = document.getElementById('fb-content');
   const sep = data.path.includes('\\') ? '\\' : '/';
   const parentPath = fbGetParent(data.path);
-  const isImgExt = n => /\.(png|jpg|jpeg|gif|bmp|webp|ico)$/i.test(n);
 
   const parentCard = parentPath !== null ? `
     <div class="fb-icon-item" data-path="${escapeHtml(parentPath)}" onclick="fbNavigate(this.dataset.path)">
@@ -1245,15 +1244,12 @@ function _fbRenderIcons(data, agentId) {
         <div class="fb-icon-label" title="${escapeHtml(e.name)}">${escapeHtml(e.name)}</div>
       </div>`;
     }
-    const thumb = isImgExt(e.name)
-      ? `<img class="fb-icon-thumb" data-imgpath="${escapeHtml(fullPath)}" src="" alt="">`
-      : `<div class="fb-icon-emoji">${getFileIcon(e.name)}</div>`;
     const iconReadBtn = fbIsReadable(e.name) ? `
         <button class="btn btn-sm btn-ghost" style="padding:2px 6px;font-size:10px" title="${_lang==='es'?'Leer':'Read'}"
           data-agent="${escapeHtml(agentId)}" data-path="${escapeHtml(fullPath)}" data-name="${escapeHtml(e.name)}"
           onclick="event.stopPropagation();fbRead(this.dataset.agent,this.dataset.path,this.dataset.name)">👁</button>` : '';
     return `<div class="fb-icon-item">
-      ${thumb}
+      <div class="fb-icon-emoji">${getFileIcon(e.name)}</div>
       <div class="fb-icon-label" title="${escapeHtml(e.name)}">${escapeHtml(e.name)}</div>
       <div style="display:flex;gap:3px;margin-top:2px">
         <button class="btn btn-sm btn-ghost" style="padding:2px 6px;font-size:10px" title="${_lang==='es'?'Descargar':'Download'}"
@@ -1265,11 +1261,6 @@ function _fbRenderIcons(data, agentId) {
   }).join('');
 
   fbContent.innerHTML = `<div class="fb-grid">${parentCard}${entryCards}</div>`;
-
-  // Lazy-load image thumbnails (up to 20)
-  fbContent.querySelectorAll('img.fb-icon-thumb[data-imgpath]').forEach(img => {
-    fbLoadThumbnail(agentId, img.dataset.imgpath, img);
-  });
 }
 
 function fbSetView(mode, rerender = true) {
@@ -1282,16 +1273,18 @@ function fbSetView(mode, rerender = true) {
 }
 
 function fbIsReadable(name) {
-  // True if the file can be previewed (text OR image). Excludes only real binaries.
+  // Excludes only formats that cannot be previewed at all
   const nonViewable = new Set([
     'exe','dll','so','dylib','obj','o','bin','class','jar','pyc','pyd',
     'mp3','wav','ogg','flac','aac','mp4','avi','mkv','mov','wmv','webm',
     'zip','gz','tar','rar','7z','bz2','xz','lz','zst',
-    'pdf','doc','docx','xls','xlsx','ppt','pptx',
     'db','sqlite','sqlite3','mdb','accdb',
   ]);
   const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
-  return !nonViewable.has(ext); // images (.png/.jpg/etc.) and text files pass through
+  return !nonViewable.has(ext);
+  // pdf, doc, docx, xls, xlsx, pptx → viewable via reader
+  // images → viewable as image in reader
+  // text/code/no-ext → viewable as text
 }
 
 function getFileIcon(name) {
@@ -1308,93 +1301,169 @@ function getFileIcon(name) {
   return map[ext] || '📄';
 }
 
-async function fbRead(agentId, fullPath, filename) {
-  const modal     = document.getElementById('fb-read-modal');
-  const titleEl   = document.getElementById('fb-read-title');
-  const contentEl = document.getElementById('fb-read-content');
-  if (!modal) return;
-  titleEl.textContent = filename;
-  contentEl.innerHTML = `<span style="color:var(--text2)">${_lang === 'es' ? 'Leyendo archivo...' : 'Reading file...'}</span>`;
-  modal.style.display = 'flex';
+// Lazy-load a CDN script once
+function _loadScript(src) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = src; s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
 
-  const isImg = /\.(png|jpg|jpeg|gif|bmp|webp|ico|svg|tiff?)$/i.test(filename);
-
-  if (isImg) {
-    // Download as binary and show as image
+// Download a file from the agent and return its base64 content
+function _fbFetchB64(agentId, fullPath) {
+  return new Promise(async resolve => {
     const r = await apiFetch('/api/agents/' + agentId + '/tasks', {
       method: 'POST', body: JSON.stringify({ command: `download ${fullPath}` }),
     });
-    if (!r || !r.ok) { contentEl.innerHTML = '<span style="color:var(--danger)">Error sending command</span>'; return; }
+    if (!r || !r.ok) { resolve(null); return; }
     const task = await r.json();
     let attempts = 0;
     const poll = setInterval(async () => {
       attempts++;
-      if (attempts > 40) { clearInterval(poll); contentEl.innerHTML = '<span style="color:var(--danger)">Timeout</span>'; return; }
+      if (attempts > 60) { clearInterval(poll); resolve(null); return; }
       const tr = await apiFetch(`/api/agents/${agentId}/tasks/${task.task_id}`);
       if (!tr || !tr.ok) return;
       const td = await tr.json();
       if (td.status !== 'done' && td.status !== 'error') return;
       clearInterval(poll);
       if (td.output && td.output.startsWith('__b64file__:')) {
-        const parts = td.output.split(':', 3);
-        const ext = filename.split('.').pop().toLowerCase();
-        const mime = (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' : ext === 'svg' ? 'image/svg+xml' : `image/${ext}`;
-        contentEl.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;min-height:200px;padding:8px">
-          <img src="data:${mime};base64,${parts[2]}" style="max-width:100%;max-height:calc(90vh - 80px);object-fit:contain;border-radius:4px">
-        </div>`;
+        resolve(td.output.split(':', 3)[2]);
       } else {
-        contentEl.innerHTML = `<span style="color:var(--danger)">${escapeHtml(td.output || 'Error')}</span>`;
+        resolve(null);
       }
     }, 1500);
+  });
+}
+
+// Convert base64 string to Uint8Array
+function _b64ToBytes(b64) {
+  const raw = atob(b64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+
+let _fbXlsxWb = null; // cached workbook for sheet tabs
+
+function _fbShowXlsxSheet(idx) {
+  if (!_fbXlsxWb) return;
+  const contentEl = document.getElementById('fb-read-content');
+  const sheetContent = contentEl.querySelector('.xlsx-sheet-content');
+  if (!sheetContent) return;
+  const ws = _fbXlsxWb.Sheets[_fbXlsxWb.SheetNames[idx]];
+  sheetContent.innerHTML = XLSX.utils.sheet_to_html(ws, { editable: false });
+  _fbStyleXlsxTable(sheetContent);
+  // Update active tab
+  contentEl.querySelectorAll('.xlsx-tab').forEach((b, i) => {
+    b.style.background = i === idx ? 'var(--bg3)' : '';
+    b.style.color = i === idx ? 'var(--accent2)' : '';
+  });
+}
+
+function _fbStyleXlsxTable(container) {
+  const tbl = container.querySelector('table');
+  if (!tbl) return;
+  tbl.style.cssText = 'border-collapse:collapse;font-size:12px;min-width:100%';
+  tbl.querySelectorAll('td,th').forEach(c => {
+    c.style.cssText = 'border:1px solid var(--border);padding:4px 10px;white-space:nowrap;color:var(--text)';
+  });
+}
+
+async function fbRead(agentId, fullPath, filename) {
+  const modal     = document.getElementById('fb-read-modal');
+  const titleEl   = document.getElementById('fb-read-title');
+  const contentEl = document.getElementById('fb-read-content');
+  if (!modal) return;
+  titleEl.textContent = filename;
+  contentEl.innerHTML = `<span style="color:var(--text2);padding:8px">${_lang === 'es' ? 'Leyendo archivo...' : 'Reading file...'}</span>`;
+  modal.style.display = 'flex';
+
+  const ext    = filename.includes('.') ? filename.split('.').pop().toLowerCase() : '';
+  const isImg  = /^(png|jpg|jpeg|gif|bmp|webp|ico|svg|tiff?)$/.test(ext);
+  const isPdf  = ext === 'pdf';
+  const isDocx = /^docx?$/.test(ext);
+  const isXlsx = /^xlsx?$/.test(ext);
+  const isPpt  = /^pptx?$/.test(ext);
+
+  const errHtml = msg => `<span style="color:var(--danger);padding:8px">${escapeHtml(msg)}</span>`;
+
+  if (isImg) {
+    const b64 = await _fbFetchB64(agentId, fullPath);
+    if (!b64) { contentEl.innerHTML = errHtml('Error downloading image'); return; }
+    const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'svg' ? 'image/svg+xml' : `image/${ext}`;
+    contentEl.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;min-height:200px;padding:8px">
+      <img src="data:${mime};base64,${b64}" style="max-width:100%;max-height:calc(90vh - 80px);object-fit:contain;border-radius:4px">
+    </div>`;
+
+  } else if (isPdf) {
+    const b64 = await _fbFetchB64(agentId, fullPath);
+    if (!b64) { contentEl.innerHTML = errHtml('Error downloading PDF'); return; }
+    const blob = new Blob([_b64ToBytes(b64)], { type: 'application/pdf' });
+    const url  = URL.createObjectURL(blob);
+    contentEl.innerHTML = `<iframe src="${url}" style="width:100%;height:calc(90vh - 80px);border:none;border-radius:4px"></iframe>`;
+
+  } else if (isDocx) {
+    const b64 = await _fbFetchB64(agentId, fullPath);
+    if (!b64) { contentEl.innerHTML = errHtml('Error downloading DOCX'); return; }
+    try {
+      await _loadScript('https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js');
+      const result = await mammoth.convertToHtml({ arrayBuffer: _b64ToBytes(b64).buffer });
+      contentEl.innerHTML = `<div style="color:var(--text);line-height:1.8;font-family:sans-serif;font-size:13px;padding:12px 16px;max-width:900px;margin:0 auto">${result.value}</div>`;
+    } catch (e) {
+      contentEl.innerHTML = errHtml('Error rendering DOCX: ' + e);
+    }
+
+  } else if (isXlsx) {
+    const b64 = await _fbFetchB64(agentId, fullPath);
+    if (!b64) { contentEl.innerHTML = errHtml('Error downloading spreadsheet'); return; }
+    try {
+      await _loadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js');
+      _fbXlsxWb = XLSX.read(_b64ToBytes(b64), { type: 'array' });
+      const tabs = _fbXlsxWb.SheetNames.length > 1
+        ? _fbXlsxWb.SheetNames.map((n, i) =>
+            `<button class="btn btn-sm btn-ghost xlsx-tab" style="margin-right:4px;${i===0?'background:var(--bg3);color:var(--accent2)':''}"
+              onclick="_fbShowXlsxSheet(${i})">${escapeHtml(n)}</button>`
+          ).join('')
+        : '';
+      contentEl.innerHTML = `
+        ${tabs ? `<div style="padding:8px 8px 0;flex-shrink:0">${tabs}</div>` : ''}
+        <div class="xlsx-sheet-content" style="overflow:auto;padding:8px"></div>`;
+      _fbShowXlsxSheet(0);
+    } catch (e) {
+      contentEl.innerHTML = errHtml('Error rendering spreadsheet: ' + e);
+    }
+
+  } else if (isPpt) {
+    contentEl.innerHTML = `<div style="padding:24px;color:var(--text2);text-align:center">
+      <div style="font-size:32px;margin-bottom:12px">📊</div>
+      <div>${_lang==='es'?'Vista previa de PowerPoint no disponible. Usa ⬇ para descargar.':'PowerPoint preview not supported. Use ⬇ to download.'}</div>
+    </div>`;
+
   } else {
-    // Read as text
+    // Plain text / code / no extension
     const isWin = fullPath.includes('\\');
     const cmd   = isWin ? `type "${fullPath}"` : `cat "${fullPath}"`;
     const r = await apiFetch('/api/agents/' + agentId + '/tasks', {
       method: 'POST', body: JSON.stringify({ command: cmd }),
     });
-    if (!r || !r.ok) { contentEl.innerHTML = '<span style="color:var(--danger)">Error sending command</span>'; return; }
+    if (!r || !r.ok) { contentEl.innerHTML = errHtml('Error sending command'); return; }
     const task = await r.json();
     let attempts = 0;
     const poll = setInterval(async () => {
       attempts++;
-      if (attempts > 40) { clearInterval(poll); contentEl.innerHTML = '<span style="color:var(--danger)">Timeout</span>'; return; }
+      if (attempts > 40) { clearInterval(poll); contentEl.innerHTML = errHtml('Timeout'); return; }
       const tr = await apiFetch(`/api/agents/${agentId}/tasks/${task.task_id}`);
       if (!tr || !tr.ok) return;
       const td = await tr.json();
       if (td.status !== 'done' && td.status !== 'error') return;
       clearInterval(poll);
-      contentEl.innerHTML = `<pre style="margin:0;white-space:pre-wrap;word-break:break-all;font-family:var(--font-mono);font-size:12px;line-height:1.7">${escapeHtml(td.output || '(vacío / empty)')}</pre>`;
+      contentEl.innerHTML = `<pre style="margin:0;white-space:pre-wrap;word-break:break-all;font-family:var(--font-mono);font-size:12px;line-height:1.7;padding:4px">${escapeHtml(td.output || '(vacío / empty)')}</pre>`;
     }, 1500);
   }
 }
 
-async function fbLoadThumbnail(agentId, fullPath, imgEl) {
-  const r = await apiFetch('/api/agents/' + agentId + '/tasks', {
-    method: 'POST', body: JSON.stringify({ command: `download ${fullPath}` }),
-  });
-  if (!r || !r.ok) return;
-  const task = await r.json();
-
-  let attempts = 0;
-  const poll = setInterval(async () => {
-    attempts++;
-    if (attempts > 30) { clearInterval(poll); return; }
-    const tr = await apiFetch(`/api/agents/${agentId}/tasks/${task.task_id}`);
-    if (!tr || !tr.ok) return;
-    const td = await tr.json();
-    if (td.status !== 'done' && td.status !== 'error') return;
-    clearInterval(poll);
-    if (td.output && td.output.startsWith('__b64file__:')) {
-      const parts = td.output.split(':', 3);
-      if (parts.length >= 3) {
-        const ext  = fullPath.split('.').pop().toLowerCase();
-        const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : `image/${ext}`;
-        if (document.contains(imgEl)) imgEl.src = `data:${mime};base64,${parts[2]}`;
-      }
-    }
-  }, 1500);
-}
 
 async function fbDownload(agentId, fullPath, filename) {
   const r = await apiFetch('/api/agents/' + agentId + '/tasks', {
