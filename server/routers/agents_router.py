@@ -44,6 +44,11 @@ def agent_to_dict(a: Agent) -> dict:
         "note": a.note,
         "cwd": a.cwd or "",
         "tags": [t.strip() for t in (a.tags or "").split(",") if t.strip()],
+        "country": a.country or "",
+        "country_code": a.country_code or "",
+        "city": a.city or "",
+        "latitude": a.latitude,
+        "longitude": a.longitude,
     }
 
 

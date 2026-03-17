@@ -9,7 +9,9 @@
   <link rel="icon" type="image/png" href="/static/xolo.png">
   <link rel="stylesheet" href="/static/css/style.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css">
   <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
 <body>
@@ -24,6 +26,9 @@
     <nav class="sidebar-nav">
       <button class="nav-item active" onclick="showView('agents')" id="nav-agents">
         <span class="icon">⚡</span> <span data-i18n="nav_sessions">Sessions</span>
+      </button>
+      <button class="nav-item" onclick="showView('map')" id="nav-map">
+        <span class="icon">🗺</span> <span data-i18n="nav_map">Map</span>
       </button>
       <button class="nav-item" onclick="showView('generate')" id="nav-generate">
         <span class="icon">⚙</span> <span data-i18n="nav_generate">Generate Beacon</span>
@@ -130,9 +135,9 @@
 // ── i18n ─────────────────────────────────────────────────
 const LANG = {
   en: {
-    nav_sessions:'Sessions', nav_generate:'Generate Beacon', nav_redirector:'Redirector',
+    nav_sessions:'Sessions', nav_map:'Map', nav_generate:'Generate Beacon', nav_redirector:'Redirector',
     nav_settings:'Settings', nav_logout:'Logout',
-    title_sessions:'Sessions', title_generate:'Generate Beacon',
+    title_sessions:'Sessions', title_map:'Agent Map', title_generate:'Generate Beacon',
     title_redirector:'Redirector Config', title_settings:'Settings',
     stat_total:'Total Sessions', stat_online:'Online', stat_offline:'Offline',
     agents_title:'Active Sessions', agents_refresh:'↻ Refresh',
@@ -205,9 +210,9 @@ const LANG = {
     loading:'Loading...', no_available:'N/A',
   },
   es: {
-    nav_sessions:'Sesiones', nav_generate:'Generar Beacon', nav_redirector:'Redirector',
+    nav_sessions:'Sesiones', nav_map:'Mapa', nav_generate:'Generar Beacon', nav_redirector:'Redirector',
     nav_settings:'Ajustes', nav_logout:'Salir',
-    title_sessions:'Sesiones', title_generate:'Generar Beacon',
+    title_sessions:'Sesiones', title_map:'Mapa de Agentes', title_generate:'Generar Beacon',
     title_redirector:'Config. Redirector', title_settings:'Ajustes',
     stat_total:'Sesiones Totales', stat_online:'En línea', stat_offline:'Sin conexión',
     agents_title:'Sesiones Activas', agents_refresh:'↻ Actualizar',
@@ -356,6 +361,8 @@ let pollTimer = null;
 let agentPollTimer = null;
 let taskHistory = [];  // [{command, output, status, id}]
 let _isAdmin = false;
+let _leafletMap = null;
+let _mapTimer = null;
 
 // ── Toast notifications ───────────────────────────────────
 function showToast(msg, type = 'info') {
@@ -465,6 +472,9 @@ function showView(view, agentId) {
   } else if (view === 'session') {
     document.getElementById('topbar-title').textContent = 'Session: ' + agentId.slice(0, 8) + '...';
     renderSessionView(agentId);
+  } else if (view === 'map') {
+    document.getElementById('topbar-title').textContent = t('title_map');
+    renderMapView();
   } else if (view === 'generate') {
     document.getElementById('topbar-title').textContent = t('title_generate');
     renderGenerateView();
@@ -480,6 +490,11 @@ function showView(view, agentId) {
 function clearPolling() {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   if (agentPollTimer) { clearInterval(agentPollTimer); agentPollTimer = null; }
+  if (_mapTimer) { clearInterval(_mapTimer); _mapTimer = null; }
+  if (_leafletMap) { _leafletMap.remove(); _leafletMap = null; }
+  // Restore content padding if it was removed for the map
+  const content = document.getElementById('content');
+  if (content) { content.style.padding = ''; content.style.overflow = ''; }
 }
 
 // ── Agents List View ─────────────────────────────────────
@@ -683,6 +698,8 @@ async function loadAgentInfo(agentId) {
     <div class="info-row"><span class="key">${t('col_hostname')}</span><span class="val">${escapeHtml(a.hostname || '—')}</span></div>
     <div class="info-row"><span class="key">${t('col_user')}</span><span class="val" style="color:var(--accent2)">${escapeHtml(a.username || '—')}</span></div>
     <div class="info-row"><span class="key">${t('col_ip_int')}</span><span class="val">${escapeHtml(a.ip_internal || '—')}</span></div>
+    ${a.ip_external ? `<div class="info-row"><span class="key">IP (Ext)</span><span class="val" style="color:var(--text2)">${escapeHtml(a.ip_external)}</span></div>` : ''}
+    ${(a.country || a.city) ? `<div class="info-row"><span class="key">Ubicación</span><span class="val">${countryFlag(a.country_code)} ${escapeHtml([a.city, a.country].filter(Boolean).join(', '))}</span></div>` : ''}
     <div class="info-row"><span class="key">${t('col_os')}</span><span class="val">${escapeHtml(a.os_info || '—')}</span></div>
     <div class="info-row"><span class="key">PID</span><span class="val">${a.pid || '—'}</span></div>
     <div class="info-row"><span class="key">Sleep</span><span class="val">${a.sleep_interval}s</span></div>
@@ -3627,6 +3644,97 @@ async function clearAuditLog() {
   if (!confirm(_lang==='es'?'¿Limpiar todo el registro de auditoría?':'Clear all audit log entries?')) return;
   const res = await apiFetch('/api/audit/logs', { method: 'DELETE' });
   if (res && res.ok) loadAuditLog();
+}
+
+// ── Map View ─────────────────────────────────────────────
+function countryFlag(code) {
+  if (!code || code.length !== 2) return '';
+  return [...code.toUpperCase()].map(c => String.fromCodePoint(c.charCodeAt(0) + 127397)).join('');
+}
+
+async function renderMapView() {
+  const content = document.getElementById('content');
+  content.style.padding = '0';
+  content.style.overflow = 'hidden';
+  content.innerHTML = `
+    <div id="agent-map" style="width:100%;height:calc(100vh - 48px)"></div>
+    <div style="position:absolute;top:64px;left:236px;z-index:1000;display:flex;gap:8px;pointer-events:none">
+      <div style="background:rgba(13,15,20,0.9);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;pointer-events:auto;display:flex;align-items:center;gap:12px">
+        <span id="map-stat-online" style="color:var(--online)">● 0 online</span>
+        <span style="color:var(--border)">|</span>
+        <span id="map-stat-total" style="color:var(--text2)">0 total</span>
+        <span style="color:var(--border)">|</span>
+        <span id="map-stat-nogeo" style="color:var(--text3)">0 sin geo</span>
+      </div>
+      <button class="btn btn-sm btn-ghost" style="pointer-events:auto" onclick="refreshMap()">↻</button>
+    </div>`;
+
+  await _initMap();
+  _mapTimer = setInterval(refreshMap, 30000);
+}
+
+async function _initMap() {
+  const agents = await apiFetch('/api/agents').then(r => r.ok ? r.json() : []).catch(() => []);
+
+  if (!document.getElementById('agent-map')) return;
+
+  if (!_leafletMap) {
+    _leafletMap = L.map('agent-map', { zoomControl: true, attributionControl: true })
+      .setView([20, 0], 2);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" style="color:#64748b">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" style="color:#64748b">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 19,
+    }).addTo(_leafletMap);
+  } else {
+    _leafletMap.eachLayer(layer => {
+      if (layer instanceof L.CircleMarker) _leafletMap.removeLayer(layer);
+    });
+  }
+
+  let noGeo = 0;
+  const geoAgents = agents.filter(a => a.latitude != null && a.longitude != null);
+  noGeo = agents.length - geoAgents.length;
+
+  geoAgents.forEach(a => {
+    const isOnline = a.online;
+    const flag = countryFlag(a.country_code);
+    const loc = [a.city, a.country].filter(Boolean).join(', ') || '—';
+
+    const marker = L.circleMarker([a.latitude, a.longitude], {
+      radius: isOnline ? 9 : 7,
+      fillColor: isOnline ? '#22c55e' : '#ef4444',
+      color: isOnline ? '#16a34a' : '#dc2626',
+      weight: 2,
+      opacity: 1,
+      fillOpacity: isOnline ? 0.9 : 0.45,
+    }).addTo(_leafletMap);
+
+    marker.bindPopup(`
+      <div class="xolo-map-popup">
+        <div class="xmp-host">${escapeHtml(a.hostname)}</div>
+        <div class="xmp-row">👤 ${escapeHtml(a.username)}</div>
+        <div class="xmp-row">📡 ${escapeHtml(a.ip_internal || '—')}${a.ip_external ? ' <span style="color:#64748b">(ext: ' + escapeHtml(a.ip_external) + ')</span>' : ''}</div>
+        <div class="xmp-row">${flag} ${escapeHtml(loc)}</div>
+        <div class="xmp-row" style="margin-top:4px">
+          <span class="${isOnline ? 'xmp-online' : 'xmp-offline'}">${isOnline ? '● ONLINE' : '○ OFFLINE'}</span>
+        </div>
+        <button class="xmp-btn" onclick="showView('session','${escapeHtml(a.id)}')">→ Abrir sesión</button>
+      </div>`, { className: 'xolo-popup-wrap', maxWidth: 240 });
+  });
+
+  const onlineCount = agents.filter(a => a.online).length;
+  const el1 = document.getElementById('map-stat-online');
+  const el2 = document.getElementById('map-stat-total');
+  const el3 = document.getElementById('map-stat-nogeo');
+  if (el1) el1.textContent = `● ${onlineCount} online`;
+  if (el2) el2.textContent = `${agents.length} total`;
+  if (el3) el3.textContent = `${noGeo} sin geo`;
+}
+
+async function refreshMap() {
+  if (!_leafletMap) return;
+  await _initMap();
 }
 
 // ── Helpers ──────────────────────────────────────────────

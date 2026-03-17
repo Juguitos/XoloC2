@@ -61,7 +61,7 @@ async def security_headers_middleware(request: Request, call_next):
         "script-src 'self' 'unsafe-inline' cdn.jsdelivr.net; "
         "style-src 'self' 'unsafe-inline' cdn.jsdelivr.net fonts.googleapis.com; "
         "font-src 'self' fonts.gstatic.com cdn.jsdelivr.net; "
-        "img-src 'self' data:; "
+        "img-src 'self' data: https://*.basemaps.cartocdn.com cdn.jsdelivr.net; "
         "connect-src 'self' wss: ws:; "
         "frame-ancestors 'none';"
     )

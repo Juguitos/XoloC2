@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, String, Boolean, DateTime, Text, Integer, ForeignKey, text
+from sqlalchemy import create_engine, Column, String, Boolean, DateTime, Text, Integer, Float, ForeignKey, text
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from datetime import datetime, timezone
 from pathlib import Path
@@ -44,6 +44,11 @@ class Agent(Base):
     note = Column(String, default="")
     cwd = Column(String, default="")
     tags = Column(String, default="")
+    country = Column(String, default="")
+    country_code = Column(String, default="")
+    city = Column(String, default="")
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
 
 
 class Task(Base):
@@ -84,6 +89,11 @@ def init_db():
         for stmt in [
             "ALTER TABLE agents ADD COLUMN cwd TEXT DEFAULT ''",
             "ALTER TABLE agents ADD COLUMN tags TEXT DEFAULT ''",
+            "ALTER TABLE agents ADD COLUMN country TEXT DEFAULT ''",
+            "ALTER TABLE agents ADD COLUMN country_code TEXT DEFAULT ''",
+            "ALTER TABLE agents ADD COLUMN city TEXT DEFAULT ''",
+            "ALTER TABLE agents ADD COLUMN latitude REAL",
+            "ALTER TABLE agents ADD COLUMN longitude REAL",
             "ALTER TABLE users ADD COLUMN totp_secret TEXT DEFAULT NULL",
             "ALTER TABLE users ADD COLUMN totp_enabled INTEGER DEFAULT 0",
             "ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0",

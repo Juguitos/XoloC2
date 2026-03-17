@@ -592,6 +592,65 @@ tr.clickable:hover td { background: var(--bg3); cursor: pointer; }
 
 .modal h2 { font-size: 15px; margin-bottom: 20px; }
 
+/* ── MAP POPUP ──────────────────────────────────────── */
+.xolo-popup-wrap .leaflet-popup-content-wrapper {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  padding: 0;
+}
+
+.xolo-popup-wrap .leaflet-popup-content {
+  margin: 0;
+}
+
+.xolo-popup-wrap .leaflet-popup-tip-container {
+  display: none;
+}
+
+.xolo-map-popup {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 14px;
+  min-width: 200px;
+}
+
+.xmp-host {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.xmp-row {
+  color: var(--text2);
+  margin-bottom: 3px;
+  line-height: 1.5;
+}
+
+.xmp-online { color: var(--online); font-weight: 600; }
+.xmp-offline { color: var(--offline); }
+
+.xmp-btn {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  background: var(--accent);
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.xmp-btn:hover { background: var(--accent-hover); }
+
 /* ── SETTINGS TABS ──────────────────────────────────── */
 .st-tab-strip {
   display: flex;

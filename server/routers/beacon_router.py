@@ -4,6 +4,7 @@ Authentication: shared secret in X-Agent-Secret header.
 """
 import os
 import uuid as _uuid_mod
+import ipaddress
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from fastapi.responses import FileResponse
@@ -11,11 +12,54 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timezone
-from database import get_db, Agent, Task
+from database import get_db, Agent, Task, SessionLocal
 import config
 import json as _json_mod
+import httpx
 from websocket_manager import manager as ws_manager
 from routers.webhook_router import notify as wh_notify
+
+
+async def _geo_lookup(ip: str) -> dict:
+    """Geolocate an IP via ip-api.com (free, no key, server-side only)."""
+    try:
+        addr = ipaddress.ip_address(ip)
+        if addr.is_private or addr.is_loopback or addr.is_link_local:
+            return {}
+    except ValueError:
+        return {}
+    try:
+        async with httpx.AsyncClient(timeout=4) as client:
+            r = await client.get(
+                f"http://ip-api.com/json/{ip}",
+                params={"fields": "status,country,countryCode,city,lat,lon"},
+            )
+            data = r.json()
+            if data.get("status") == "success":
+                return data
+    except Exception:
+        pass
+    return {}
+
+
+async def _geo_and_update(agent_id: str, ip: str):
+    geo = await _geo_lookup(ip)
+    if not geo:
+        return
+    db = SessionLocal()
+    try:
+        agent = db.query(Agent).filter(Agent.id == agent_id).first()
+        if agent:
+            agent.country = geo.get("country", "")
+            agent.country_code = geo.get("countryCode", "")
+            agent.city = geo.get("city", "")
+            agent.latitude = geo.get("lat")
+            agent.longitude = geo.get("lon")
+            db.commit()
+    except Exception:
+        pass
+    finally:
+        db.close()
 
 
 def _decrypt_body(raw: bytes) -> dict:
@@ -70,14 +114,23 @@ async def checkin(
     except ValueError:
         raise HTTPException(status_code=400, detail="agent_id must be a valid UUID")
 
+    # Capture real external IP (respects TRUST_PROXY setting)
+    if config.TRUST_PROXY:
+        ip_ext = request.headers.get("X-Real-IP") or (request.client.host if request.client else "")
+    else:
+        ip_ext = request.client.host if request.client else ""
+
     agent = db.query(Agent).filter(Agent.id == req.agent_id).first()
 
     is_new = agent is None
+    prev_ip_ext = agent.ip_external if agent else None
+
     if not agent:
         agent = Agent(
             id=req.agent_id,
             hostname=req.hostname,
             ip_internal=req.ip_internal,
+            ip_external=ip_ext,
             os_info=req.os_info,
             username=req.username,
             pid=req.pid,
@@ -87,6 +140,7 @@ async def checkin(
     else:
         agent.hostname = req.hostname
         agent.ip_internal = req.ip_internal
+        agent.ip_external = ip_ext
         agent.os_info = req.os_info
         agent.username = req.username
         agent.pid = req.pid
@@ -98,6 +152,10 @@ async def checkin(
     db.commit()
 
     import asyncio
+    # Geo lookup: run on new agent or when external IP changes
+    if ip_ext and (is_new or ip_ext != prev_ip_ext):
+        asyncio.create_task(_geo_and_update(req.agent_id, ip_ext))
+
     asyncio.create_task(ws_manager.broadcast({
         "type": "agent_checkin",
         "agent_id": req.agent_id,
