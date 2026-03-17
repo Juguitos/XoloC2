@@ -52,9 +52,9 @@ def compile_beacon_java(req: JavaCompileRequest, _: User = Depends(require_auth)
         with open(manifest, "w") as f:
             f.write("Manifest-Version: 1.0\nMain-Class: Beacon\n")
 
-        # Package into fat JAR
+        # Package into fat JAR — include ALL .class files (Beacon.class + Beacon$1.class etc.)
         jar_path = os.path.join(tmpdir, "beacon.jar")
-        result = subprocess.run([jar, "cfm", jar_path, manifest, "-C", tmpdir, "Beacon.class"],
+        result = subprocess.run([jar, "cfm", jar_path, manifest, "-C", tmpdir, "."],
                                 capture_output=True, text=True, timeout=30, cwd=tmpdir)
         if result.returncode != 0:
             raise HTTPException(status_code=500, detail=f"JAR packaging failed: {result.stderr[-400:]}")
