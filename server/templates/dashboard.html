@@ -2517,13 +2517,37 @@ def run_command(cmd, task_id=None):
             return f"Error: {_le}"
 
     if cmd.startswith("shell "): cmd = cmd[6:]
+
+    # Windows: handle 'cd' natively in Python to avoid cmd.exe trailing-backslash
+    # quoting bugs (e.g. cd /d "C:\" misparses the closing quote).
+    if _WIN:
+        _cd_target = None
+        _lcmd = cmd.strip().lower()
+        if _lcmd in ('cd', 'cd .'):
+            return _cwd
+        elif _lcmd in ('cd..', 'cd ..'):
+            _cd_target = os.path.dirname(_cwd) or _cwd
+        elif _lcmd.startswith('cd '):
+            _cd_target = cmd.strip()[3:].strip().strip('"').strip("'")
+            if not os.path.isabs(_cd_target):
+                _cd_target = os.path.normpath(os.path.join(_cwd, _cd_target))
+        if _cd_target is not None:
+            _cd_target = os.path.normpath(_cd_target)
+            if os.path.isdir(_cd_target):
+                _cwd = _cd_target; _save_cwd(_cwd)
+                return ""
+            return "El sistema no puede encontrar la ruta especificada."
+
     try:
         if _WIN:
             import tempfile as _tf
             _tbat = _tf.mktemp(suffix='.bat')
             try:
                 with open(_tbat, 'w') as _bf:
-                    _bf.write('@echo off\\r\\ncd /d "{}"\\r\\n{}\\r\\necho __CWD__:%CD%\\r\\n'.format(_cwd, cmd))
+                    # cmd.exe misparses "C:\" — the \" looks like an escaped quote.
+                    # Appending a dot ("C:\.") avoids trailing-backslash before the closing quote.
+                    _safe_cwd = _cwd if not _cwd.endswith('\\\\') else _cwd + '.'
+                    _bf.write('@echo off\\r\\ncd /d "{}"\\r\\n{}\\r\\necho __CWD__:%CD%\\r\\n'.format(_safe_cwd, cmd))
                 result = subprocess.run(_tbat, shell=True, capture_output=True, text=True, timeout=60)
             finally:
                 try: os.remove(_tbat)
