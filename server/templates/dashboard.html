@@ -1194,13 +1194,15 @@ function _fbRenderList(data, agentId) {
     const fullPath = data.path.endsWith(sep) ? data.path + e.name : data.path + sep + e.name;
     const icon = e.type === 'dir' ? '📁' : getFileIcon(e.name);
     const sizeStr = e.type === 'dir' ? '—' : formatSize(e.size);
+    const readBtn = (e.type !== 'dir' && fbIsReadable(e.name)) ? `
+      <button class="btn btn-sm btn-ghost" style="padding:2px 7px;font-size:11px" title="${_lang==='es'?'Leer archivo':'Read file'}"
+        data-agent="${escapeHtml(agentId)}" data-path="${escapeHtml(fullPath)}" data-name="${escapeHtml(e.name)}"
+        onclick="fbRead(this.dataset.agent,this.dataset.path,this.dataset.name)">👁</button>` : '';
     const actions = e.type !== 'dir' ? `
       <button class="btn btn-sm btn-ghost" style="padding:2px 7px;font-size:11px" title="${_lang==='es'?'Descargar':'Download'}"
         data-agent="${escapeHtml(agentId)}" data-path="${escapeHtml(fullPath)}" data-name="${escapeHtml(e.name)}"
         onclick="fbDownload(this.dataset.agent,this.dataset.path,this.dataset.name)">⬇</button>
-      <button class="btn btn-sm btn-ghost" style="padding:2px 7px;font-size:11px" title="${_lang==='es'?'Leer archivo':'Read file'}"
-        data-agent="${escapeHtml(agentId)}" data-path="${escapeHtml(fullPath)}" data-name="${escapeHtml(e.name)}"
-        onclick="fbRead(this.dataset.agent,this.dataset.path,this.dataset.name)">👁</button>` : '';
+      ${readBtn}` : '';
     return `<tr>
       <td>${e.type === 'dir'
         ? `<button class="btn btn-sm btn-ghost" style="font-family:var(--font-mono);font-size:11px;text-align:left;width:100%;justify-content:flex-start"
@@ -1246,6 +1248,10 @@ function _fbRenderIcons(data, agentId) {
     const thumb = isImgExt(e.name)
       ? `<img class="fb-icon-thumb" data-imgpath="${escapeHtml(fullPath)}" src="" alt="">`
       : `<div class="fb-icon-emoji">${getFileIcon(e.name)}</div>`;
+    const iconReadBtn = fbIsReadable(e.name) ? `
+        <button class="btn btn-sm btn-ghost" style="padding:2px 6px;font-size:10px" title="${_lang==='es'?'Leer':'Read'}"
+          data-agent="${escapeHtml(agentId)}" data-path="${escapeHtml(fullPath)}" data-name="${escapeHtml(e.name)}"
+          onclick="event.stopPropagation();fbRead(this.dataset.agent,this.dataset.path,this.dataset.name)">👁</button>` : '';
     return `<div class="fb-icon-item">
       ${thumb}
       <div class="fb-icon-label" title="${escapeHtml(e.name)}">${escapeHtml(e.name)}</div>
@@ -1253,9 +1259,7 @@ function _fbRenderIcons(data, agentId) {
         <button class="btn btn-sm btn-ghost" style="padding:2px 6px;font-size:10px" title="${_lang==='es'?'Descargar':'Download'}"
           data-agent="${escapeHtml(agentId)}" data-path="${escapeHtml(fullPath)}" data-name="${escapeHtml(e.name)}"
           onclick="event.stopPropagation();fbDownload(this.dataset.agent,this.dataset.path,this.dataset.name)">⬇</button>
-        <button class="btn btn-sm btn-ghost" style="padding:2px 6px;font-size:10px" title="${_lang==='es'?'Leer':'Read'}"
-          data-agent="${escapeHtml(agentId)}" data-path="${escapeHtml(fullPath)}" data-name="${escapeHtml(e.name)}"
-          onclick="event.stopPropagation();fbRead(this.dataset.agent,this.dataset.path,this.dataset.name)">👁</button>
+        ${iconReadBtn}
       </div>
     </div>`;
   }).join('');
@@ -1275,6 +1279,20 @@ function fbSetView(mode, rerender = true) {
   if (listBtn)  listBtn.style.background  = mode === 'list'  ? 'var(--bg3)' : '';
   if (iconsBtn) iconsBtn.style.background = mode === 'icons' ? 'var(--bg3)' : '';
   if (rerender && _fbLastOutput && _fbAgentId) renderFileListing(_fbLastOutput, _fbAgentId);
+}
+
+function fbIsReadable(name) {
+  // Binary / media / archive extensions that should NOT be opened as text
+  const binary = new Set([
+    'exe','dll','so','dylib','obj','o','bin','class','jar','pyc','pyd',
+    'png','jpg','jpeg','gif','bmp','webp','ico','svg','tiff','tif',
+    'mp3','wav','ogg','flac','aac','mp4','avi','mkv','mov','wmv','webm',
+    'zip','gz','tar','rar','7z','bz2','xz','lz','zst',
+    'pdf','doc','docx','xls','xlsx','ppt','pptx',
+    'db','sqlite','sqlite3','mdb','accdb',
+  ]);
+  const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+  return !binary.has(ext); // no extension = likely text (e.g. Makefile, Dockerfile)
 }
 
 function getFileIcon(name) {
@@ -1323,7 +1341,7 @@ async function fbRead(agentId, fullPath, filename) {
 
 async function fbLoadThumbnail(agentId, fullPath, imgEl) {
   const r = await apiFetch('/api/agents/' + agentId + '/tasks', {
-    method: 'POST', body: JSON.stringify({ command: `__download__:${fullPath}` }),
+    method: 'POST', body: JSON.stringify({ command: `download ${fullPath}` }),
   });
   if (!r || !r.ok) return;
   const task = await r.json();
