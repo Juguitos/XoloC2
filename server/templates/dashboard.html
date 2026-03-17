@@ -23,21 +23,21 @@
     </div>
     <nav class="sidebar-nav">
       <button class="nav-item active" onclick="showView('agents')" id="nav-agents">
-        <span class="icon">⚡</span> Sessions
+        <span class="icon">⚡</span> <span data-i18n="nav_sessions">Sessions</span>
       </button>
       <button class="nav-item" onclick="showView('generate')" id="nav-generate">
-        <span class="icon">⚙</span> Generate Beacon
+        <span class="icon">⚙</span> <span data-i18n="nav_generate">Generate Beacon</span>
       </button>
       <button class="nav-item" onclick="showView('redirector')" id="nav-redirector">
-        <span class="icon">↪</span> Redirector
+        <span class="icon">↪</span> <span data-i18n="nav_redirector">Redirector</span>
       </button>
     </nav>
     <div class="sidebar-footer">
       <button class="nav-item" onclick="showView('settings')" id="nav-settings">
-        <span class="icon">⚙</span> Settings
+        <span class="icon">⚙</span> <span data-i18n="nav_settings">Settings</span>
       </button>
       <button class="nav-item" onclick="logout()">
-        <span class="icon">⏻</span> Logout
+        <span class="icon">⏻</span> <span data-i18n="nav_logout">Logout</span>
         <span id="sidebar-user" style="color:var(--text3);font-size:10px;margin-left:auto"></span>
       </button>
     </div>
@@ -48,6 +48,8 @@
     <div class="topbar">
       <span class="topbar-title" id="topbar-title">Sessions</span>
       <div style="display:flex;align-items:center;gap:16px">
+        <button id="lang-en-btn" onclick="setLang('en')" title="English" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px;line-height:1;opacity:1">🇺🇸</button>
+        <button id="lang-es-btn" onclick="setLang('es')" title="Español" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px;line-height:1;opacity:0.4">🇲🇽</button>
         <span id="ws-indicator" title="WebSocket" style="font-size:10px;color:var(--text3)">● WS</span>
         <span id="topbar-status" style="color:var(--text3);font-size:11px"></span>
         <span id="session-timer" style="font-size:11px;color:var(--text3);font-family:var(--font-mono)" title="Session expires in"></span>
@@ -66,22 +68,22 @@
 <!-- Upload File Modal -->
 <div class="modal-overlay" id="upload-modal">
   <div class="modal">
-    <h2>↑ Upload File to Agent</h2>
-    <p style="color:var(--text3);font-size:11px;margin-bottom:16px;line-height:1.5">
+    <h2 data-i18n="upload_title">↑ Upload File to Agent</h2>
+    <p style="color:var(--text3);font-size:11px;margin-bottom:16px;line-height:1.5" data-i18n="upload_desc">
       The file will be staged on the server. The beacon will download and write it to the destination path on its next check-in.
     </p>
     <div class="error-msg" id="upload-error"></div>
     <div class="form-group">
-      <label>File</label>
+      <label data-i18n="upload_file_label">File</label>
       <input type="file" id="upload-file" style="color:var(--text);background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px;width:100%">
     </div>
     <div class="form-group">
-      <label>Destination path on target</label>
+      <label data-i18n="upload_dest_label">Destination path on target</label>
       <input type="text" id="upload-dest" placeholder="/tmp/file.txt">
     </div>
     <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
-      <button class="btn btn-ghost" onclick="closeUploadModal()">Cancel</button>
-      <button class="btn" onclick="submitUpload()">↑ Upload</button>
+      <button class="btn btn-ghost" onclick="closeUploadModal()" data-i18n="upload_cancel">Cancel</button>
+      <button class="btn" onclick="submitUpload()" data-i18n="upload_submit">↑ Upload</button>
     </div>
   </div>
 </div>
@@ -90,10 +92,10 @@
 <div class="modal-overlay" id="pty-modal">
   <div class="modal" style="max-width:900px;width:95vw;max-height:92vh;padding:16px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <h2 style="margin:0;font-size:14px">🖥 Interactive Shell</h2>
+      <h2 style="margin:0;font-size:14px" data-i18n="pty_title">🖥 Interactive Shell</h2>
       <div style="display:flex;gap:10px;align-items:center">
-        <span id="pty-status" style="font-size:11px;color:var(--text3)">Connecting...</span>
-        <button class="btn btn-sm btn-ghost" onclick="closePtyShell()">✕ Close</button>
+        <span id="pty-status" style="font-size:11px;color:var(--text3)" data-i18n="pty_connecting">Connecting...</span>
+        <button class="btn btn-sm btn-ghost" onclick="closePtyShell()" data-i18n="pty_close">✕ Close</button>
       </div>
     </div>
     <div id="pty-terminal" style="height:500px;background:#0d0d0d;border-radius:6px;overflow:hidden;padding:4px"></div>
@@ -103,28 +105,211 @@
 <!-- Change Password Modal -->
 <div class="modal-overlay" id="pw-modal">
   <div class="modal">
-    <h2>Change Password</h2>
+    <h2 data-i18n="cpw_title">Change Password</h2>
     <div class="error-msg" id="pw-modal-error"></div>
     <div class="form-group">
-      <label>Current Password</label>
+      <label data-i18n="cpw_current">Current Password</label>
       <input type="password" id="pm-current">
     </div>
     <div class="form-group">
-      <label>New Password (min 12 chars)</label>
+      <label data-i18n="cpw_new">New Password (min 12 chars)</label>
       <input type="password" id="pm-new">
     </div>
     <div class="form-group">
-      <label>Confirm New Password</label>
+      <label data-i18n="cpw_confirm">Confirm New Password</label>
       <input type="password" id="pm-confirm">
     </div>
     <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
-      <button class="btn btn-ghost" onclick="closePwModal()">Cancel</button>
-      <button class="btn" onclick="submitChangePw()">Change</button>
+      <button class="btn btn-ghost" onclick="closePwModal()" data-i18n="cpw_cancel">Cancel</button>
+      <button class="btn" onclick="submitChangePw()" data-i18n="cpw_submit">Change</button>
     </div>
   </div>
 </div>
 
 <script>
+// ── i18n ─────────────────────────────────────────────────
+const LANG = {
+  en: {
+    nav_sessions:'Sessions', nav_generate:'Generate Beacon', nav_redirector:'Redirector',
+    nav_settings:'Settings', nav_logout:'Logout',
+    title_sessions:'Sessions', title_generate:'Generate Beacon',
+    title_redirector:'Redirector Config', title_settings:'Settings',
+    stat_total:'Total Sessions', stat_online:'Online', stat_offline:'Offline',
+    agents_title:'Active Sessions', agents_refresh:'↻ Refresh',
+    agents_empty:'No sessions yet. Deploy a beacon to see it here.',
+    col_status:'Status', col_id:'ID', col_hostname:'Hostname', col_user:'User',
+    col_ip_int:'IP (Internal)', col_os:'OS', col_last_seen:'Last Seen',
+    badge_online:'ONLINE', badge_offline:'OFFLINE',
+    del_session_confirm:'Delete this session? All tasks will be removed.',
+    back:'← Back', session_info:'Session Info', note_label:'Note',
+    note_placeholder:'Add a note...', save_note:'Save Note',
+    socks5_label:'SOCKS5 Tunnel', socks5_port:'Port',
+    socks5_start:'▶ Start', socks5_stop:'■ Stop',
+    export_label:'Export', export_txt:'⬇ Export .txt', export_json:'⬇ Export .json',
+    pty_shell:'🖥 PTY Shell', upload_btn:'↑ Upload', clear_btn:'Clear',
+    connected_msg:'Connected. Type a command and press Enter.',
+    builtin_label:'Built-in:', cmd_placeholder:'Enter command...',
+    gen_title:'⚙ Generate Beacon', gen_subtitle:'Authorized engagements only.',
+    gen_connection:'Connection', gen_c2_label:'C2 Listeners (primary + fallbacks)',
+    gen_add_fallback:'+ Add fallback', gen_sleep:'Sleep (seconds)', gen_jitter:'Jitter %',
+    gen_persist:'Persistence (survives reboots)', gen_evasion:'Evasion',
+    ev_traffic:'Traffic camouflage', ev_traffic_desc:'Fake browser User-Agent and real HTTP headers',
+    ev_sandbox:'Sandbox detection', ev_sandbox_desc:'Detects VMs, sandboxes and analysis environments',
+    ev_masq:'Process masquerade', ev_masq_desc:'Changes process name (Linux)',
+    ev_encrypt:'Payload encryption', ev_encrypt_desc:'Encrypts each request body with XOR+nonce',
+    ev_background:'Background execution', ev_background_desc:'Linux: double-fork daemon · Windows: no console window',
+    gen_btn:'⚡ Generate Beacon', save_as:'Save as',
+    info_title:'Info', info_type_py:'Python 3 beacon', info_type_java:'Java 11 beacon',
+    info_out_py:'.py / Linux ELF', info_cross_yes:'Yes — Windows/Linux/macOS',
+    rd_title:'Parameters',
+    rd_desc:'Generate config for a redirector server (clean VPS) that forwards C2 traffic to the real server and serves legitimate content to others.',
+    rd_c2:'Real C2 (IP:port)', rd_domain:'Redirector domain',
+    rd_decoy:'Decoy URL (rest of traffic)', rd_path:'Beacon path (regex)',
+    rd_deploy_notes:'Deployment notes:',
+    rd_note1:'Install on a clean VPS with a different IP/domain than the real C2',
+    rd_note2:'The real C2 must listen on the IP configured above',
+    rd_note3:'Enable mod_proxy / mod_proxy_http on Apache',
+    rd_note4:'Use a valid TLS cert on the redirector (Let\'s Encrypt / Certbot)',
+    rd_note5:'The beacon points to the redirector, not the real C2',
+    st_changepw:'Change Password', st_current_pw:'Current password',
+    st_new_pw:'New password (min 12)', st_confirm_pw:'Confirm new password',
+    st_update_pw_btn:'Update password', st_pw_updated:'✓ Password updated.',
+    mfa_title:'Two-factor Authentication (MFA)',
+    mfa_desc:'Compatible with Google Authenticator and Microsoft Authenticator.',
+    mfa_loading:'Loading...', mfa_enabled_badge:'● Enabled', mfa_disabled_badge:'○ Disabled',
+    mfa_activate:'Enable MFA', mfa_deactivate:'Disable',
+    mfa_scan_desc:'Scan the QR code with your authenticator and enter the 6-digit code to confirm.',
+    mfa_manual_key:'Manual key', mfa_confirm_btn:'Confirm and enable', mfa_cancel:'Cancel',
+    mfa_disable_prompt:'Enter your current MFA code to disable it.',
+    mfa_disable_btn:'Disable MFA', mfa_disable_cancel:'Cancel',
+    users_title:'User Management', col_username:'Username', users_empty:'No users',
+    new_user_label:'Username', new_user_pass_label:'Password (min 12)',
+    create_user_btn:'+ Create', del_user_confirm:'Delete user',
+    wl_title:'IP Whitelist', wl_enable:'Enable restriction',
+    wl_desc:'Restricts the panel to listed IPs. Beacons are never blocked.',
+    wl_detected_ip:'Your IP detected by server', wl_detecting:'Detecting...',
+    wl_use_ip:'↓ Use this IP',
+    wl_warning:'⚠ Make sure your IP is in the list before saving or you will lose access.',
+    col_name:'Name', col_pub_ip:'Public IP', wl_name_placeholder:'Office, Home, VPN...',
+    wl_save:'Save', wl_saving:'Saving...', wl_saved:'✓ Saved',
+    wl_error:'✗ Error saving', wl_no_entries:'No entries',
+    upload_title:'↑ Upload File to Agent',
+    upload_desc:'The file will be staged on the server. The beacon will download and write it to the destination path on its next check-in.',
+    upload_file_label:'File', upload_dest_label:'Destination path on target',
+    upload_cancel:'Cancel', upload_submit:'↑ Upload',
+    pty_title:'🖥 Interactive Shell', pty_connecting:'Connecting...', pty_close:'✕ Close',
+    cpw_title:'Change Password', cpw_current:'Current Password',
+    cpw_new:'New Password (min 12 chars)', cpw_confirm:'Confirm New Password',
+    cpw_cancel:'Cancel', cpw_submit:'Change',
+    socks_running:'Running', socks_stopped:'Stopped', socks_no_channels:'No active channels',
+    loading:'Loading...', no_available:'N/A',
+  },
+  es: {
+    nav_sessions:'Sesiones', nav_generate:'Generar Beacon', nav_redirector:'Redirector',
+    nav_settings:'Ajustes', nav_logout:'Salir',
+    title_sessions:'Sesiones', title_generate:'Generar Beacon',
+    title_redirector:'Config. Redirector', title_settings:'Ajustes',
+    stat_total:'Sesiones Totales', stat_online:'En línea', stat_offline:'Sin conexión',
+    agents_title:'Sesiones Activas', agents_refresh:'↻ Actualizar',
+    agents_empty:'Sin sesiones. Despliega un beacon para verlo aquí.',
+    col_status:'Estado', col_id:'ID', col_hostname:'Hostname', col_user:'Usuario',
+    col_ip_int:'IP (Interna)', col_os:'SO', col_last_seen:'Última vez',
+    badge_online:'EN LÍNEA', badge_offline:'OFFLINE',
+    del_session_confirm:'¿Eliminar esta sesión? Se borrarán todas las tareas.',
+    back:'← Volver', session_info:'Info de Sesión', note_label:'Nota',
+    note_placeholder:'Añade una nota...', save_note:'Guardar Nota',
+    socks5_label:'Túnel SOCKS5', socks5_port:'Puerto',
+    socks5_start:'▶ Iniciar', socks5_stop:'■ Detener',
+    export_label:'Exportar', export_txt:'⬇ Exportar .txt', export_json:'⬇ Exportar .json',
+    pty_shell:'🖥 Shell PTY', upload_btn:'↑ Subir', clear_btn:'Limpiar',
+    connected_msg:'Conectado. Escribe un comando y presiona Enter.',
+    builtin_label:'Comandos:', cmd_placeholder:'Escribe un comando...',
+    gen_title:'⚙ Generar Beacon', gen_subtitle:'Solo para engagements autorizados.',
+    gen_connection:'Conexión', gen_c2_label:'C2 Listeners (primario + fallbacks)',
+    gen_add_fallback:'+ Agregar fallback', gen_sleep:'Sleep (segundos)', gen_jitter:'Jitter %',
+    gen_persist:'Persistencia (sobrevive reinicios)', gen_evasion:'Evasión',
+    ev_traffic:'Traffic camouflage', ev_traffic_desc:'Fake browser User-Agent y headers HTTP reales',
+    ev_sandbox:'Sandbox detection', ev_sandbox_desc:'Detecta VMs, sandboxes y entornos de análisis',
+    ev_masq:'Process masquerade', ev_masq_desc:'Cambia el nombre del proceso (Linux)',
+    ev_encrypt:'Payload encryption', ev_encrypt_desc:'Cifra el body de cada request con XOR+nonce',
+    ev_background:'Background execution', ev_background_desc:'Linux: doble-fork daemon · Windows: sin ventana de consola',
+    gen_btn:'⚡ Generar Beacon', save_as:'Guardar como',
+    info_title:'Info', info_type_py:'Python 3 beacon', info_type_java:'Java 11 beacon',
+    info_out_py:'.py / Linux ELF', info_cross_yes:'Sí — Windows/Linux/macOS',
+    rd_title:'Parámetros',
+    rd_desc:'Genera configuración para un servidor redirector (VPS limpio) que reenvía tráfico C2 al servidor real y sirve contenido legítimo al resto.',
+    rd_c2:'C2 real (IP:puerto)', rd_domain:'Dominio del redirector',
+    rd_decoy:'URL señuelo (resto del tráfico)', rd_path:'Path del beacon (regex)',
+    rd_deploy_notes:'Notas de despliegue:',
+    rd_note1:'Instalar en un VPS limpio con IP/dominio diferente al C2 real',
+    rd_note2:'El C2 real debe escuchar en la IP configurada arriba',
+    rd_note3:'Habilitar mod_proxy / mod_proxy_http en Apache',
+    rd_note4:'Usar certificado TLS válido en el redirector (Let\'s Encrypt / Certbot)',
+    rd_note5:'El beacon apunta al redirector, no al C2 real',
+    st_changepw:'Cambiar Contraseña', st_current_pw:'Contraseña actual',
+    st_new_pw:'Nueva contraseña (min 12)', st_confirm_pw:'Confirmar nueva contraseña',
+    st_update_pw_btn:'Actualizar contraseña', st_pw_updated:'✓ Contraseña actualizada.',
+    mfa_title:'Autenticación de dos factores (MFA)',
+    mfa_desc:'Compatible con Google Authenticator y Microsoft Authenticator.',
+    mfa_loading:'Cargando...', mfa_enabled_badge:'● Activado', mfa_disabled_badge:'○ Desactivado',
+    mfa_activate:'Activar MFA', mfa_deactivate:'Desactivar',
+    mfa_scan_desc:'Escanea el código QR con tu autenticador y luego ingresa el código de 6 dígitos para confirmar.',
+    mfa_manual_key:'Clave manual', mfa_confirm_btn:'Confirmar y activar', mfa_cancel:'Cancelar',
+    mfa_disable_prompt:'Ingresa tu código MFA actual para desactivarlo.',
+    mfa_disable_btn:'Desactivar MFA', mfa_disable_cancel:'Cancelar',
+    users_title:'Gestión de usuarios', col_username:'Usuario', users_empty:'Sin usuarios',
+    new_user_label:'Usuario', new_user_pass_label:'Contraseña (min 12)',
+    create_user_btn:'+ Crear', del_user_confirm:'Eliminar usuario',
+    wl_title:'Lista blanca de IPs', wl_enable:'Activar restricción',
+    wl_desc:'Restringe el panel a las IPs listadas. Los beacons nunca se bloquean.',
+    wl_detected_ip:'Tu IP detectada por el servidor', wl_detecting:'Detectando...',
+    wl_use_ip:'↓ Usar esta IP',
+    wl_warning:'⚠ Asegúrate de que tu IP esté en la lista antes de guardar o perderás acceso.',
+    col_name:'Nombre', col_pub_ip:'IP Pública', wl_name_placeholder:'Oficina, Casa, VPN...',
+    wl_save:'Guardar', wl_saving:'Guardando...', wl_saved:'✓ Guardado',
+    wl_error:'✗ Error al guardar', wl_no_entries:'No hay entradas',
+    upload_title:'↑ Subir Archivo al Agente',
+    upload_desc:'El archivo se almacenará en el servidor. El beacon lo descargará y escribirá en la ruta destino en su siguiente check-in.',
+    upload_file_label:'Archivo', upload_dest_label:'Ruta destino en el objetivo',
+    upload_cancel:'Cancelar', upload_submit:'↑ Subir',
+    pty_title:'🖥 Shell Interactiva', pty_connecting:'Conectando...', pty_close:'✕ Cerrar',
+    cpw_title:'Cambiar Contraseña', cpw_current:'Contraseña Actual',
+    cpw_new:'Nueva Contraseña (min 12 chars)', cpw_confirm:'Confirmar Nueva Contraseña',
+    cpw_cancel:'Cancelar', cpw_submit:'Cambiar',
+    socks_running:'Activo', socks_stopped:'Detenido', socks_no_channels:'Sin canales activos',
+    loading:'Cargando...', no_available:'No disponible',
+  }
+};
+
+let _lang = localStorage.getItem('xolo_lang') || 'en';
+
+function t(key) {
+  return (LANG[_lang] && LANG[_lang][key]) || (LANG.en && LANG.en[key]) || key;
+}
+
+function setLang(lang) {
+  _lang = lang;
+  localStorage.setItem('xolo_lang', lang);
+  const enBtn = document.getElementById('lang-en-btn');
+  const esBtn = document.getElementById('lang-es-btn');
+  if (enBtn) enBtn.style.opacity = lang === 'en' ? '1' : '0.4';
+  if (esBtn) esBtn.style.opacity = lang === 'es' ? '1' : '0.4';
+  applyStaticTranslations();
+  showView(currentView, currentView === 'session' ? currentAgentId : undefined);
+}
+
+function applyStaticTranslations() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.textContent = t(el.getAttribute('data-i18n'));
+  });
+  // Sync PTY status span if not currently connecting
+  const ptyStatus = document.getElementById('pty-status');
+  if (ptyStatus && ptyStatus.textContent !== '') {
+    const key = ptyStatus.dataset.state === 'connected' ? 'pty_shell' : 'pty_connecting';
+    ptyStatus.textContent = t(key);
+  }
+}
+
 // ── Auth helpers ────────────────────────────────────────
 const TOKEN_KEY = 'xolo_token';
 
@@ -237,6 +422,13 @@ function connectWS() {
 (async function init() {
   if (!getToken()) { window.location.href = '/login'; return; }
 
+  // Apply saved language on page load
+  const enBtn = document.getElementById('lang-en-btn');
+  const esBtn = document.getElementById('lang-es-btn');
+  if (enBtn) enBtn.style.opacity = _lang === 'en' ? '1' : '0.4';
+  if (esBtn) esBtn.style.opacity = _lang === 'es' ? '1' : '0.4';
+  applyStaticTranslations();
+
   const res = await apiFetch('/api/auth/me');
   if (!res) return;
   if (!res.ok) { logout(); return; }
@@ -264,20 +456,20 @@ function showView(view, agentId) {
   if (navEl) navEl.classList.add('active');
 
   if (view === 'agents') {
-    document.getElementById('topbar-title').textContent = 'Sessions';
+    document.getElementById('topbar-title').textContent = t('title_sessions');
     renderAgentsView();
     pollTimer = setInterval(refreshAgentList, 30000); // WS handles real-time; this is fallback
   } else if (view === 'session') {
     document.getElementById('topbar-title').textContent = 'Session: ' + agentId.slice(0, 8) + '...';
     renderSessionView(agentId);
   } else if (view === 'generate') {
-    document.getElementById('topbar-title').textContent = 'Generate Beacon';
+    document.getElementById('topbar-title').textContent = t('title_generate');
     renderGenerateView();
   } else if (view === 'redirector') {
-    document.getElementById('topbar-title').textContent = 'Redirector Config';
+    document.getElementById('topbar-title').textContent = t('title_redirector');
     renderRedirectorView();
   } else if (view === 'settings') {
-    document.getElementById('topbar-title').textContent = 'Settings';
+    document.getElementById('topbar-title').textContent = t('title_settings');
     renderSettingsView();
   }
 }
@@ -292,14 +484,14 @@ async function renderAgentsView() {
   const content = document.getElementById('content');
   content.innerHTML = `
     <div class="stats-row" id="stats-row">
-      <div class="stat-card"><div class="label">Total Sessions</div><div class="value" id="stat-total">—</div></div>
-      <div class="stat-card"><div class="label">Online</div><div class="value online" id="stat-online">—</div></div>
-      <div class="stat-card"><div class="label">Offline</div><div class="value" id="stat-offline" style="color:var(--text3)">—</div></div>
+      <div class="stat-card"><div class="label">${t('stat_total')}</div><div class="value" id="stat-total">—</div></div>
+      <div class="stat-card"><div class="label">${t('stat_online')}</div><div class="value online" id="stat-online">—</div></div>
+      <div class="stat-card"><div class="label">${t('stat_offline')}</div><div class="value" id="stat-offline" style="color:var(--text3)">—</div></div>
     </div>
     <div class="table-wrap">
       <div class="table-header">
-        <h2>Active Sessions</h2>
-        <button class="btn btn-sm btn-ghost" onclick="refreshAgentList()">↻ Refresh</button>
+        <h2>${t('agents_title')}</h2>
+        <button class="btn btn-sm btn-ghost" onclick="refreshAgentList()">${t('agents_refresh')}</button>
       </div>
       <div id="agent-table-body"></div>
     </div>`;
@@ -320,7 +512,7 @@ async function refreshAgentList() {
   if (!body) return;
 
   if (agents.length === 0) {
-    body.innerHTML = `<div class="empty-state"><div class="icon">📡</div><p>No sessions yet. Deploy a beacon to see it here.</p></div>`;
+    body.innerHTML = `<div class="empty-state"><div class="icon">📡</div><p>${t('agents_empty')}</p></div>`;
     return;
   }
 
@@ -328,13 +520,13 @@ async function refreshAgentList() {
     <table>
       <thead>
         <tr>
-          <th>Status</th>
-          <th>ID</th>
-          <th>Hostname</th>
-          <th>User</th>
-          <th>IP (Internal)</th>
-          <th>OS</th>
-          <th>Last Seen</th>
+          <th>${t('col_status')}</th>
+          <th>${t('col_id')}</th>
+          <th>${t('col_hostname')}</th>
+          <th>${t('col_user')}</th>
+          <th>${t('col_ip_int')}</th>
+          <th>${t('col_os')}</th>
+          <th>${t('col_last_seen')}</th>
           <th></th>
         </tr>
       </thead>
@@ -344,7 +536,7 @@ async function refreshAgentList() {
             <td>
               <span class="badge ${a.online ? 'badge-online' : 'badge-offline'}">
                 <span class="dot ${a.online ? 'dot-online' : 'dot-offline'}"></span>
-                ${a.online ? 'ONLINE' : 'OFFLINE'}
+                ${a.online ? t('badge_online') : t('badge_offline')}
               </span>
             </td>
             <td style="color:var(--text3);font-size:11px">${escapeHtml(a.id.slice(0, 8))}</td>
@@ -362,7 +554,7 @@ async function refreshAgentList() {
 }
 
 async function deleteAgent(id) {
-  if (!confirm('Delete this session? All tasks will be removed.')) return;
+  if (!confirm(t('del_session_confirm'))) return;
   await apiFetch('/api/agents/' + id, { method: 'DELETE' });
   refreshAgentList();
 }
@@ -372,42 +564,42 @@ async function renderSessionView(agentId) {
   const content = document.getElementById('content');
   content.innerHTML = `
     <div style="margin-bottom:12px">
-      <button class="btn btn-ghost btn-sm" onclick="showView('agents')">← Back</button>
+      <button class="btn btn-ghost btn-sm" onclick="showView('agents')">${t('back')}</button>
     </div>
     <div class="session-layout" style="height:calc(100vh - 140px)">
       <div class="session-info">
         <div class="info-card" id="agent-info-card">
-          <h3>Session Info</h3>
-          <div style="color:var(--text3);font-size:11px">Loading...</div>
+          <h3>${t('session_info')}</h3>
+          <div style="color:var(--text3);font-size:11px">${t('loading')}</div>
         </div>
         <div class="info-card">
-          <h3>Note</h3>
-          <textarea id="agent-note" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--font-mono);font-size:11px;padding:8px;resize:none;height:80px;outline:none" placeholder="Add a note..."></textarea>
-          <button class="btn btn-sm" style="margin-top:6px;width:100%" onclick="saveNote('${escapeHtml(agentId)}')">Save Note</button>
+          <h3>${t('note_label')}</h3>
+          <textarea id="agent-note" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--font-mono);font-size:11px;padding:8px;resize:none;height:80px;outline:none" placeholder="${t('note_placeholder')}"></textarea>
+          <button class="btn btn-sm" style="margin-top:6px;width:100%" onclick="saveNote('${escapeHtml(agentId)}')">${t('save_note')}</button>
         </div>
         <div class="info-card">
-          <h3>SOCKS5 Tunnel</h3>
+          <h3>${t('socks5_label')}</h3>
           <div id="socks-status-wrap">
-            <div id="socks-status-text" style="font-size:11px;color:var(--text3);margin-bottom:8px">Loading...</div>
+            <div id="socks-status-text" style="font-size:11px;color:var(--text3);margin-bottom:8px">${t('loading')}</div>
             <div id="socks-channels" style="font-size:10px;color:var(--text3);margin-bottom:8px"></div>
           </div>
           <div style="display:flex;gap:6px;align-items:end;margin-bottom:8px">
             <div class="form-group" style="margin:0;flex:1">
-              <label style="font-size:10px">Port</label>
+              <label style="font-size:10px">${t('socks5_port')}</label>
               <input type="number" id="socks-port" value="1080" min="1024" max="65535"
                 style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--font-mono);font-size:12px;padding:5px 8px;outline:none;width:100%">
             </div>
           </div>
           <div style="display:flex;gap:6px">
-            <button class="btn btn-sm" onclick="startSocks5('${escapeHtml(agentId)}')">▶ Start</button>
-            <button class="btn btn-sm btn-ghost" onclick="stopSocks5()">■ Stop</button>
+            <button class="btn btn-sm" onclick="startSocks5('${escapeHtml(agentId)}')">${t('socks5_start')}</button>
+            <button class="btn btn-sm btn-ghost" onclick="stopSocks5()">${t('socks5_stop')}</button>
             <button class="btn btn-sm btn-ghost" onclick="refreshSocks5Status()">↻</button>
           </div>
         </div>
         <div class="info-card">
-          <h3>Export</h3>
-          <button class="btn btn-sm btn-ghost" style="width:100%;margin-bottom:6px" onclick="exportTasks('${escapeHtml(agentId)}','txt')">⬇ Export .txt</button>
-          <button class="btn btn-sm btn-ghost" style="width:100%" onclick="exportTasks('${escapeHtml(agentId)}','json')">⬇ Export .json</button>
+          <h3>${t('export_label')}</h3>
+          <button class="btn btn-sm btn-ghost" style="width:100%;margin-bottom:6px" onclick="exportTasks('${escapeHtml(agentId)}','txt')">${t('export_txt')}</button>
+          <button class="btn btn-sm btn-ghost" style="width:100%" onclick="exportTasks('${escapeHtml(agentId)}','json')">${t('export_json')}</button>
         </div>
       </div>
       <div class="session-terminal">
@@ -416,21 +608,21 @@ async function renderSessionView(agentId) {
             <div class="dots"><span class="r"></span><span class="y"></span><span class="g"></span></div>
             <span class="terminal-title">beacon shell — ${escapeHtml(agentId.slice(0, 8))}</span>
             <div style="display:flex;gap:6px">
-              <button class="btn btn-sm btn-ghost" id="pty-btn" onclick="openPtyShell('${escapeHtml(agentId)}')">🖥 PTY Shell</button>
-              <button class="btn btn-sm btn-ghost" onclick="openUploadModal('${escapeHtml(agentId)}')">↑ Upload</button>
-              <button class="btn btn-sm btn-ghost" onclick="clearTerminal()">Clear</button>
+              <button class="btn btn-sm btn-ghost" id="pty-btn" onclick="openPtyShell('${escapeHtml(agentId)}')">${t('pty_shell')}</button>
+              <button class="btn btn-sm btn-ghost" onclick="openUploadModal('${escapeHtml(agentId)}')">${t('upload_btn')}</button>
+              <button class="btn btn-sm btn-ghost" onclick="clearTerminal()">${t('clear_btn')}</button>
             </div>
           </div>
           <div class="terminal-output" id="term-output">
             <div style="color:var(--text3);font-size:11px">
-              Connected. Type a command and press Enter.<br>
-              Built-in: <span style="color:var(--accent)">shell &lt;cmd&gt;</span> | <span style="color:var(--accent)">download &lt;path&gt;</span> | <span style="color:var(--accent)">screenshot</span> | <span style="color:var(--accent)">ps</span> | <span style="color:var(--accent)">kill &lt;pid&gt;</span> | <span style="color:var(--accent)">info</span> | <span style="color:var(--accent)">sleep &lt;s&gt;</span>
+              ${t('connected_msg')}<br>
+              ${t('builtin_label')} <span style="color:var(--accent)">shell &lt;cmd&gt;</span> | <span style="color:var(--accent)">download &lt;path&gt;</span> | <span style="color:var(--accent)">screenshot</span> | <span style="color:var(--accent)">ps</span> | <span style="color:var(--accent)">kill &lt;pid&gt;</span> | <span style="color:var(--accent)">info</span> | <span style="color:var(--accent)">sleep &lt;s&gt;</span>
             </div>
           </div>
           <div class="terminal-input">
             <span id="term-cwd" style="color:var(--accent2);font-size:10pt;margin-right:6px;opacity:0.8">~</span>
             <span class="prompt-sym">❯</span>
-            <input type="text" id="term-input" placeholder="Enter command..."
+            <input type="text" id="term-input" placeholder="${t('cmd_placeholder')}"
                    onkeydown="handleTermKey(event, '${escapeHtml(agentId)}')">
           </div>
         </div>
@@ -464,18 +656,18 @@ async function loadAgentInfo(agentId) {
   if (!card) return;
 
   card.innerHTML = `
-    <h3>Session Info</h3>
-    <div class="info-row"><span class="key">Status</span>
-      <span class="badge ${a.online ? 'badge-online' : 'badge-offline'}">${a.online ? 'ONLINE' : 'OFFLINE'}</span>
+    <h3>${t('session_info')}</h3>
+    <div class="info-row"><span class="key">${t('col_status')}</span>
+      <span class="badge ${a.online ? 'badge-online' : 'badge-offline'}">${a.online ? t('badge_online') : t('badge_offline')}</span>
     </div>
-    <div class="info-row"><span class="key">ID</span><span class="val" style="color:var(--text3)">${escapeHtml(a.id.slice(0, 12))}...</span></div>
-    <div class="info-row"><span class="key">Hostname</span><span class="val">${escapeHtml(a.hostname || '—')}</span></div>
-    <div class="info-row"><span class="key">User</span><span class="val" style="color:var(--accent2)">${escapeHtml(a.username || '—')}</span></div>
-    <div class="info-row"><span class="key">IP Internal</span><span class="val">${escapeHtml(a.ip_internal || '—')}</span></div>
-    <div class="info-row"><span class="key">OS</span><span class="val">${escapeHtml(a.os_info || '—')}</span></div>
+    <div class="info-row"><span class="key">${t('col_id')}</span><span class="val" style="color:var(--text3)">${escapeHtml(a.id.slice(0, 12))}...</span></div>
+    <div class="info-row"><span class="key">${t('col_hostname')}</span><span class="val">${escapeHtml(a.hostname || '—')}</span></div>
+    <div class="info-row"><span class="key">${t('col_user')}</span><span class="val" style="color:var(--accent2)">${escapeHtml(a.username || '—')}</span></div>
+    <div class="info-row"><span class="key">${t('col_ip_int')}</span><span class="val">${escapeHtml(a.ip_internal || '—')}</span></div>
+    <div class="info-row"><span class="key">${t('col_os')}</span><span class="val">${escapeHtml(a.os_info || '—')}</span></div>
     <div class="info-row"><span class="key">PID</span><span class="val">${a.pid || '—'}</span></div>
     <div class="info-row"><span class="key">Sleep</span><span class="val">${a.sleep_interval}s</span></div>
-    <div class="info-row"><span class="key">Last seen</span><span class="val">${a.seconds_ago !== null ? formatAgo(a.seconds_ago) : '—'}</span></div>`;
+    <div class="info-row"><span class="key">${t('col_last_seen')}</span><span class="val">${a.seconds_ago !== null ? formatAgo(a.seconds_ago) : '—'}</span></div>`;
 
   const noteEl = document.getElementById('agent-note');
   if (noteEl) noteEl.value = a.note || '';
@@ -556,8 +748,8 @@ function renderTerminal() {
   if (!out) return;
 
   const intro = `<div style="color:var(--text3);font-size:11px;margin-bottom:10px">
-    Connected. Type a command and press Enter.<br>
-    Built-in: <span style="color:var(--accent)">shell &lt;cmd&gt;</span> | <span style="color:var(--accent)">info</span> | <span style="color:var(--accent)">sleep &lt;seconds&gt;</span>
+    ${t('connected_msg')}<br>
+    ${t('builtin_label')} <span style="color:var(--accent)">shell &lt;cmd&gt;</span> | <span style="color:var(--accent)">info</span> | <span style="color:var(--accent)">sleep &lt;seconds&gt;</span>
   </div>`;
 
   const entries = taskHistory.map(t => {
@@ -740,25 +932,25 @@ function renderRedirectorView() {
     <div style="max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:16px;padding-bottom:40px">
 
       <div class="info-card" style="margin:0">
-        <h3>Parámetros</h3>
+        <h3>${t('rd_title')}</h3>
         <p style="font-size:11px;color:var(--text3);margin-bottom:16px;line-height:1.6">
-          Genera configuración para un servidor redirector (VPS limpio) que reenvía tráfico C2 al servidor real y sirve contenido legítimo al resto.
+          ${t('rd_desc')}
         </p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
           <div class="form-group" style="margin:0">
-            <label>C2 real (IP:puerto)</label>
+            <label>${t('rd_c2')}</label>
             <input type="text" id="rd-c2" placeholder="10.10.10.10:8443" value="${window.location.host}">
           </div>
           <div class="form-group" style="margin:0">
-            <label>Dominio del redirector</label>
+            <label>${t('rd_domain')}</label>
             <input type="text" id="rd-domain" placeholder="cdn-update.example.com">
           </div>
           <div class="form-group" style="margin:0">
-            <label>URL señuelo (resto del tráfico)</label>
+            <label>${t('rd_decoy')}</label>
             <input type="text" id="rd-decoy" placeholder="https://www.microsoft.com/" value="https://www.microsoft.com/">
           </div>
           <div class="form-group" style="margin:0">
-            <label>Path del beacon (regex)</label>
+            <label>${t('rd_path')}</label>
             <input type="text" id="rd-path" placeholder="/api/beacon" value="/api/beacon">
           </div>
         </div>
@@ -777,12 +969,12 @@ function renderRedirectorView() {
           </div>
           <pre id="rd-code" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:14px;font-size:11px;color:var(--accent2);white-space:pre;overflow-x:auto;line-height:1.6"></pre>
           <div style="margin-top:12px;padding:10px 14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:6px;font-size:11px;color:var(--warning);line-height:1.7">
-            <strong>Notas de despliegue:</strong><br>
-            • Instalar en un VPS limpio con IP/dominio diferente al C2 real<br>
-            • El C2 real debe escuchar en la IP configurada arriba<br>
-            • Habilitar <code>mod_proxy</code> / <code>mod_proxy_http</code> en Apache<br>
-            • Usar certificado TLS válido en el redirector (Let's Encrypt / Certbot)<br>
-            • El beacon apunta al redirector, no al C2 real
+            <strong>${t('rd_deploy_notes')}</strong><br>
+            • ${t('rd_note1')}<br>
+            • ${t('rd_note2')}<br>
+            • ${t('rd_note3')} (<code>mod_proxy</code> / <code>mod_proxy_http</code>)<br>
+            • ${t('rd_note4')}<br>
+            • ${t('rd_note5')}
           </div>
         </div>
       </div>
@@ -905,8 +1097,8 @@ function renderGenerateView() {
 
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
         <div>
-          <h2 style="font-size:15px;font-weight:700;color:var(--text)">⚙ Generate Beacon</h2>
-          <p style="color:var(--text3);font-size:12px;margin-top:4px">Authorized engagements only.</p>
+          <h2 style="font-size:15px;font-weight:700;color:var(--text)">${t('gen_title')}</h2>
+          <p style="color:var(--text3);font-size:12px;margin-top:4px">${t('gen_subtitle')}</p>
         </div>
         <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden">
           <button id="lang-py-btn"  onclick="setBeaconLang('py')"   style="padding:6px 18px;font-size:12px;font-weight:600;background:var(--accent);color:#fff;border:none;cursor:pointer">Python</button>
@@ -916,82 +1108,82 @@ function renderGenerateView() {
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
         <div class="info-card" style="margin:0">
-          <h3>Connection</h3>
+          <h3>${t('gen_connection')}</h3>
           <div class="form-group" style="margin-bottom:8px">
-            <label>C2 Listeners (primario + fallbacks)</label>
+            <label>${t('gen_c2_label')}</label>
             <div id="gen-urls" style="display:flex;flex-direction:column;gap:5px">
               <div style="display:flex;gap:6px">
                 <input type="text" class="gen-url-input" placeholder="https://your-c2:8443" style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--font-mono);font-size:12px;padding:7px 10px;outline:none">
               </div>
             </div>
-            <button class="btn btn-sm btn-ghost" style="margin-top:6px" onclick="addListenerField()">+ Agregar fallback</button>
+            <button class="btn btn-sm btn-ghost" style="margin-top:6px" onclick="addListenerField()">${t('gen_add_fallback')}</button>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
             <div class="form-group" style="margin:0">
-              <label>Sleep (seconds)</label>
+              <label>${t('gen_sleep')}</label>
               <input type="number" id="gen-sleep" value="5" min="1" max="300">
             </div>
             <div class="form-group" style="margin:0">
-              <label>Jitter %</label>
+              <label>${t('gen_jitter')}</label>
               <input type="number" id="gen-jitter" value="20" min="0" max="80">
             </div>
           </div>
           <label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;color:var(--text2);font-size:12px">
             <input type="checkbox" id="gen-persist" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer">
-            Persistencia (sobrevive reinicios)
+            ${t('gen_persist')}
           </label>
         </div>
 
         <div class="info-card" style="margin:0" id="beacon-info-card">
-          <h3>Info</h3>
+          <h3>${t('info_title')}</h3>
           <div id="beacon-info-py">
-            <div class="info-row"><span class="key">Type</span><span class="val">Python 3 beacon</span></div>
+            <div class="info-row"><span class="key">Type</span><span class="val">${t('info_type_py')}</span></div>
             <div class="info-row"><span class="key">Protocol</span><span class="val">HTTPS polling</span></div>
             <div class="info-row"><span class="key">Auth</span><span class="val">X-Agent-Secret header</span></div>
             <div class="info-row"><span class="key">TLS</span><span class="val">Self-signed accepted</span></div>
             <div class="info-row"><span class="key">Deps</span><span class="val">None (stdlib only)</span></div>
-            <div class="info-row"><span class="key">Output</span><span class="val">.py / Linux ELF</span></div>
+            <div class="info-row"><span class="key">Output</span><span class="val">${t('info_out_py')}</span></div>
           </div>
           <div id="beacon-info-java" style="display:none">
-            <div class="info-row"><span class="key">Type</span><span class="val">Java 11 beacon</span></div>
+            <div class="info-row"><span class="key">Type</span><span class="val">${t('info_type_java')}</span></div>
             <div class="info-row"><span class="key">Protocol</span><span class="val">HTTPS polling</span></div>
             <div class="info-row"><span class="key">Auth</span><span class="val">X-Agent-Secret header</span></div>
             <div class="info-row"><span class="key">TLS</span><span class="val">Self-signed accepted</span></div>
             <div class="info-row"><span class="key">Deps</span><span class="val">None (stdlib only)</span></div>
-            <div class="info-row"><span class="key">Output</span><span class="val">Fat JAR (requiere JRE)</span></div>
-            <div class="info-row"><span class="key">Cross-compile</span><span class="val" style="color:var(--online)">Sí — Windows/Linux/macOS</span></div>
+            <div class="info-row"><span class="key">Output</span><span class="val">Fat JAR (JRE required)</span></div>
+            <div class="info-row"><span class="key">Cross-compile</span><span class="val" style="color:var(--online)">${t('info_cross_yes')}</span></div>
           </div>
         </div>
       </div>
 
       <div class="info-card" style="margin:0 0 16px 0">
-        <h3>Evasión</h3>
+        <h3>${t('gen_evasion')}</h3>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;margin-top:4px">
           <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
             <input type="checkbox" id="ev-traffic" checked style="margin-top:2px;accent-color:var(--accent)">
-            <div><div style="color:var(--text)">Traffic camouflage</div><div style="color:var(--text3);font-size:11px">Fake browser User-Agent y headers HTTP reales</div></div>
+            <div><div style="color:var(--text)">${t('ev_traffic')}</div><div style="color:var(--text3);font-size:11px">${t('ev_traffic_desc')}</div></div>
           </label>
           <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
             <input type="checkbox" id="ev-sandbox" checked style="margin-top:2px;accent-color:var(--accent)">
-            <div><div style="color:var(--text)">Sandbox detection</div><div style="color:var(--text3);font-size:11px">Detecta VMs, sandboxes y entornos de análisis</div></div>
+            <div><div style="color:var(--text)">${t('ev_sandbox')}</div><div style="color:var(--text3);font-size:11px">${t('ev_sandbox_desc')}</div></div>
           </label>
           <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
             <input type="checkbox" id="ev-masq" style="margin-top:2px;accent-color:var(--accent)">
-            <div><div style="color:var(--text)">Process masquerade</div><div style="color:var(--text3);font-size:11px">Cambia el nombre del proceso (Linux)</div></div>
+            <div><div style="color:var(--text)">${t('ev_masq')}</div><div style="color:var(--text3);font-size:11px">${t('ev_masq_desc')}</div></div>
           </label>
           <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
             <input type="checkbox" id="ev-encrypt" checked style="margin-top:2px;accent-color:var(--accent)">
-            <div><div style="color:var(--text)">Payload encryption</div><div style="color:var(--text3);font-size:11px">Cifra el body de cada request con XOR+nonce</div></div>
+            <div><div style="color:var(--text)">${t('ev_encrypt')}</div><div style="color:var(--text3);font-size:11px">${t('ev_encrypt_desc')}</div></div>
           </label>
           <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
             <input type="checkbox" id="ev-background" checked style="margin-top:2px;accent-color:var(--accent)">
-            <div><div style="color:var(--text)">Background execution</div><div style="color:var(--text3);font-size:11px">Linux: doble-fork daemon · Windows: sin ventana de consola</div></div>
+            <div><div style="color:var(--text)">${t('ev_background')}</div><div style="color:var(--text3);font-size:11px">${t('ev_background_desc')}</div></div>
           </label>
         </div>
       </div>
 
       <button class="btn" onclick="generateBeacon()" style="width:100%;justify-content:center;padding:12px">
-        ⚡ Generate Beacon
+        ${t('gen_btn')}
       </button>
 
       <div id="gen-output" style="display:none;margin-top:20px">
@@ -1033,46 +1225,46 @@ async function renderSettingsView() {
 
       <!-- Change Password -->
       <div class="info-card" style="margin:0">
-        <h3>Change Password</h3>
+        <h3>${t('st_changepw')}</h3>
         <div class="error-msg" id="st-pw-error"></div>
-        <div id="st-pw-ok" style="display:none;color:var(--online);font-size:12px;margin-bottom:12px">✓ Contraseña actualizada.</div>
+        <div id="st-pw-ok" style="display:none;color:var(--online);font-size:12px;margin-bottom:12px">${t('st_pw_updated')}</div>
         <div class="form-group" style="margin-bottom:12px">
-          <label>Contraseña actual</label>
+          <label>${t('st_current_pw')}</label>
           <input type="password" id="st-pw-current" autocomplete="current-password">
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
           <div class="form-group" style="margin:0">
-            <label>Nueva contraseña (min 12)</label>
+            <label>${t('st_new_pw')}</label>
             <input type="password" id="st-pw-new" autocomplete="new-password">
           </div>
           <div class="form-group" style="margin:0">
-            <label>Confirmar nueva contraseña</label>
+            <label>${t('st_confirm_pw')}</label>
             <input type="password" id="st-pw-confirm" autocomplete="new-password">
           </div>
         </div>
-        <button class="btn btn-sm" onclick="settingsChangePw()">Actualizar contraseña</button>
+        <button class="btn btn-sm" onclick="settingsChangePw()">${t('st_update_pw_btn')}</button>
       </div>
 
       <!-- MFA -->
       <div class="info-card" style="margin:0">
-        <h3>Autenticación de dos factores (MFA)</h3>
+        <h3>${t('mfa_title')}</h3>
         <p style="font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.6">
-          Compatible con Google Authenticator y Microsoft Authenticator.
+          ${t('mfa_desc')}
         </p>
         <div id="mfa-status-row" style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-          <span id="mfa-badge" style="font-size:12px">Cargando...</span>
+          <span id="mfa-badge" style="font-size:12px">${t('mfa_loading')}</span>
           <button id="mfa-toggle-btn" class="btn btn-sm" onclick="mfaToggle()" style="display:none"></button>
         </div>
 
-        <!-- Setup flow (hidden until user clicks Activar) -->
+        <!-- Setup flow (hidden until user clicks Enable) -->
         <div id="mfa-setup-box" style="display:none">
           <p style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.6">
-            Escanea el código QR con tu autenticador y luego ingresa el código de 6 dígitos para confirmar.
+            ${t('mfa_scan_desc')}
           </p>
           <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px">
             <div id="mfa-qr-canvas" style="background:#fff;padding:6px;border-radius:4px;display:inline-block"></div>
             <div>
-              <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Clave manual</div>
+              <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">${t('mfa_manual_key')}</div>
               <div id="mfa-secret-display" style="font-family:var(--font-mono);font-size:12px;color:var(--accent2);word-break:break-all;max-width:200px"></div>
             </div>
           </div>
@@ -1082,15 +1274,15 @@ async function renderSettingsView() {
                    placeholder="000000"
                    style="width:120px;font-family:var(--font-mono);font-size:18px;letter-spacing:4px;text-align:center"
                    onkeydown="if(event.key==='Enter') mfaConfirm()">
-            <button class="btn btn-sm" onclick="mfaConfirm()">Confirmar y activar</button>
-            <button class="btn btn-sm btn-ghost" onclick="mfaCancelSetup()">Cancelar</button>
+            <button class="btn btn-sm" onclick="mfaConfirm()">${t('mfa_confirm_btn')}</button>
+            <button class="btn btn-sm btn-ghost" onclick="mfaCancelSetup()">${t('mfa_cancel')}</button>
           </div>
         </div>
 
         <!-- Disable flow -->
         <div id="mfa-disable-box" style="display:none">
           <p style="font-size:11px;color:var(--warning);margin-bottom:10px">
-            Ingresa tu código MFA actual para desactivarlo.
+            ${t('mfa_disable_prompt')}
           </p>
           <div class="error-msg" id="mfa-disable-error"></div>
           <div style="display:flex;gap:8px;align-items:center">
@@ -1098,19 +1290,19 @@ async function renderSettingsView() {
                    placeholder="000000"
                    style="width:120px;font-family:var(--font-mono);font-size:18px;letter-spacing:4px;text-align:center"
                    onkeydown="if(event.key==='Enter') mfaDisableConfirm()">
-            <button class="btn btn-sm btn-danger" onclick="mfaDisableConfirm()">Desactivar MFA</button>
-            <button class="btn btn-sm btn-ghost" onclick="mfaCancelDisable()">Cancelar</button>
+            <button class="btn btn-sm btn-danger" onclick="mfaDisableConfirm()">${t('mfa_disable_btn')}</button>
+            <button class="btn btn-sm btn-ghost" onclick="mfaCancelDisable()">${t('mfa_disable_cancel')}</button>
           </div>
         </div>
       </div>
 
       <!-- Users -->
       <div class="info-card" style="margin:0">
-        <h3>Gestión de usuarios</h3>
+        <h3>${t('users_title')}</h3>
         <table style="width:100%;margin-bottom:14px">
           <thead>
             <tr>
-              <th>Usuario</th>
+              <th>${t('col_username')}</th>
               <th style="width:80px;text-align:center">MFA</th>
               <th style="width:40px"></th>
             </tr>
@@ -1120,48 +1312,48 @@ async function renderSettingsView() {
         <div class="error-msg" id="users-error"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end">
           <div class="form-group" style="margin:0">
-            <label>Usuario</label>
+            <label>${t('new_user_label')}</label>
             <input type="text" id="new-user-name" placeholder="operador1">
           </div>
           <div class="form-group" style="margin:0">
-            <label>Contraseña (min 12)</label>
+            <label>${t('new_user_pass_label')}</label>
             <input type="password" id="new-user-pass" placeholder="••••••••••••">
           </div>
-          <button class="btn btn-sm btn-ghost" style="margin-bottom:1px" onclick="createUser()">+ Crear</button>
+          <button class="btn btn-sm btn-ghost" style="margin-bottom:1px" onclick="createUser()">${t('create_user_btn')}</button>
         </div>
       </div>
 
       <!-- IP Whitelist -->
       <div class="info-card" style="margin:0">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-          <h3 style="margin:0">IP Whitelist</h3>
+          <h3 style="margin:0">${t('wl_title')}</h3>
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
             <input type="checkbox" id="wl-enabled" style="accent-color:var(--accent)" onchange="toggleWhitelistWarning()">
-            Activar restricción
+            ${t('wl_enable')}
           </label>
         </div>
         <p style="font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.6">
-          Restringe el panel a las IPs listadas. Los beacons nunca se bloquean.
+          ${t('wl_desc')}
         </p>
 
         <!-- Detected IP banner -->
         <div id="wl-myip-banner" style="display:flex;align-items:center;justify-content:space-between;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:14px">
           <div>
-            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Tu IP detectada por el servidor</div>
-            <div id="wl-myip-val" style="font-size:14px;font-family:var(--font-mono);color:var(--accent2)">Detectando...</div>
+            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">${t('wl_detected_ip')}</div>
+            <div id="wl-myip-val" style="font-size:14px;font-family:var(--font-mono);color:var(--accent2)">${t('wl_detecting')}</div>
           </div>
-          <button class="btn btn-sm btn-ghost" onclick="useMyIp()">↓ Usar esta IP</button>
+          <button class="btn btn-sm btn-ghost" onclick="useMyIp()">${t('wl_use_ip')}</button>
         </div>
 
         <div id="wl-warning" style="display:none;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:6px;padding:10px 14px;font-size:12px;color:var(--warning);margin-bottom:14px;line-height:1.6">
-          ⚠ Asegúrate de que tu IP esté en la lista antes de guardar o perderás acceso.
+          ${t('wl_warning')}
         </div>
 
         <table style="width:100%;margin-bottom:14px">
           <thead>
             <tr>
-              <th style="width:38%">Nombre</th>
-              <th>IP Pública</th>
+              <th style="width:38%">${t('col_name')}</th>
+              <th>${t('col_pub_ip')}</th>
               <th style="width:40px"></th>
             </tr>
           </thead>
@@ -1170,18 +1362,18 @@ async function renderSettingsView() {
 
         <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-bottom:14px">
           <div class="form-group" style="margin:0">
-            <label>Nombre</label>
-            <input type="text" id="wl-new-name" placeholder="Oficina, Casa, VPN...">
+            <label>${t('col_name')}</label>
+            <input type="text" id="wl-new-name" placeholder="${t('wl_name_placeholder')}">
           </div>
           <div class="form-group" style="margin:0">
-            <label>IP Pública</label>
+            <label>${t('col_pub_ip')}</label>
             <input type="text" id="wl-new-ip" placeholder="1.2.3.4" style="font-family:var(--font-mono)">
           </div>
           <button class="btn btn-sm btn-ghost" style="margin-bottom:1px" onclick="addWhitelistEntry()">+ Add</button>
         </div>
 
         <div style="display:flex;align-items:center;gap:12px">
-          <button class="btn btn-sm" onclick="saveWhitelist()">Guardar</button>
+          <button class="btn btn-sm" onclick="saveWhitelist()">${t('wl_save')}</button>
           <span id="wl-status" style="font-size:12px;color:var(--text3)"></span>
         </div>
       </div>
@@ -1204,7 +1396,7 @@ async function renderSettingsView() {
     document.getElementById('wl-myip-val').textContent = ip;
     document.getElementById('wl-myip-val').dataset.ip = ip;
   } else {
-    document.getElementById('wl-myip-val').textContent = 'No disponible';
+    document.getElementById('wl-myip-val').textContent = t('no_available');
   }
 
   // Load MFA status
@@ -1224,12 +1416,12 @@ async function loadMfaStatus() {
   const btn   = document.getElementById('mfa-toggle-btn');
   if (!badge || !btn) return;
   if (enabled) {
-    badge.innerHTML = '<span style="color:var(--online)">● Activado</span>';
-    btn.textContent = 'Desactivar';
+    badge.innerHTML = `<span style="color:var(--online)">${t('mfa_enabled_badge')}</span>`;
+    btn.textContent = t('mfa_deactivate');
     btn.className = 'btn btn-sm btn-danger';
   } else {
-    badge.innerHTML = '<span style="color:var(--text3)">○ Desactivado</span>';
-    btn.textContent = 'Activar MFA';
+    badge.innerHTML = `<span style="color:var(--text3)">${t('mfa_disabled_badge')}</span>`;
+    btn.textContent = t('mfa_activate');
     btn.className = 'btn btn-sm';
   }
   btn.style.display = 'inline-block';
@@ -1327,7 +1519,7 @@ async function loadUsers() {
   if (!tbody) return;
   const me = localStorage.getItem('xolo_user') || '';
   tbody.innerHTML = users.length === 0
-    ? `<tr><td colspan="3" style="color:var(--text3);font-size:12px;text-align:center;padding:14px">Sin usuarios</td></tr>`
+    ? `<tr><td colspan="3" style="color:var(--text3);font-size:12px;text-align:center;padding:14px">${t('users_empty')}</td></tr>`
     : users.map(u => `
       <tr>
         <td style="font-size:12px;font-family:var(--font-mono)">${escapeHtml(u.username)}${u.username===me?' <span style="color:var(--text3);font-size:10px">(tú)</span>':''}</td>
@@ -1359,7 +1551,7 @@ async function createUser() {
 }
 
 async function deleteUser(username) {
-  if (!confirm(`¿Eliminar al usuario "${username}"?`)) return;
+  if (!confirm(`${t('del_user_confirm')} "${username}"?`)) return;
   const res = await apiFetch(`/api/settings/users/${encodeURIComponent(username)}`, { method: 'DELETE' });
   if (res && res.ok) loadUsers();
 }
@@ -1377,7 +1569,7 @@ function renderWhitelistTable(entries) {
   const tbody = document.getElementById('wl-tbody');
   if (!tbody) return;
   tbody.innerHTML = _wlEntries.length === 0
-    ? `<tr><td colspan="3" style="color:var(--text3);font-size:12px;text-align:center;padding:14px">No hay entradas</td></tr>`
+    ? `<tr><td colspan="3" style="color:var(--text3);font-size:12px;text-align:center;padding:14px">${t('wl_no_entries')}</td></tr>`
     : _wlEntries.map((e, i) => `
       <tr>
         <td style="font-size:12px">${escapeHtml(e.name)}</td>
@@ -1412,7 +1604,7 @@ function toggleWhitelistWarning() {
 async function saveWhitelist() {
   const enabled = document.getElementById('wl-enabled').checked;
   const statusEl = document.getElementById('wl-status');
-  statusEl.textContent = 'Saving...';
+  statusEl.textContent = t('wl_saving');
   statusEl.style.color = 'var(--text3)';
 
   const res = await apiFetch('/api/settings/ipwhitelist', {
@@ -1421,11 +1613,11 @@ async function saveWhitelist() {
   });
 
   if (!res || !res.ok) {
-    statusEl.textContent = '✗ Error saving';
+    statusEl.textContent = t('wl_error');
     statusEl.style.color = 'var(--danger)';
     return;
   }
-  statusEl.textContent = '✓ Saved';
+  statusEl.textContent = t('wl_saved');
   statusEl.style.color = 'var(--online)';
   setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
 }
@@ -1491,7 +1683,7 @@ function setBeaconLang(lang) {
 async function generateBeacon() {
   const urls = [...document.querySelectorAll('.gen-url-input')]
     .map(i => i.value.trim()).filter(Boolean);
-  if (!urls.length) { alert('Agrega al menos un listener URL'); return; }
+  if (!urls.length) { alert(_lang === 'es' ? 'Agrega al menos un listener URL' : 'Add at least one listener URL'); return; }
   const sleep   = parseInt(document.getElementById('gen-sleep').value) || 5;
   const jitter  = parseInt(document.getElementById('gen-jitter').value) || 20;
   const persist = document.getElementById('gen-persist').checked;
@@ -1519,7 +1711,7 @@ async function generateBeacon() {
     document.getElementById('beacon-dl-buttons-py').style.display   = 'flex';
     document.getElementById('beacon-dl-buttons-java').style.display = 'none';
   }
-  document.getElementById('beacon-filename-label').innerHTML = `Save as <code style="color:var(--accent)">${filename}</code>`;
+  document.getElementById('beacon-filename-label').innerHTML = `${t('save_as')} <code style="color:var(--accent)">${filename}</code>`;
   document.getElementById('beacon-tab-label').textContent = filename;
   document.getElementById('beacon-code').textContent = code;
   document.getElementById('gen-output').style.display = 'block';
@@ -2723,16 +2915,17 @@ async function refreshSocks5Status() {
   const data = await res.json();
 
   if (data.running) {
-    statusEl.innerHTML = `<span style="color:var(--online)">● Running</span> — 127.0.0.1:<strong style="color:var(--accent2)">${data.port}</strong>`;
+    statusEl.innerHTML = `<span style="color:var(--online)">● ${t('socks_running')}</span> — 127.0.0.1:<strong style="color:var(--accent2)">${data.port}</strong>`;
     const ch = data.channels || [];
+    const noChannels = t('socks_no_channels');
     channelsEl.textContent = ch.length === 0
-      ? 'No active channels'
+      ? noChannels
       : `${ch.length} channel${ch.length > 1 ? 's' : ''}: ${ch.slice(0,3).map(c => c.target).join(', ')}${ch.length > 3 ? '...' : ''}`;
-    if (channelsEl.textContent !== 'No active channels') {
+    if (channelsEl.textContent !== noChannels) {
       channelsEl.style.color = 'var(--accent2)';
     }
   } else {
-    statusEl.innerHTML = `<span style="color:var(--text3)">● Stopped</span>`;
+    statusEl.innerHTML = `<span style="color:var(--text3)">● ${t('socks_stopped')}</span>`;
     channelsEl.textContent = '';
   }
 }
@@ -2861,9 +3054,9 @@ function escapeHtml(str) {
 }
 
 function formatAgo(secs) {
-  if (secs < 60) return secs + 's ago';
-  if (secs < 3600) return Math.floor(secs / 60) + 'm ago';
-  return Math.floor(secs / 3600) + 'h ago';
+  if (secs < 60) return secs + (t('ago_s') || 's ago');
+  if (secs < 3600) return Math.floor(secs / 60) + (t('ago_m') || 'm ago');
+  return Math.floor(secs / 3600) + (t('ago_h') || 'h ago');
 }
 </script>
 </body>
