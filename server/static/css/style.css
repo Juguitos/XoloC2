@@ -685,3 +685,53 @@ tr.clickable:hover td { background: var(--bg3); cursor: pointer; }
 
 .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
 .empty-state p { font-size: 13px; }
+
+/* ── FILE BROWSER — ICON VIEW ────────────────────────── */
+.fb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 8px;
+  padding: 4px;
+}
+
+.fb-icon-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 6px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  transition: background 0.15s;
+  cursor: default;
+}
+
+.fb-icon-item:hover {
+  background: var(--bg3);
+  border-color: var(--border);
+}
+
+.fb-icon-emoji {
+  font-size: 38px;
+  line-height: 1;
+}
+
+.fb-icon-thumb {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+}
+
+.fb-icon-label {
+  font-size: 10px;
+  color: var(--text2);
+  text-align: center;
+  word-break: break-word;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

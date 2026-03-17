@@ -1028,6 +1028,8 @@ let _fbAgentId = null;
 let _fbCurrentPath = null;
 let _fbHistory = [];
 let _fbHistoryIdx = -1;
+let _fbViewMode = 'list';   // 'list' | 'icons'
+let _fbLastOutput = null;   // raw output of last __ls__ for view-switch re-render
 
 // Returns parent path or null if already at root. Handles both Windows and Unix.
 function fbGetParent(path) {
@@ -1080,14 +1082,16 @@ async function openFileBrowser(agentId) {
 function showFileBrowserPanel(agentId) {
   const content = document.getElementById('content');
   content.innerHTML = `
-    <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px">
+    <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <button class="btn btn-ghost btn-sm" onclick="showView('session','${escapeHtml(agentId)}')">${t('back')}</button>
       <button class="btn btn-ghost btn-sm" id="fb-back" onclick="fbBack()" disabled title="${_lang==='es'?'Atrás':'Back'}">←</button>
       <button class="btn btn-ghost btn-sm" id="fb-fwd"  onclick="fbForward()" disabled title="${_lang==='es'?'Adelante':'Forward'}">→</button>
-      <span style="color:var(--text3);font-size:12px">📂 File Browser</span>
+      <span style="color:var(--text3);font-size:12px;flex:1">📂 File Browser</span>
+      <button class="btn btn-sm btn-ghost" id="fb-view-list"  onclick="fbSetView('list')"  title="${_lang==='es'?'Vista lista':'List view'}"  style="padding:5px 10px;font-size:14px">☰</button>
+      <button class="btn btn-sm btn-ghost" id="fb-view-icons" onclick="fbSetView('icons')" title="${_lang==='es'?'Vista iconos':'Icons view'}" style="padding:5px 10px;font-size:14px">⊞</button>
     </div>
-    <div class="info-card" style="margin:0">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+    <div class="info-card" style="margin:0;display:flex;flex-direction:column;height:calc(100vh - 190px)">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-shrink:0">
         <input type="text" id="fb-path-input" value="${escapeHtml(_fbCurrentPath)}"
           style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--font-mono);font-size:12px;padding:6px 10px;outline:none"
           onkeydown="if(event.key==='Enter') fbNavigate(document.getElementById('fb-path-input').value)">
@@ -1096,10 +1100,23 @@ function showFileBrowserPanel(agentId) {
         </button>
         <button class="btn btn-sm btn-ghost" onclick="openFileBrowser('${escapeHtml(agentId)}')" title="${_lang==='es'?'Recargar':'Refresh'}">↻</button>
       </div>
-      <div id="fb-content" style="min-height:200px">
+      <div id="fb-content" style="flex:1;overflow-y:auto;min-height:0">
         <div style="color:var(--text3);font-size:12px">${_lang==='es'?'Enviando comando...':'Sending command...'}</div>
       </div>
+    </div>
+
+    <!-- File reader modal -->
+    <div id="fb-read-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:200;align-items:center;justify-content:center">
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;width:720px;max-width:92vw;max-height:82vh;display:flex;flex-direction:column;overflow:hidden">
+        <div style="display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border);flex-shrink:0">
+          <span id="fb-read-title" style="flex:1;font-size:13px;font-weight:600;color:var(--text);font-family:var(--font-mono)"></span>
+          <button class="btn btn-sm btn-ghost" onclick="document.getElementById('fb-read-modal').style.display='none'">✕</button>
+        </div>
+        <pre id="fb-read-content" style="flex:1;overflow-y:auto;padding:16px;font-size:12px;line-height:1.7;color:var(--text);margin:0;white-space:pre-wrap;word-break:break-all;font-family:var(--font-mono)"></pre>
+      </div>
     </div>`;
+
+  fbSetView(_fbViewMode, false);
   fbNavigate(_fbCurrentPath);
 }
 
@@ -1141,6 +1158,7 @@ async function fbNavigate(path, addToHistory = true) {
 }
 
 function renderFileListing(output, agentId) {
+  _fbLastOutput = output;
   const fbContent = document.getElementById('fb-content');
   if (!fbContent) return;
   if (!output || output.startsWith('Error')) {
@@ -1153,52 +1171,181 @@ function renderFileListing(output, agentId) {
     fbContent.innerHTML = `<div style="color:var(--danger);font-size:12px">${escapeHtml(output)}</div>`;
     return;
   }
+
+  if (_fbViewMode === 'icons') {
+    _fbRenderIcons(data, agentId);
+  } else {
+    _fbRenderList(data, agentId);
+  }
+}
+
+function _fbRenderList(data, agentId) {
+  const fbContent = document.getElementById('fb-content');
   const sep = data.path.includes('\\') ? '\\' : '/';
   const parentPath = fbGetParent(data.path);
 
-  // Build rows — use data-* attrs so Windows backslashes are never mis-parsed as JS escapes
   const parentRow = parentPath !== null ? `
-    <tr>
-      <td colspan="3">
-        <button class="btn btn-sm btn-ghost" style="font-family:var(--font-mono);font-size:11px;width:100%;text-align:left"
-          data-path="${escapeHtml(parentPath)}" onclick="fbNavigate(this.dataset.path)">📁 ..</button>
-      </td>
-    </tr>` : '';
+    <tr><td colspan="4">
+      <button class="btn btn-sm btn-ghost" style="font-family:var(--font-mono);font-size:11px;width:100%;text-align:left"
+        data-path="${escapeHtml(parentPath)}" onclick="fbNavigate(this.dataset.path)">📁 ..</button>
+    </td></tr>` : '';
 
   const entryRows = data.entries.map(e => {
     const fullPath = data.path.endsWith(sep) ? data.path + e.name : data.path + sep + e.name;
-    const icon = e.type === 'dir' ? '📁' : '📄';
+    const icon = e.type === 'dir' ? '📁' : getFileIcon(e.name);
     const sizeStr = e.type === 'dir' ? '—' : formatSize(e.size);
+    const actions = e.type !== 'dir' ? `
+      <button class="btn btn-sm btn-ghost" style="padding:2px 7px;font-size:11px" title="${_lang==='es'?'Descargar':'Download'}"
+        data-agent="${escapeHtml(agentId)}" data-path="${escapeHtml(fullPath)}" data-name="${escapeHtml(e.name)}"
+        onclick="fbDownload(this.dataset.agent,this.dataset.path,this.dataset.name)">⬇</button>
+      <button class="btn btn-sm btn-ghost" style="padding:2px 7px;font-size:11px" title="${_lang==='es'?'Leer archivo':'Read file'}"
+        data-agent="${escapeHtml(agentId)}" data-path="${escapeHtml(fullPath)}" data-name="${escapeHtml(e.name)}"
+        onclick="fbRead(this.dataset.agent,this.dataset.path,this.dataset.name)">👁</button>` : '';
     return `<tr>
-      <td>
-        ${e.type === 'dir'
-          ? `<button class="btn btn-sm btn-ghost" style="font-family:var(--font-mono);font-size:11px;text-align:left;width:100%;justify-content:flex-start"
-              data-path="${escapeHtml(fullPath)}" onclick="fbNavigate(this.dataset.path)">${icon} ${escapeHtml(e.name)}</button>`
-          : `<span style="font-family:var(--font-mono);font-size:11px;color:var(--text2)">${icon} ${escapeHtml(e.name)}</span>`
-        }
-      </td>
+      <td>${e.type === 'dir'
+        ? `<button class="btn btn-sm btn-ghost" style="font-family:var(--font-mono);font-size:11px;text-align:left;width:100%;justify-content:flex-start"
+            data-path="${escapeHtml(fullPath)}" onclick="fbNavigate(this.dataset.path)">${icon} ${escapeHtml(e.name)}</button>`
+        : `<span style="font-family:var(--font-mono);font-size:11px;color:var(--text2)">${icon} ${escapeHtml(e.name)}</span>`
+      }</td>
       <td style="text-align:right;color:var(--text3);font-family:var(--font-mono);font-size:11px">${sizeStr}</td>
-      <td style="text-align:right">
-        ${e.type !== 'dir'
-          ? `<button class="btn btn-sm btn-ghost" style="padding:2px 8px;font-size:10px"
-              data-agent="${escapeHtml(agentId)}" data-path="${escapeHtml(fullPath)}" data-name="${escapeHtml(e.name)}"
-              onclick="fbDownload(this.dataset.agent, this.dataset.path, this.dataset.name)">⬇</button>`
-          : ''}
-      </td>
+      <td style="text-align:right;white-space:nowrap">${actions}</td>
     </tr>`;
   }).join('');
 
   fbContent.innerHTML = `
     <table style="width:100%;font-size:12px">
-      <thead>
-        <tr>
-          <th style="text-align:left">${_lang==='es'?'Nombre':'Name'}</th>
-          <th style="width:90px;text-align:right">${_lang==='es'?'Tamaño':'Size'}</th>
-          <th style="width:60px"></th>
-        </tr>
-      </thead>
+      <thead><tr>
+        <th style="text-align:left">${_lang==='es'?'Nombre':'Name'}</th>
+        <th style="width:90px;text-align:right">${_lang==='es'?'Tamaño':'Size'}</th>
+        <th style="width:80px"></th>
+      </tr></thead>
       <tbody>${parentRow}${entryRows}</tbody>
     </table>`;
+}
+
+function _fbRenderIcons(data, agentId) {
+  const fbContent = document.getElementById('fb-content');
+  const sep = data.path.includes('\\') ? '\\' : '/';
+  const parentPath = fbGetParent(data.path);
+  const isImgExt = n => /\.(png|jpg|jpeg|gif|bmp|webp|ico)$/i.test(n);
+
+  const parentCard = parentPath !== null ? `
+    <div class="fb-icon-item" data-path="${escapeHtml(parentPath)}" onclick="fbNavigate(this.dataset.path)">
+      <div class="fb-icon-emoji">📁</div>
+      <div class="fb-icon-label">..</div>
+    </div>` : '';
+
+  const entryCards = data.entries.map(e => {
+    const fullPath = data.path.endsWith(sep) ? data.path + e.name : data.path + sep + e.name;
+    if (e.type === 'dir') {
+      return `<div class="fb-icon-item" data-path="${escapeHtml(fullPath)}" onclick="fbNavigate(this.dataset.path)">
+        <div class="fb-icon-emoji">📁</div>
+        <div class="fb-icon-label" title="${escapeHtml(e.name)}">${escapeHtml(e.name)}</div>
+      </div>`;
+    }
+    const thumb = isImgExt(e.name)
+      ? `<img class="fb-icon-thumb" data-imgpath="${escapeHtml(fullPath)}" src="" alt="">`
+      : `<div class="fb-icon-emoji">${getFileIcon(e.name)}</div>`;
+    return `<div class="fb-icon-item">
+      ${thumb}
+      <div class="fb-icon-label" title="${escapeHtml(e.name)}">${escapeHtml(e.name)}</div>
+      <div style="display:flex;gap:3px;margin-top:2px">
+        <button class="btn btn-sm btn-ghost" style="padding:2px 6px;font-size:10px" title="${_lang==='es'?'Descargar':'Download'}"
+          data-agent="${escapeHtml(agentId)}" data-path="${escapeHtml(fullPath)}" data-name="${escapeHtml(e.name)}"
+          onclick="event.stopPropagation();fbDownload(this.dataset.agent,this.dataset.path,this.dataset.name)">⬇</button>
+        <button class="btn btn-sm btn-ghost" style="padding:2px 6px;font-size:10px" title="${_lang==='es'?'Leer':'Read'}"
+          data-agent="${escapeHtml(agentId)}" data-path="${escapeHtml(fullPath)}" data-name="${escapeHtml(e.name)}"
+          onclick="event.stopPropagation();fbRead(this.dataset.agent,this.dataset.path,this.dataset.name)">👁</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  fbContent.innerHTML = `<div class="fb-grid">${parentCard}${entryCards}</div>`;
+
+  // Lazy-load image thumbnails (up to 20)
+  fbContent.querySelectorAll('img.fb-icon-thumb[data-imgpath]').forEach(img => {
+    fbLoadThumbnail(agentId, img.dataset.imgpath, img);
+  });
+}
+
+function fbSetView(mode, rerender = true) {
+  _fbViewMode = mode;
+  const listBtn  = document.getElementById('fb-view-list');
+  const iconsBtn = document.getElementById('fb-view-icons');
+  if (listBtn)  listBtn.style.background  = mode === 'list'  ? 'var(--bg3)' : '';
+  if (iconsBtn) iconsBtn.style.background = mode === 'icons' ? 'var(--bg3)' : '';
+  if (rerender && _fbLastOutput && _fbAgentId) renderFileListing(_fbLastOutput, _fbAgentId);
+}
+
+function getFileIcon(name) {
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  const map = {
+    pdf:'📕', doc:'📝', docx:'📝', xls:'📊', xlsx:'📊', ppt:'📊', pptx:'📊',
+    txt:'📃', log:'📃', csv:'📃', json:'📋', xml:'📋', yaml:'📋', yml:'📋',
+    zip:'🗜', gz:'🗜', tar:'🗜', rar:'🗜', '7z':'🗜',
+    exe:'⚙', dll:'⚙', bat:'⚙', cmd:'⚙', sh:'⚙', py:'🐍',
+    js:'📜', ts:'📜', html:'🌐', css:'🎨', php:'🌐',
+    mp3:'🎵', wav:'🎵', mp4:'🎬', avi:'🎬', mkv:'🎬',
+    png:'🖼', jpg:'🖼', jpeg:'🖼', gif:'🖼', bmp:'🖼', webp:'🖼', svg:'🖼',
+  };
+  return map[ext] || '📄';
+}
+
+async function fbRead(agentId, fullPath, filename) {
+  const modal     = document.getElementById('fb-read-modal');
+  const titleEl   = document.getElementById('fb-read-title');
+  const contentEl = document.getElementById('fb-read-content');
+  if (!modal) return;
+  titleEl.textContent   = filename;
+  contentEl.textContent = _lang === 'es' ? 'Leyendo archivo...' : 'Reading file...';
+  modal.style.display   = 'flex';
+
+  const isWin = fullPath.includes('\\');
+  const cmd   = isWin ? `type "${fullPath}"` : `cat "${fullPath}"`;
+  const r = await apiFetch('/api/agents/' + agentId + '/tasks', {
+    method: 'POST', body: JSON.stringify({ command: cmd }),
+  });
+  if (!r || !r.ok) { contentEl.textContent = 'Error sending command'; return; }
+  const task = await r.json();
+
+  let attempts = 0;
+  const poll = setInterval(async () => {
+    attempts++;
+    if (attempts > 40) { clearInterval(poll); contentEl.textContent = 'Timeout'; return; }
+    const tr = await apiFetch(`/api/agents/${agentId}/tasks/${task.task_id}`);
+    if (!tr || !tr.ok) return;
+    const td = await tr.json();
+    if (td.status !== 'done' && td.status !== 'error') return;
+    clearInterval(poll);
+    contentEl.textContent = td.output || '(vacío / empty)';
+  }, 1500);
+}
+
+async function fbLoadThumbnail(agentId, fullPath, imgEl) {
+  const r = await apiFetch('/api/agents/' + agentId + '/tasks', {
+    method: 'POST', body: JSON.stringify({ command: `__download__:${fullPath}` }),
+  });
+  if (!r || !r.ok) return;
+  const task = await r.json();
+
+  let attempts = 0;
+  const poll = setInterval(async () => {
+    attempts++;
+    if (attempts > 30) { clearInterval(poll); return; }
+    const tr = await apiFetch(`/api/agents/${agentId}/tasks/${task.task_id}`);
+    if (!tr || !tr.ok) return;
+    const td = await tr.json();
+    if (td.status !== 'done' && td.status !== 'error') return;
+    clearInterval(poll);
+    if (td.output && td.output.startsWith('__b64file__:')) {
+      const parts = td.output.split(':', 3);
+      if (parts.length >= 3) {
+        const ext  = fullPath.split('.').pop().toLowerCase();
+        const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : `image/${ext}`;
+        if (document.contains(imgEl)) imgEl.src = `data:${mime};base64,${parts[2]}`;
+      }
+    }
+  }, 1500);
 }
 
 async function fbDownload(agentId, fullPath, filename) {
