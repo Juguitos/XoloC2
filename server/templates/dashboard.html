@@ -2519,8 +2519,15 @@ def run_command(cmd, task_id=None):
     if cmd.startswith("shell "): cmd = cmd[6:]
     try:
         if _WIN:
-            wrapped = 'cd /d "{}" && {} && echo __CWD__:%CD%'.format(_cwd, cmd)
-            result = subprocess.run(wrapped, shell=True, capture_output=True, text=True, timeout=60)
+            import tempfile as _tf
+            _tbat = _tf.mktemp(suffix='.bat')
+            try:
+                with open(_tbat, 'w') as _bf:
+                    _bf.write('@echo off\\r\\ncd /d "{}"\\r\\n{}\\r\\necho __CWD__:%CD%\\r\\n'.format(_cwd, cmd))
+                result = subprocess.run(_tbat, shell=True, capture_output=True, text=True, timeout=60)
+            finally:
+                try: os.remove(_tbat)
+                except: pass
         else:
             wrapped = 'cd {} && {}; echo "__CWD__:$(pwd)"'.format(_json.dumps(_cwd), cmd)
             result = subprocess.run(wrapped, shell=True, capture_output=True, text=True, timeout=60,
