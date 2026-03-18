@@ -82,7 +82,8 @@ UPLOADS_DIR = Path(__file__).parent.parent / "uploads"
 
 
 def verify_agent_secret(x_agent_secret: Optional[str] = Header(None)):
-    if x_agent_secret != config.AGENT_SECRET:
+    current, old = config.get_agent_secrets()
+    if x_agent_secret != current and x_agent_secret != old:
         raise HTTPException(status_code=403, detail="Invalid agent secret")
 
 
@@ -126,6 +127,10 @@ async def checkin(
     db: Session = Depends(get_db),
     _: None = Depends(verify_agent_secret),
 ):
+    # Detect if beacon is using the old (pre-rotation) secret so we can push the new one
+    _x_secret = request.headers.get("x-agent-secret", "")
+    _current, _old = config.get_agent_secrets()
+    _used_old = bool(_old and _x_secret == _old)
     try:
         req = CheckinRequest(**_decrypt_body(await request.body()))
     except Exception:
@@ -201,12 +206,14 @@ async def checkin(
         .first()
     )
 
+    _extra = {"new_secret": _current} if _used_old else {}
+
     if task:
         task.status = "running"
         db.commit()
-        return {"task_id": task.id, "command": task.command}
+        return {"task_id": task.id, "command": task.command, **_extra}
 
-    return {"task_id": None, "command": None}
+    return {"task_id": None, "command": None, **_extra}
 
 
 class ResultRequest(BaseModel):

@@ -35,6 +35,11 @@ AGENT_SECRET = get("agent_secret") or os.urandom(16).hex()
 # Set env var XOLO_TRUST_PROXY=1 to enable (install.sh does this when a reverse proxy is used).
 TRUST_PROXY: bool = os.getenv("XOLO_TRUST_PROXY", "0") == "1"
 
+def get_agent_secrets():
+    """Returns (current_secret, old_secret_or_None). Reads from file each call so rotation takes effect immediately."""
+    cfg = load_config()
+    return cfg.get("agent_secret", AGENT_SECRET), cfg.get("agent_secret_old")
+
 # Persist secrets if not already saved
 if not get("jwt_secret"):
     cfg = load_config()

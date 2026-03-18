@@ -3,11 +3,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from typing import List, Optional
 import json
+import os
 import pyotp
 from sqlalchemy.orm import Session
 from database import get_db, User as DBUser
 from auth import require_auth, User, hash_password
 from routers.audit_router import log_event
+import config as _cfg
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -148,6 +150,19 @@ def create_user(req: CreateUserRequest, current_user: User = Depends(require_aut
     db.commit()
     log_event(db, current_user.username, "USER_CREATED", detail=req.username)
     return {"message": "Usuario creado", "username": req.username}
+
+
+@router.post("/rotate-secret")
+def rotate_secret(current_user: User = Depends(require_auth), db: Session = Depends(get_db)):
+    """Generate a new agent secret. Old secret stays valid until all beacons check in and update."""
+    cfg = _cfg.load_config()
+    old = cfg.get("agent_secret", _cfg.AGENT_SECRET)
+    new = os.urandom(16).hex()
+    cfg["agent_secret_old"] = old
+    cfg["agent_secret"] = new
+    _cfg.save_config(cfg)
+    log_event(db, current_user.username, "SECRET_ROTATED", detail="agent_secret rotated")
+    return {"new_secret": new}
 
 
 @router.delete("/users/{username}")

