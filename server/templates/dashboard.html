@@ -1605,7 +1605,7 @@ function showFileBrowserPanel(agentId) {
             c.style.padding='';c.style.overflow='';c.style.display='';c.style.flexDirection='';
           ">✕</button>
         </div>
-        <div id="fb-read-content" style="flex:1;overflow:auto;padding:16px;font-size:12px;line-height:1.7;color:var(--text);margin:0;font-family:var(--font-mono)"></div>
+        <div id="fb-read-content" style="flex:1;min-height:0;overflow:auto;padding:16px;font-size:12px;line-height:1.7;color:var(--text);margin:0;font-family:var(--font-mono)"></div>
       </div>
     </div>`;
 
@@ -1964,7 +1964,7 @@ async function fbRead(agentId, fullPath, filename) {
       const td = await tr.json();
       if (td.status !== 'done' && td.status !== 'error') return;
       clearInterval(poll);
-      contentEl.innerHTML = `<pre style="margin:0;white-space:pre-wrap;word-break:break-all;font-family:var(--font-mono);font-size:12px;line-height:1.7;padding:4px">${escapeHtml(td.output || '(vacío / empty)')}</pre>`;
+      contentEl.innerHTML = `<pre style="margin:0;white-space:pre;word-break:normal;overflow-x:auto;font-family:var(--font-mono);font-size:12px;line-height:1.7;padding:4px">${escapeHtml(td.output || '(vacío / empty)')}</pre>`;
     }, 1500);
   }
 }
