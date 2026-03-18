@@ -156,6 +156,48 @@ The installer will:
 ./start.sh
 ```
 
+### Run as a systemd service (recommended for production)
+
+```bash
+cat > /etc/systemd/system/xoloc2.service << 'EOF'
+[Unit]
+Description=XoloC2 C2 Server
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/XoloC2
+Environment=XOLO_TRUST_PROXY=0
+ExecStart=/opt/XoloC2/.venv/bin/python3 -m uvicorn server.main:app \
+    --host 0.0.0.0 \
+    --port 8444 \
+    --ssl-keyfile server/certs/key.pem \
+    --ssl-certfile server/certs/cert.pem \
+    --log-level warning
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=xoloc2
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable xoloc2   # start on boot
+systemctl start xoloc2
+systemctl status xoloc2
+```
+
+View logs:
+
+```bash
+journalctl -u xoloc2 -f
+```
+
 ### Non-interactive install
 
 ```bash
@@ -369,6 +411,48 @@ El instalador:
 
 ```bash
 ./start.sh
+```
+
+### Ejecutar como servicio systemd (recomendado en producción)
+
+```bash
+cat > /etc/systemd/system/xoloc2.service << 'EOF'
+[Unit]
+Description=XoloC2 C2 Server
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/XoloC2
+Environment=XOLO_TRUST_PROXY=0
+ExecStart=/opt/XoloC2/.venv/bin/python3 -m uvicorn server.main:app \
+    --host 0.0.0.0 \
+    --port 8444 \
+    --ssl-keyfile server/certs/key.pem \
+    --ssl-certfile server/certs/cert.pem \
+    --log-level warning
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=xoloc2
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable xoloc2   # iniciar en cada arranque
+systemctl start xoloc2
+systemctl status xoloc2
+```
+
+Ver logs en tiempo real:
+
+```bash
+journalctl -u xoloc2 -f
 ```
 
 ### Instalación no interactiva
