@@ -63,7 +63,7 @@ class ChangePasswordRequest(BaseModel):
 
 
 @router.post("/login")
-def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
+async def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
     ip = (
         request.headers.get("X-Real-IP")
         or request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
