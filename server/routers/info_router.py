@@ -132,6 +132,64 @@ def compile_beacon_java(req: JavaCompileRequest, _: User = Depends(require_auth)
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
+class GoCompileRequest(BaseModel):
+    code: str
+    platform: str  # "linux" | "windows"
+
+
+@router.post("/beacon/compile-go")
+def compile_beacon_go(req: GoCompileRequest, _: User = Depends(require_auth)):
+    if req.platform not in ("linux", "windows"):
+        raise HTTPException(status_code=400, detail="platform must be 'linux' or 'windows'")
+
+    go_bin = shutil.which("go")
+    if not go_bin:
+        raise HTTPException(status_code=503, detail="go not found on server. Install Go: apt install golang")
+
+    tmpdir = tempfile.mkdtemp(prefix="xolo_go_")
+    try:
+        src = os.path.join(tmpdir, "main.go")
+        with open(src, "w") as f:
+            f.write(req.code)
+
+        ext = ".exe" if req.platform == "windows" else ""
+        out_path = os.path.join(tmpdir, f"beacon{ext}")
+
+        env = os.environ.copy()
+        env["GOOS"] = "windows" if req.platform == "windows" else "linux"
+        env["GOARCH"] = "amd64"
+        env["CGO_ENABLED"] = "0"
+        env["GOPATH"] = os.path.join(tmpdir, "gopath")
+        env["GOMODCACHE"] = os.path.join(tmpdir, "gomod")
+
+        ldflags = "-s -w"
+        if req.platform == "windows":
+            ldflags += " -H windowsgui"
+
+        result = subprocess.run(
+            [go_bin, "build", "-ldflags", ldflags, "-trimpath", "-o", out_path, src],
+            capture_output=True, text=True, timeout=120, env=env, cwd=tmpdir,
+        )
+        if result.returncode != 0:
+            raise HTTPException(status_code=500, detail=f"Compilation failed: {result.stderr[-800:]}")
+
+        if not os.path.exists(out_path):
+            raise HTTPException(status_code=500, detail="Binary not found after compilation")
+
+        final_path = os.path.join(tempfile.gettempdir(), f"xolo_beacon_{uuid.uuid4().hex}{ext}")
+        shutil.copy2(out_path, final_path)
+        return FileResponse(path=final_path, filename=f"beacon{ext}", media_type="application/octet-stream")
+
+    except HTTPException:
+        raise
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="Compilation timed out")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
 @router.post("/beacon/compile")
 def compile_beacon(req: CompileRequest, _: User = Depends(require_auth)):
     if req.platform not in ("linux", "windows"):

