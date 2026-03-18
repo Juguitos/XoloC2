@@ -665,6 +665,7 @@ async function renderSessionView(agentId) {
         </div>
         <div class="info-card">
           <h3>${t('export_label')}</h3>
+          <button class="btn btn-sm btn-ghost" style="width:100%;margin-bottom:6px" onclick="exportTasks('${escapeHtml(agentId)}','txt')">${t('export_txt')}</button>
           <button class="btn btn-sm btn-ghost" style="width:100%" onclick="openReportForAgent('${escapeHtml(agentId)}')">
             📊 ${t('nav_reports')}
           </button>
@@ -988,7 +989,7 @@ function _renderReportPreview(container) {
   }).join('');
 
   container.innerHTML = `
-    <div style="font-size:11px;color:var(--text3);margin-bottom:16px">${t('rep_generated')} ${new Date(generatedAt).toLocaleString()}</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:16px">${t('rep_generated')} ${fmtDate(generatedAt)}</div>
     ${statsHtml}${summaryTable}
     <h3 style="font-size:13px;font-weight:600;margin-bottom:14px;color:var(--text2)">${t('rep_timeline')}</h3>
     ${agentSecs||`<div style="color:var(--text3);font-size:12px">${t('rep_no_cmds')}</div>`}`;
@@ -1013,10 +1014,10 @@ function _repEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&l
 function _buildReportHtml(data,logoB64){
   const {agents,includeOutput,maxOutput,generatedAt,fromDate,toDate}=data;
   const logoSrc = logoB64?`data:image/png;base64,${logoB64}`:'/static/xolo.png';
-  const genDate = new Date(generatedAt).toLocaleString();
+  const genDate = fmtDate(generatedAt);
   const totalCmds=agents.reduce((s,a)=>s+a.cmds.length,0);
   const totalFiles=agents.reduce((s,a)=>s+a.files.length,0);
-  function fmtDt(iso){if(!iso)return'—';try{return new Date(iso).toLocaleString();}catch{return iso;}}
+  const fmtDt = iso => fmtDate(iso);
 
   const summaryRows=agents.map(a=>`
     <tr>
@@ -1127,8 +1128,8 @@ h1.report-title{font-size:32px;font-weight:700;margin-bottom:8px}
 
 function _buildReportMd(data){
   const {agents,includeOutput,maxOutput,generatedAt,fromDate,toDate}=data;
-  const genDate=new Date(generatedAt).toLocaleString();
-  function fmtDt(iso){if(!iso)return'—';try{return new Date(iso).toLocaleString();}catch{return iso;}}
+  const genDate=fmtDate(generatedAt);
+  const fmtDt = iso => fmtDate(iso);
   let md=`# Engagement Report\n\n**Generated:** ${genDate}  \n**Period:** ${fromDate||'—'} → ${toDate||'—'}  \n**Agents:** ${agents.length}\n\n---\n\n## Summary\n\n`;
   md+=`| Hostname | User | OS | IP Ext | IP Int | First Seen | Last Seen | Cmds |\n|----------|------|----|--------|--------|------------|-----------|------|\n`;
   agents.forEach(a=>{
