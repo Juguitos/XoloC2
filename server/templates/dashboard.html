@@ -36,6 +36,9 @@
       <button class="nav-item" onclick="showView('redirector')" id="nav-redirector">
         <span class="icon">↪</span> <span data-i18n="nav_redirector">Redirector</span>
       </button>
+      <button class="nav-item" onclick="showView('reports')" id="nav-reports">
+        <span class="icon">📊</span> <span data-i18n="nav_reports">Reports</span>
+      </button>
     </nav>
     <div class="sidebar-footer">
       <button class="nav-item" onclick="showView('settings')" id="nav-settings">
@@ -214,6 +217,15 @@ const LANG = {
     cpw_new:'New Password (min 12 chars)', cpw_confirm:'Confirm New Password',
     cpw_cancel:'Cancel', cpw_submit:'Change',
     socks_running:'Running', socks_stopped:'Stopped', socks_no_channels:'No active channels',
+    nav_reports:'Reports', title_reports:'Engagement Reports',
+    rep_agents:'Agents', rep_all:'All agents', rep_date_range:'Date Range',
+    rep_from:'From', rep_to:'To', rep_options:'Options',
+    rep_include_output:'Include command output', rep_max_output:'Max output (chars)',
+    rep_generate:'⚡ Generate', rep_generating:'Generating...', rep_empty:'Select agents and click Generate.',
+    rep_export_md:'⬇ Markdown', rep_export_html:'⬇ HTML', rep_export_pdf:'⎙ Print / PDF',
+    rep_summary:'Summary', rep_timeline:'Activity Timeline',
+    rep_no_cmds:'No commands recorded.', rep_files:'Exfiltrated Files',
+    rep_generated:'Generated:', rep_select_hint:'Select at least one agent.',
     loading:'Loading...', no_available:'N/A',
   },
   es: {
@@ -296,6 +308,15 @@ const LANG = {
     cpw_new:'Nueva Contraseña (min 12 chars)', cpw_confirm:'Confirmar Nueva Contraseña',
     cpw_cancel:'Cancelar', cpw_submit:'Cambiar',
     socks_running:'Activo', socks_stopped:'Detenido', socks_no_channels:'Sin canales activos',
+    nav_reports:'Reportes', title_reports:'Reportes de Engagement',
+    rep_agents:'Agentes', rep_all:'Todos los agentes', rep_date_range:'Rango de Fechas',
+    rep_from:'Desde', rep_to:'Hasta', rep_options:'Opciones',
+    rep_include_output:'Incluir output de comandos', rep_max_output:'Output máx. (chars)',
+    rep_generate:'⚡ Generar', rep_generating:'Generando...', rep_empty:'Selecciona agentes y haz clic en Generar.',
+    rep_export_md:'⬇ Markdown', rep_export_html:'⬇ HTML', rep_export_pdf:'⎙ Imprimir / PDF',
+    rep_summary:'Resumen', rep_timeline:'Línea de tiempo',
+    rep_no_cmds:'Sin comandos registrados.', rep_files:'Archivos exfiltrados',
+    rep_generated:'Generado:', rep_select_hint:'Selecciona al menos un agente.',
     loading:'Cargando...', no_available:'No disponible',
   }
 };
@@ -498,6 +519,9 @@ function showView(view, agentId) {
   } else if (view === 'settings') {
     document.getElementById('topbar-title').textContent = t('title_settings');
     renderSettingsView();
+  } else if (view === 'reports') {
+    document.getElementById('topbar-title').textContent = t('title_reports');
+    renderReportsView();
   }
 }
 
@@ -641,8 +665,9 @@ async function renderSessionView(agentId) {
         </div>
         <div class="info-card">
           <h3>${t('export_label')}</h3>
-          <button class="btn btn-sm btn-ghost" style="width:100%;margin-bottom:6px" onclick="exportTasks('${escapeHtml(agentId)}','txt')">${t('export_txt')}</button>
-          <button class="btn btn-sm btn-ghost" style="width:100%" onclick="exportTasks('${escapeHtml(agentId)}','json')">${t('export_json')}</button>
+          <button class="btn btn-sm btn-ghost" style="width:100%" onclick="openReportForAgent('${escapeHtml(agentId)}')">
+            📊 ${t('nav_reports')}
+          </button>
         </div>
         <div class="info-card">
           <h3>${t('note_label')}</h3>
@@ -781,6 +806,397 @@ async function exportTasks(agentId, format) {
   a.href = URL.createObjectURL(blob);
   a.download = filename;
   a.click();
+}
+
+// ── Reports ───────────────────────────────────────────────
+let _reportData = null;
+let _reportAgents = [];
+
+async function renderReportsView() {
+  const content = document.getElementById('content');
+  content.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;padding:40px"><div style="color:var(--text3)">${t('loading')}</div></div>`;
+  const res = await apiFetch('/api/agents');
+  _reportAgents = (res && res.ok) ? await res.json() : [];
+  _reportAgents.sort((a,b) => (b.online?1:0)-(a.online?1:0));
+
+  const today = new Date().toISOString().slice(0,10);
+  const monthAgo = new Date(Date.now()-30*86400000).toISOString().slice(0,10);
+
+  const agentCbs = _reportAgents.map(a => `
+    <label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;cursor:pointer;border:1px solid var(--border);background:var(--bg3);margin-bottom:4px">
+      <input type="checkbox" class="rep-agent-cb" value="${escapeHtml(a.id)}" checked style="accent-color:var(--accent);width:14px;height:14px">
+      <span style="flex:1;font-size:12px;font-family:var(--font-mono)">${escapeHtml(a.hostname)}</span>
+      <span style="font-size:10px;color:var(--text3)">${escapeHtml(a.username)}</span>
+      <span class="badge ${a.online?'badge-online':'badge-offline'}" style="font-size:9px">${a.online?t('badge_online'):t('badge_offline')}</span>
+    </label>`).join('') || `<div style="color:var(--text3);font-size:12px;padding:8px">${t('agents_empty')}</div>`;
+
+  content.innerHTML = `
+    <div style="display:grid;grid-template-columns:300px 1fr;gap:20px;height:calc(100vh - 100px)">
+      <div style="display:flex;flex-direction:column;gap:12px;overflow-y:auto;padding-right:4px">
+        <div class="info-card">
+          <h3 style="margin-bottom:10px">${t('rep_agents')}</h3>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2);margin-bottom:8px;cursor:pointer">
+            <input type="checkbox" id="rep-select-all" checked onchange="document.querySelectorAll('.rep-agent-cb').forEach(c=>c.checked=this.checked)">
+            ${t('rep_all')}
+          </label>
+          ${agentCbs}
+        </div>
+        <div class="info-card">
+          <h3 style="margin-bottom:10px">${t('rep_date_range')}</h3>
+          <div class="form-group" style="margin-bottom:8px">
+            <label>${t('rep_from')}</label>
+            <input type="date" id="rep-from" value="${monthAgo}" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:6px 8px;font-size:12px;outline:none">
+          </div>
+          <div class="form-group">
+            <label>${t('rep_to')}</label>
+            <input type="date" id="rep-to" value="${today}" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:6px 8px;font-size:12px;outline:none">
+          </div>
+        </div>
+        <div class="info-card">
+          <h3 style="margin-bottom:10px">${t('rep_options')}</h3>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;margin-bottom:8px">
+            <input type="checkbox" id="rep-include-output" checked style="accent-color:var(--accent)">
+            ${t('rep_include_output')}
+          </label>
+          <div class="form-group">
+            <label>${t('rep_max_output')}</label>
+            <input type="number" id="rep-max-output" value="500" min="100" max="5000" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:6px 8px;font-size:12px;outline:none">
+          </div>
+        </div>
+        <button class="btn" style="width:100%" id="rep-gen-btn" onclick="generateReport()">${t('rep_generate')}</button>
+        <div id="rep-export-btns" style="display:none;flex-direction:column;gap:6px">
+          <button class="btn btn-ghost" style="width:100%" onclick="exportReportMd()">${t('rep_export_md')}</button>
+          <button class="btn btn-ghost" style="width:100%" onclick="exportReportHtml()">${t('rep_export_html')}</button>
+          <button class="btn btn-ghost" style="width:100%" onclick="exportReportPdf()">${t('rep_export_pdf')}</button>
+        </div>
+      </div>
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow-y:auto;padding:24px" id="rep-preview">
+        <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:13px">${t('rep_empty')}</div>
+      </div>
+    </div>`;
+}
+
+async function generateReport() {
+  const btn = document.getElementById('rep-gen-btn');
+  const preview = document.getElementById('rep-preview');
+  btn.textContent = t('rep_generating'); btn.disabled = true;
+
+  const selectedIds = [...document.querySelectorAll('.rep-agent-cb:checked')].map(c=>c.value);
+  if (!selectedIds.length) {
+    preview.innerHTML = `<div style="color:var(--text3);padding:20px;font-size:13px">${t('rep_select_hint')}</div>`;
+    btn.textContent = t('rep_generate'); btn.disabled = false; return;
+  }
+
+  const fromDate = document.getElementById('rep-from').value;
+  const toDate   = document.getElementById('rep-to').value;
+  const includeOutput = document.getElementById('rep-include-output').checked;
+  const maxOutput = parseInt(document.getElementById('rep-max-output').value) || 500;
+  const fromTs = fromDate ? new Date(fromDate+'T00:00:00').getTime() : 0;
+  const toTs   = toDate   ? new Date(toDate+'T23:59:59').getTime()   : Infinity;
+
+  const agents = [];
+  for (const id of selectedIds) {
+    const info = _reportAgents.find(a=>a.id===id);
+    if (!info) continue;
+    const tr = await apiFetch(`/api/agents/${id}/tasks`);
+    const raw = (tr&&tr.ok) ? await tr.json() : [];
+    const cmds = raw.filter(tk=>{
+      const ts = tk.created_at ? new Date(tk.created_at).getTime() : 0;
+      return ts>=fromTs && ts<=toTs && _exportFilterCmd(tk.command)!==null;
+    }).map(tk=>({...tk,_label:_exportFilterCmd(tk.command)})).reverse();
+    const files = raw.filter(tk=>tk.output&&tk.output.startsWith('__b64file__:')).map(tk=>{
+      const p=tk.output.split(':',3); return {name:p[1]||'?',date:tk.completed_at};
+    });
+    agents.push({info,cmds,files});
+  }
+
+  _reportData = {agents,includeOutput,maxOutput,fromDate,toDate,generatedAt:new Date().toISOString()};
+  document.getElementById('rep-export-btns').style.display = 'flex';
+  _renderReportPreview(preview);
+  btn.textContent = t('rep_generate'); btn.disabled = false;
+}
+
+function _renderReportPreview(container) {
+  const {agents,includeOutput,maxOutput,generatedAt} = _reportData;
+  const totalCmds  = agents.reduce((s,a)=>s+a.cmds.length,0);
+  const totalFiles = agents.reduce((s,a)=>s+a.files.length,0);
+
+  const statsHtml = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px">
+      ${[
+        [agents.length, t('rep_agents')],
+        [totalCmds, 'Commands'],
+        [totalFiles, t('rep_files')],
+      ].map(([v,l])=>`
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:700;color:var(--accent)">${v}</div>
+          <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">${l}</div>
+        </div>`).join('')}
+    </div>`;
+
+  const tableRows = agents.map(a=>`
+    <tr>
+      <td><strong style="color:var(--text)">${escapeHtml(a.info.hostname)}</strong></td>
+      <td>${escapeHtml(a.info.username)}</td>
+      <td style="color:var(--text3);font-size:11px">${escapeHtml((a.info.os_info||'').slice(0,30))}</td>
+      <td>${escapeHtml(a.info.ip_external||'—')}</td>
+      <td>${escapeHtml(a.info.ip_internal||'—')}</td>
+      <td>${fmtDate(a.info.registered_at)}</td>
+      <td>${fmtDate(a.info.last_seen)}</td>
+      <td style="text-align:center">${a.cmds.length}</td>
+    </tr>`).join('');
+
+  const summaryTable = `
+    <h3 style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)">${t('rep_summary')}</h3>
+    <div style="overflow-x:auto;margin-bottom:24px">
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="border-bottom:1px solid var(--border)">
+          ${['Hostname','User','OS','IP Ext','IP Int','First Seen','Last Seen','Cmds'].map(h=>`<th style="padding:6px 10px;text-align:left;color:var(--text3);font-weight:500">${h}</th>`).join('')}
+        </tr></thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+    </div>`;
+
+  const agentSecs = agents.map(a=>{
+    const cmdHtml = a.cmds.length===0
+      ? `<div style="color:var(--text3);font-size:11px;padding:4px 0">${t('rep_no_cmds')}</div>`
+      : a.cmds.map(c=>{
+          const okOut = includeOutput && c.output && !c.output.startsWith('__b64file__:');
+          const outHtml = okOut
+            ? `<div style="font-family:var(--font-mono);font-size:11px;background:var(--bg);padding:6px 10px;border-left:2px solid var(--border);white-space:pre-wrap;word-break:break-all;color:var(--text2);margin-top:3px;max-height:120px;overflow:hidden">${escapeHtml((c.output||'').slice(0,maxOutput))}</div>`:'';
+          const sc = c.status==='done'?'var(--success)':c.status==='error'?'var(--danger)':'var(--text3)';
+          return `<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+            <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+              <span style="color:var(--text3);font-size:10px;font-family:var(--font-mono)">[${fmtDate(c.created_at)}]</span>
+              <span style="font-family:var(--font-mono);font-weight:600;color:var(--accent2);font-size:12px">${escapeHtml(c._label||c.command)}</span>
+              <span style="font-size:10px;color:${sc}">${c.status}</span>
+            </div>${outHtml}</div>`;
+        }).join('');
+    const filesHtml = a.files.length===0?'':a.files.map(f=>`
+      <div style="font-size:11px;padding:4px 8px;background:var(--bg3);border-radius:4px;margin-bottom:3px;font-family:var(--font-mono)">📥 ${escapeHtml(f.name)} <span style="color:var(--text3)">${fmtDate(f.date)}</span></div>`).join('');
+    return `
+      <div style="margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+          <span style="font-size:14px;font-weight:600;color:var(--text)">${escapeHtml(a.info.hostname)}</span>
+          <span class="badge ${a.info.online?'badge-online':'badge-offline'}" style="font-size:9px">${a.info.online?t('badge_online'):t('badge_offline')}</span>
+          <span style="font-size:11px;color:var(--text3)">${escapeHtml(a.info.username)} · ${escapeHtml((a.info.os_info||'').split(' ').slice(0,2).join(' '))}</span>
+          <span style="margin-left:auto;font-size:11px;color:var(--text3)">${a.cmds.length} cmds${a.files.length?` · ${a.files.length} files`:''}</span>
+        </div>
+        ${cmdHtml}
+        ${filesHtml?`<div style="margin-top:10px"><div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px">${t('rep_files')}</div>${filesHtml}</div>`:''}
+      </div>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div style="font-size:11px;color:var(--text3);margin-bottom:16px">${t('rep_generated')} ${new Date(generatedAt).toLocaleString()}</div>
+    ${statsHtml}${summaryTable}
+    <h3 style="font-size:13px;font-weight:600;margin-bottom:14px;color:var(--text2)">${t('rep_timeline')}</h3>
+    ${agentSecs||`<div style="color:var(--text3);font-size:12px">${t('rep_no_cmds')}</div>`}`;
+}
+
+async function _fetchLogoB64() {
+  try {
+    const res = await fetch('/static/xolo.png');
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return new Promise(resolve=>{
+      const r=new FileReader();
+      r.onload=()=>resolve(r.result.split(',')[1]);
+      r.onerror=()=>resolve(null);
+      r.readAsDataURL(blob);
+    });
+  } catch { return null; }
+}
+
+function _repEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function _buildReportHtml(data,logoB64){
+  const {agents,includeOutput,maxOutput,generatedAt,fromDate,toDate}=data;
+  const logoSrc = logoB64?`data:image/png;base64,${logoB64}`:'/static/xolo.png';
+  const genDate = new Date(generatedAt).toLocaleString();
+  const totalCmds=agents.reduce((s,a)=>s+a.cmds.length,0);
+  const totalFiles=agents.reduce((s,a)=>s+a.files.length,0);
+  function fmtDt(iso){if(!iso)return'—';try{return new Date(iso).toLocaleString();}catch{return iso;}}
+
+  const summaryRows=agents.map(a=>`
+    <tr>
+      <td><strong>${_repEsc(a.info.hostname)}</strong></td>
+      <td>${_repEsc(a.info.username)}</td>
+      <td>${_repEsc((a.info.os_info||'').slice(0,40))}</td>
+      <td>${_repEsc(a.info.ip_external||'—')}</td>
+      <td>${_repEsc(a.info.ip_internal||'—')}</td>
+      <td>${fmtDt(a.info.registered_at)}</td>
+      <td>${fmtDt(a.info.last_seen)}</td>
+      <td style="text-align:center;font-weight:600">${a.cmds.length}</td>
+    </tr>`).join('');
+
+  const agentSecs=agents.map(a=>{
+    const cmdRows=a.cmds.length===0?`<p class="empty-msg">No commands recorded.</p>`
+      :a.cmds.map(c=>{
+        const outText=c.output&&!c.output.startsWith('__b64file__:')?c.output:null;
+        const trunc=outText&&outText.length>maxOutput;
+        const outHtml=includeOutput&&outText?`<div class="cmd-output${trunc?' truncated':''}">${_repEsc(outText.slice(0,maxOutput))}</div>`:'';
+        const sc=c.status==='done'?'status-done':c.status==='error'?'status-error':'status-pending';
+        return `<div class="cmd-entry">
+          <div class="cmd-header">
+            <span class="cmd-ts">[${fmtDt(c.created_at)}]</span>
+            <span class="cmd-text">${_repEsc(c._label||c.command)}</span>
+            <span class="${sc}">${c.status}</span>
+          </div>${outHtml}</div>`;
+      }).join('');
+    const filesHtml=a.files.length===0?'':
+      `<div class="files-section"><h4 style="font-size:12px;color:#374151;margin:12px 0 6px">Exfiltrated Files</h4>${a.files.map(f=>`<div class="file-entry">📥 <code>${_repEsc(f.name)}</code><span style="color:#9ca3af;font-size:11px"> — ${fmtDt(f.date)}</span></div>`).join('')}</div>`;
+    return `<div class="agent-block">
+      <div class="agent-header">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span class="agent-name">${_repEsc(a.info.hostname)}</span>
+            <span class="badge ${a.info.online?'badge-online':'badge-offline'}">${a.info.online?'ONLINE':'OFFLINE'}</span>
+          </div>
+          <div class="agent-meta-grid">
+            <span>👤 <strong>User:</strong> ${_repEsc(a.info.username)}</span>
+            <span>💻 <strong>OS:</strong> ${_repEsc((a.info.os_info||'').slice(0,50))}</span>
+            <span>🌐 <strong>IP Ext:</strong> ${_repEsc(a.info.ip_external||'—')}</span>
+            <span>🔒 <strong>IP Int:</strong> ${_repEsc(a.info.ip_internal||'—')}</span>
+            <span>📅 <strong>First Seen:</strong> ${fmtDt(a.info.registered_at)}</span>
+            <span>🕐 <strong>Last Seen:</strong> ${fmtDt(a.info.last_seen)}</span>
+            ${a.info.country?`<span>🌍 <strong>Location:</strong> ${_repEsc(a.info.city||'')} ${_repEsc(a.info.country||'')}</span>`:''}
+          </div>
+        </div>
+        <div style="text-align:right;color:#6b7280;font-size:12px;margin-left:auto;flex-shrink:0">
+          <div style="font-size:20px;font-weight:700;color:#111">${a.cmds.length}</div>
+          <div style="font-size:10px;text-transform:uppercase">commands</div>
+        </div>
+      </div>
+      <div class="cmd-list">${cmdRows}</div>${filesHtml}
+    </div>`;
+  }).join('<hr style="border:none;border-top:2px solid #e5e7eb;margin:32px 0">');
+
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>XoloC2 Engagement Report</title><style>
+*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Arial,sans-serif;color:#111;background:#fff;font-size:13px}
+.cover{padding:48px 56px 36px;background:linear-gradient(135deg,#0f0f23 0%,#1a1a3e 100%);color:#fff}
+.cover-logo{display:flex;align-items:center;gap:16px;margin-bottom:24px}.cover-logo img{width:56px;height:56px;border-radius:10px}
+.cover-logo span{font-size:22px;font-weight:700;letter-spacing:.5px}
+h1.report-title{font-size:32px;font-weight:700;margin-bottom:8px}
+.cover-meta{color:rgba(255,255,255,.6);font-size:13px;line-height:1.8}
+.cover-stats{display:flex;gap:32px;margin-top:24px}.cover-stat .val{font-size:28px;font-weight:700;color:#4ade80}
+.cover-stat .lbl{font-size:11px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.5px}
+.content{padding:32px 56px}h2.section-title{font-size:18px;font-weight:600;margin:32px 0 16px;padding-bottom:8px;border-bottom:2px solid #e5e7eb}
+.summary-table{width:100%;border-collapse:collapse;margin-bottom:24px}
+.summary-table th{background:#f3f4f6;padding:9px 12px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;border-bottom:1px solid #e5e7eb}
+.summary-table td{padding:9px 12px;border-bottom:1px solid #f3f4f6;font-size:12px}
+.agent-block{margin-bottom:40px;page-break-inside:avoid}
+.agent-header{display:flex;align-items:flex-start;gap:10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin-bottom:16px}
+.agent-name{font-size:14px;font-weight:600}.agent-meta-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:4px 16px;font-size:11px;color:#6b7280;margin-top:6px}
+.agent-meta-grid strong{color:#374151}
+.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+.badge-online{background:#dcfce7;color:#166534}.badge-offline{background:#f3f4f6;color:#6b7280}
+.cmd-list{font-size:12px}.cmd-entry{margin-bottom:10px;page-break-inside:avoid}
+.cmd-header{display:flex;align-items:baseline;gap:8px;margin-bottom:3px;flex-wrap:wrap}
+.cmd-ts{color:#9ca3af;font-size:11px;font-family:monospace}
+.cmd-text{font-family:'Consolas','Courier New',monospace;font-weight:600;color:#1d4ed8}
+.status-done{color:#16a34a;font-size:10px}.status-error{color:#dc2626;font-size:10px}.status-pending{color:#9ca3af;font-size:10px}
+.cmd-output{font-family:'Consolas','Courier New',monospace;font-size:11px;background:#f8fafc;border-left:3px solid #e2e8f0;padding:8px 12px;margin-top:3px;white-space:pre-wrap;word-break:break-all;color:#374151;max-height:300px;overflow:hidden}
+.cmd-output.truncated::after{content:' ... [truncated]';color:#9ca3af;font-style:italic}
+.files-section .file-entry{display:flex;align-items:center;gap:8px;padding:6px 10px;background:#fef9ee;border:1px solid #fde68a;border-radius:4px;margin-bottom:4px;font-size:12px}
+.empty-msg{color:#9ca3af;font-style:italic;font-size:12px;padding:8px 0}
+.footer{margin-top:48px;padding:16px 56px;border-top:1px solid #e5e7eb;color:#9ca3af;font-size:11px;display:flex;justify-content:space-between}
+@media print{body{font-size:11px}.cover,.badge{-webkit-print-color-adjust:exact;print-color-adjust:exact}.agent-block{page-break-inside:avoid}}
+</style></head><body>
+<div class="cover">
+  <div class="cover-logo"><img src="${logoSrc}" alt="XoloC2"><span>XoloC2</span></div>
+  <h1 class="report-title">Engagement Report</h1>
+  <div class="cover-meta">Generated: ${_repEsc(genDate)}<br>Period: ${_repEsc(fromDate||'—')} → ${_repEsc(toDate||'—')}</div>
+  <div class="cover-stats">
+    <div class="cover-stat"><div class="val">${agents.length}</div><div class="lbl">Agents</div></div>
+    <div class="cover-stat"><div class="val">${totalCmds}</div><div class="lbl">Commands</div></div>
+    <div class="cover-stat"><div class="val">${totalFiles}</div><div class="lbl">Files</div></div>
+  </div>
+</div>
+<div class="content">
+  <h2 class="section-title">Summary</h2>
+  <table class="summary-table"><thead><tr>
+    <th>Hostname</th><th>User</th><th>OS</th><th>IP External</th><th>IP Internal</th><th>First Seen</th><th>Last Seen</th><th style="text-align:center">Commands</th>
+  </tr></thead><tbody>${summaryRows}</tbody></table>
+  <h2 class="section-title">Activity Timeline</h2>
+  ${agentSecs||'<p class="empty-msg">No activity recorded.</p>'}
+</div>
+<div class="footer"><span>XoloC2 — Engagement Report</span><span>${_repEsc(genDate)}</span></div>
+</body></html>`;
+}
+
+function _buildReportMd(data){
+  const {agents,includeOutput,maxOutput,generatedAt,fromDate,toDate}=data;
+  const genDate=new Date(generatedAt).toLocaleString();
+  function fmtDt(iso){if(!iso)return'—';try{return new Date(iso).toLocaleString();}catch{return iso;}}
+  let md=`# Engagement Report\n\n**Generated:** ${genDate}  \n**Period:** ${fromDate||'—'} → ${toDate||'—'}  \n**Agents:** ${agents.length}\n\n---\n\n## Summary\n\n`;
+  md+=`| Hostname | User | OS | IP Ext | IP Int | First Seen | Last Seen | Cmds |\n|----------|------|----|--------|--------|------------|-----------|------|\n`;
+  agents.forEach(a=>{
+    const os=(a.info.os_info||'').replace(/\|/g,' ').slice(0,40);
+    md+=`| **${a.info.hostname}** | ${a.info.username} | ${os} | ${a.info.ip_external||'—'} | ${a.info.ip_internal||'—'} | ${fmtDt(a.info.registered_at)} | ${fmtDt(a.info.last_seen)} | ${a.cmds.length} |\n`;
+  });
+  md+=`\n---\n\n`;
+  agents.forEach(a=>{
+    md+=`## ${a.info.hostname}\n\n- **User:** ${a.info.username}\n- **OS:** ${a.info.os_info||'—'}\n- **IP Ext:** ${a.info.ip_external||'—'}\n- **IP Int:** ${a.info.ip_internal||'—'}\n- **First Seen:** ${fmtDt(a.info.registered_at)}\n- **Last Seen:** ${fmtDt(a.info.last_seen)}\n`;
+    if(a.info.country) md+=`- **Location:** ${a.info.city||''} ${a.info.country||''}\n`;
+    md+=`\n`;
+    if(a.cmds.length===0){ md+=`*No commands recorded.*\n\n`; }
+    else{
+      md+=`### Commands\n\n`;
+      a.cmds.forEach(c=>{
+        md+=`**\`[${fmtDt(c.created_at)}]\`** \`${c._label||c.command}\` — *${c.status}*\n`;
+        if(includeOutput&&c.output&&!c.output.startsWith('__b64file__:')){
+          const out=c.output.slice(0,maxOutput);
+          md+=`\`\`\`\n${out}${c.output.length>maxOutput?'\n... [truncated]':''}\n\`\`\`\n`;
+        }
+        md+=`\n`;
+      });
+    }
+    if(a.files.length>0){
+      md+=`### Exfiltrated Files\n\n`;
+      a.files.forEach(f=>{ md+=`- \`${f.name}\` — ${fmtDt(f.date)}\n`; });
+      md+=`\n`;
+    }
+    md+=`---\n\n`;
+  });
+  return md;
+}
+
+function _dlBlob(content,filename,mime){
+  const blob=new Blob([content],{type:mime});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=filename; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+
+function exportReportMd(){
+  if(!_reportData) return;
+  _dlBlob(_buildReportMd(_reportData),`xoloc2_report_${new Date().toISOString().slice(0,10)}.md`,'text/markdown');
+}
+
+async function exportReportHtml(){
+  if(!_reportData) return;
+  const logo=await _fetchLogoB64();
+  _dlBlob(_buildReportHtml(_reportData,logo),`xoloc2_report_${new Date().toISOString().slice(0,10)}.html`,'text/html');
+}
+
+async function exportReportPdf(){
+  if(!_reportData) return;
+  const logo=await _fetchLogoB64();
+  const html=_buildReportHtml(_reportData,logo);
+  const w=window.open('','_blank','width=950,height=750');
+  if(!w){ alert('Allow popups to export PDF.'); return; }
+  w.document.write(html); w.document.close();
+  setTimeout(()=>{ w.focus(); w.print(); },900);
+}
+
+function openReportForAgent(agentId){
+  showView('reports');
+  setTimeout(()=>{
+    document.querySelectorAll('.rep-agent-cb').forEach(cb=>{ cb.checked=cb.value===agentId; });
+    const all=document.getElementById('rep-select-all');
+    if(all) all.checked=false;
+  },150);
 }
 
 async function loadTaskHistory(agentId) {
