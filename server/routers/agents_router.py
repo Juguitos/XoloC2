@@ -69,7 +69,7 @@ def get_agent(agent_id: str, db: Session = Depends(get_db), _: User = Depends(re
 
 
 @router.delete("/{agent_id}")
-def delete_agent(agent_id: str, db: Session = Depends(get_db), current_user: User = Depends(require_auth)):
+async def delete_agent(agent_id: str, db: Session = Depends(get_db), current_user: User = Depends(require_auth)):
     agent = db.query(Agent).filter(Agent.id == agent_id).first()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
@@ -119,7 +119,7 @@ class TaskRequest(BaseModel):
 
 
 @router.post("/{agent_id}/tasks")
-def create_task(
+async def create_task(
     agent_id: str,
     req: TaskRequest,
     db: Session = Depends(get_db),
