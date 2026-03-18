@@ -1120,7 +1120,12 @@ function showFileBrowserPanel(agentId) {
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;width:min(1200px,94vw);max-height:90vh;display:flex;flex-direction:column;overflow:hidden">
         <div style="display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border);flex-shrink:0">
           <span id="fb-read-title" style="flex:1;font-size:13px;font-weight:600;color:var(--text);font-family:var(--font-mono)"></span>
-          <button class="btn btn-sm btn-ghost" onclick="document.getElementById('fb-read-modal').style.display='none'">✕</button>
+          <button class="btn btn-sm btn-ghost" onclick="
+            const m=document.getElementById('fb-read-modal');
+            const c=document.getElementById('fb-read-content');
+            m.style.display='none';
+            c.style.padding='';c.style.overflow='';c.style.display='';c.style.flexDirection='';
+          ">✕</button>
         </div>
         <div id="fb-read-content" style="flex:1;overflow:auto;padding:16px;font-size:12px;line-height:1.7;color:var(--text);margin:0;font-family:var(--font-mono)"></div>
       </div>
@@ -1412,7 +1417,19 @@ async function fbRead(agentId, fullPath, filename) {
     if (!b64) { contentEl.innerHTML = errHtml('Error downloading PDF'); return; }
     const blob = new Blob([_b64ToBytes(b64)], { type: 'application/pdf' });
     const url  = URL.createObjectURL(blob);
-    contentEl.innerHTML = `<iframe src="${url}" style="width:100%;height:calc(90vh - 80px);border:none;border-radius:4px"></iframe>`;
+    // Remove padding so embed fills the full container
+    contentEl.style.padding = '0';
+    contentEl.style.overflow = 'hidden';
+    contentEl.style.display = 'flex';
+    contentEl.style.flexDirection = 'column';
+    contentEl.innerHTML = `
+      <div style="padding:6px 10px;background:var(--bg3);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <span style="font-size:11px;color:var(--text3)">${escapeHtml(filename)}</span>
+        <button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="window.open('${url}','_blank')">
+          ↗ ${_lang === 'es' ? 'Abrir en nueva pestaña' : 'Open in new tab'}
+        </button>
+      </div>
+      <embed src="${url}" type="application/pdf" style="flex:1;width:100%;border:none">`;
 
   } else if (isDocx) {
     const b64 = await _fbFetchB64(agentId, fullPath);
