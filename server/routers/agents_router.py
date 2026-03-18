@@ -10,7 +10,9 @@ from typing import Optional
 from datetime import datetime, timezone
 from database import get_db, Agent, Task
 from auth import require_auth, User
+import asyncio
 from routers.audit_router import log_event
+from routers.webhook_router import notify as wh_notify
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 
@@ -73,6 +75,11 @@ def delete_agent(agent_id: str, db: Session = Depends(get_db), current_user: Use
         raise HTTPException(status_code=404, detail="Agent not found")
     log_event(db, current_user.username, "AGENT_DELETED",
               detail=f"{agent.hostname} ({agent.ip_internal})")
+    asyncio.create_task(wh_notify("agent_deleted", {
+        "hostname": agent.hostname,
+        "ip": agent.ip_internal,
+        "operator": current_user.username,
+    }))
     db.query(Task).filter(Task.agent_id == agent_id).delete()
     db.delete(agent)
     db.commit()
@@ -130,6 +137,11 @@ def create_task(
     if not req.command.startswith("__"):
         log_event(db, current_user.username, "TASK_SENT",
                   detail=f"[{agent.hostname}] {req.command[:200]}")
+        asyncio.create_task(wh_notify("task_sent", {
+            "agent": agent.hostname,
+            "operator": current_user.username,
+            "command": req.command[:200],
+        }))
     return {"task_id": task.id, "command": task.command, "status": task.status}
 
 

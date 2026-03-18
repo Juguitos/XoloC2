@@ -4,6 +4,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import json
 import asyncio
+from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -88,32 +89,85 @@ _COLORS = {
     "login_fail":    0xEF4444,  # red
     "agent_deleted": 0xF59E0B,  # amber
     "task_sent":     0x8B5CF6,  # purple
-    "test":          0xF59E0B,  # amber
+    "test":          0x6B7280,  # gray
 }
 
 _TITLES = {
-    "new_agent":     "⚡ New Agent Connected",
-    "login":         "🔑 Operator Login",
-    "login_fail":    "⚠ Failed Login Attempt",
-    "agent_deleted": "🗑 Agent Deleted",
-    "task_sent":     "📋 Task Sent",
-    "test":          "🔔 Test Notification",
+    "new_agent":     "New Agent Connected",
+    "login":         "Operator Login",
+    "login_fail":    "Failed Login Attempt",
+    "agent_deleted": "Agent Deleted",
+    "task_sent":     "Task Dispatched",
+    "test":          "Test Notification",
+}
+
+_ICONS = {
+    "new_agent":     "https://cdn.jsdelivr.net/npm/twemoji@14/assets/72x72/26a1.png",
+    "login":         "https://cdn.jsdelivr.net/npm/twemoji@14/assets/72x72/1f511.png",
+    "login_fail":    "https://cdn.jsdelivr.net/npm/twemoji@14/assets/72x72/26a0.png",
+    "agent_deleted": "https://cdn.jsdelivr.net/npm/twemoji@14/assets/72x72/1f5d1.png",
+    "task_sent":     "https://cdn.jsdelivr.net/npm/twemoji@14/assets/72x72/1f4cb.png",
+    "test":          "https://cdn.jsdelivr.net/npm/twemoji@14/assets/72x72/1f514.png",
+}
+
+# Per-event field definitions: list of (label, data_key, inline)
+_FIELDS: dict[str, list[tuple[str, str, bool]]] = {
+    "new_agent": [
+        ("Hostname",  "hostname", True),
+        ("User",      "user",     True),
+        ("Internal IP", "ip",    True),
+        ("OS",        "os",       False),
+    ],
+    "login": [
+        ("Operator",  "user",     True),
+        ("From IP",   "ip",       True),
+    ],
+    "login_fail": [
+        ("Username",  "user",     True),
+        ("From IP",   "ip",       True),
+    ],
+    "agent_deleted": [
+        ("Hostname",  "hostname", True),
+        ("IP",        "ip",       True),
+        ("Deleted by", "operator", True),
+    ],
+    "task_sent": [
+        ("Agent",     "agent",    True),
+        ("Operator",  "operator", True),
+        ("Command",   "command",  False),
+    ],
 }
 
 
 def _build_payload(event: str, data: dict) -> dict:
     """Discord-compatible embed + flat keys for generic webhooks."""
-    fields = [
-        {"name": k.replace("_", " ").title(), "value": str(v)[:1024], "inline": True}
-        for k, v in data.items()
-    ]
+    field_defs = _FIELDS.get(event)
+    if field_defs:
+        fields = [
+            {"name": label, "value": f"`{str(data[key])[:1000]}`", "inline": inline}
+            for label, key, inline in field_defs
+            if key in data
+        ]
+    else:
+        fields = [
+            {"name": k.replace("_", " ").title(), "value": f"`{str(v)[:1000]}`", "inline": True}
+            for k, v in data.items()
+        ]
+
+    ts = datetime.now(timezone.utc).isoformat()
+
     return {
+        "username": "XoloC2",
         # Discord embeds
         "embeds": [{
-            "title": _TITLES.get(event, f"XoloC2: {event}"),
+            "author": {
+                "name": _TITLES.get(event, f"XoloC2 \u2022 {event}"),
+                "icon_url": _ICONS.get(event),
+            },
             "color": _COLORS.get(event, 0x6B7280),
             "fields": fields[:10],
-            "footer": {"text": "XoloC2 C2 Framework"},
+            "footer": {"text": "XoloC2"},
+            "timestamp": ts,
         }],
         # Generic webhook fallback (flat keys)
         "event": event,

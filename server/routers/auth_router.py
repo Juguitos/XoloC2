@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session  # noqa: F401 (used via Depends)
@@ -10,6 +11,7 @@ import time
 import threading
 import pyotp
 from routers.audit_router import log_event
+from routers.webhook_router import notify as wh_notify
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -74,6 +76,7 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
     if not user or not verify_password(req.password, user.password_hash):
         _record_failure(ip)
         log_event(db, req.username, "LOGIN_FAIL", detail=f"Bad credentials", ip=ip)
+        asyncio.create_task(wh_notify("login_fail", {"user": req.username, "ip": ip}))
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     # ── MFA check ────────────────────────────────────────────────────────────
@@ -92,10 +95,12 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
         if not totp.verify(req.totp_code.strip(), valid_window=1):
             _record_failure(ip)
             log_event(db, req.username, "LOGIN_FAIL", detail="Bad MFA code", ip=ip)
+            asyncio.create_task(wh_notify("login_fail", {"user": req.username, "ip": ip}))
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid MFA code")
 
     _clear_failures(ip)
     log_event(db, user.username, "LOGIN", ip=ip)
+    asyncio.create_task(wh_notify("login", {"user": user.username, "ip": ip}))
 
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=config.JWT_EXPIRE_MINUTES)
     token = create_token({"sub": user.username})
