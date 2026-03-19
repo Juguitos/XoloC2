@@ -5291,6 +5291,19 @@ function _getBeaconName() {
   return (document.getElementById('gen-output-name')?.value || '').trim() || 'beacon';
 }
 
+function copyBeacon() {
+  const code = document.getElementById('beacon-code').textContent;
+  if (!code) { showToast('Generate a beacon first', 'error'); return; }
+  navigator.clipboard.writeText(code).then(() => {
+    // Flash all three copy buttons (whichever is visible)
+    ['copy-btn', 'copy-btn-java', 'copy-btn-go'].forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) { const orig = btn.textContent; btn.textContent = '✓ Copied!'; setTimeout(() => btn.textContent = orig, 2000); }
+    });
+    showToast('Beacon code copied!', 'success');
+  }).catch(() => showToast('Copy failed', 'error'));
+}
+
 async function downloadBeacon(type) {
   const code = document.getElementById('beacon-code').textContent;
   if (!code) return;
