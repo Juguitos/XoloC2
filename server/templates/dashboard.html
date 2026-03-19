@@ -5687,38 +5687,27 @@ function countryFlag(code) {
 // ── Topology View ─────────────────────────────────────────
 async function renderTopologyView() {
   const content = document.getElementById('content');
+  content.style.padding  = '0';
+  content.style.overflow = 'hidden';
   content.innerHTML = `
-    <div style="padding:20px 24px 0">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div>
-          <h2 style="font-size:15px;font-weight:700;color:var(--text)">${t('title_topology')}</h2>
-          <p style="color:var(--text3);font-size:12px;margin-top:3px">Run <code style="color:var(--accent)">neighbors</code> on agents to discover nearby hosts.</p>
-        </div>
+    <div style="display:flex;flex-direction:column;height:100%">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <span style="font-size:13px;font-weight:600;color:var(--text)">${t('title_topology')}</span>
         <div style="display:flex;gap:8px">
-          <button class="btn btn-sm btn-ghost" onclick="renderTopologyView()">↺ Refresh</button>
-          <button class="btn btn-sm" onclick="_topoScanAll()" id="topo-scan-btn">⚡ Scan all online</button>
+          <button class="btn btn-sm btn-ghost" onclick="renderTopologyView()">↺ Actualizar</button>
+          <button class="btn btn-sm" onclick="_topoScanAll()" id="topo-scan-btn">⚡ Escanear activos</button>
         </div>
       </div>
-      <div style="display:flex;gap:16px;font-size:11px;color:var(--text3);align-items:center;margin-bottom:8px">
-        <span style="display:inline-flex;align-items:center;gap:5px">
-          <span style="width:10px;height:10px;border-radius:50%;background:#22c55e;display:inline-block"></span>Online agent
-        </span>
-        <span style="display:inline-flex;align-items:center;gap:5px">
-          <span style="width:10px;height:10px;border-radius:50%;background:#ef4444;display:inline-block"></span>Offline agent
-        </span>
-        <span style="display:inline-flex;align-items:center;gap:5px">
-          <span style="width:10px;height:10px;border-radius:2px;background:#334155;display:inline-block"></span>Discovered host
-        </span>
-        <span style="margin-left:8px;color:var(--text3)">Double-click an agent node to open its session.</span>
+      <div style="position:relative;flex:1;min-height:0">
+        <div id="topo-container" style="width:100%;height:100%"></div>
+        <div id="topo-panel" style="display:none;position:absolute;top:14px;right:14px;width:210px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px 16px;font-size:12px;box-shadow:0 4px 16px rgba(0,0,0,0.4)"></div>
       </div>
-    </div>
-    <div id="topo-container" style="width:100%;height:calc(100vh - 155px);background:var(--bg2);border-top:1px solid var(--border)"></div>
-  `;
+    </div>`;
 
   const res = await apiFetch('/api/topology');
   if (!res || !res.ok) {
     document.getElementById('topo-container').innerHTML =
-      '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--danger)">Failed to load topology data.</div>';
+      '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--danger)">Error al cargar la topología.</div>';
     return;
   }
   const data = await res.json();
@@ -5726,10 +5715,10 @@ async function renderTopologyView() {
   if (!container) return;
 
   if (!data.nodes.length) {
-    container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:12px;color:var(--text3)">
-      <div style="font-size:36px">🕸</div>
-      <div>No agents yet. Once agents check in they appear here automatically.</div>
-      <div style="font-size:11px">Run <code style="color:var(--accent)">neighbors</code> on an agent to map nearby hosts.</div>
+    container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:10px;color:var(--text3)">
+      <div style="font-size:32px">🕸</div>
+      <div style="font-size:13px">Sin agentes registrados.</div>
+      <div style="font-size:11px">Ejecuta <code style="color:var(--accent)">neighbors</code> en un agente para descubrir hosts vecinos.</div>
     </div>`;
     return;
   }
@@ -5740,25 +5729,16 @@ async function renderTopologyView() {
       ? (n.online
           ? { background:'#22c55e', border:'#16a34a', highlight:{ background:'#4ade80', border:'#16a34a' } }
           : { background:'#ef4444', border:'#dc2626', highlight:{ background:'#f87171', border:'#dc2626' } })
-      : { background:'#1e293b', border:'#334155', highlight:{ background:'#334155', border:'#475569' } };
-    const labelParts = [n.label];
-    if (n.ip && n.ip !== n.label) labelParts.push(n.ip);
+      : { background:'#1e293b', border:'#334155', highlight:{ background:'#2d3f55', border:'#475569' } };
     return {
-      id:     n.id,
-      label:  labelParts.join('\n'),
-      shape:  isAgent ? 'dot' : 'square',
-      size:   isAgent ? 18 : 11,
+      id:    n.id,
+      label: n.label,
+      shape: isAgent ? 'dot' : 'square',
+      size:  isAgent ? 16 : 10,
       color,
-      font:   { color:'#cbd5e1', size:11, face:'monospace' },
-      title:  `<div style="font-family:monospace;font-size:11px;line-height:1.7;color:#e2e8f0;background:#1e293b;padding:8px 10px;border-radius:6px">` +
-              `<b>${n.label}</b>` +
-              (n.ip   ? `<br><span style="color:#94a3b8">IP:</span> ${n.ip}`   : '') +
-              (n.user ? `<br><span style="color:#94a3b8">User:</span> ${n.user}` : '') +
-              (n.os   ? `<br><span style="color:#94a3b8">OS:</span> ${n.os.substring(0,50)}` : '') +
-              (n.online !== undefined && isAgent ? `<br><span style="color:${n.online?'#22c55e':'#ef4444'}">${n.online?'● Online':'● Offline'}</span>` : '') +
-              `</div>`,
-      _agentId: n.agent_id,
-      _type:    n.type,
+      font:  { color:'#94a3b8', size:11, face:'monospace' },
+      title: undefined,   // deshabilita el tooltip nativo de vis.js
+      _data: n,
     };
   }));
 
@@ -5766,36 +5746,56 @@ async function renderTopologyView() {
     id:     i,
     from:   e.from,
     to:     e.to,
-    color:  { color:'#334155', highlight:'#64748b', opacity:0.8 },
-    arrows: { to:{ enabled:true, scaleFactor:0.45 } },
+    color:  { color:'#1e293b', highlight:'#334155', opacity:1 },
+    arrows: { to:{ enabled:true, scaleFactor:0.4 } },
     smooth: { type:'continuous' },
   })));
 
   const options = {
     physics: {
-      stabilization: { iterations:200, updateInterval:25 },
-      barnesHut:     { gravitationalConstant:-9000, springLength:150, damping:0.15 },
+      stabilization: { iterations:150, updateInterval:30 },
+      barnesHut:     { gravitationalConstant:-8000, springLength:140, damping:0.12 },
     },
-    interaction: { hover:true, tooltipDelay:120, hideEdgesOnDrag:true, navigationButtons:false },
+    interaction: { hover:false, hideEdgesOnDrag:true, tooltipDelay:9999 },
   };
 
   if (_topoNet) _topoNet.destroy();
   _topoNet = new vis.Network(container, { nodes:visNodes, edges:visEdges }, options);
 
-  _topoNet.on('doubleClick', params => {
-    if (!params.nodes.length) return;
-    const nodeData = visNodes.get(params.nodes[0]);
-    if (nodeData && nodeData._type === 'agent' && nodeData._agentId) {
-      showView('session', nodeData._agentId);
-    }
+  const panel = document.getElementById('topo-panel');
+
+  _topoNet.on('click', params => {
+    if (!params.nodes.length) { panel.style.display = 'none'; return; }
+    const nd = visNodes.get(params.nodes[0]);
+    if (!nd) return;
+    const n = nd._data;
+    const isAgent = n.type === 'agent';
+    const rows = [
+      ['IP', n.ip],
+      n.label !== n.ip ? ['Hostname', n.label] : null,
+      n.user ? ['Usuario', n.user] : null,
+      n.os   ? ['SO', n.os.substring(0, 55)] : null,
+      isAgent ? ['Estado', `<span style="color:${n.online ? 'var(--online)' : 'var(--danger)'}">${n.online ? '● En línea' : '● Sin conexión'}</span>`] : null,
+    ].filter(Boolean);
+
+    panel.style.display = 'block';
+    panel.innerHTML =
+      `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <span style="font-weight:600;color:var(--text);font-size:11px">${isAgent ? '⚡ Agente' : '🖥 Host'}</span>
+        <button onclick="document.getElementById('topo-panel').style.display='none'" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;line-height:1">✕</button>
+      </div>
+      <div style="display:grid;grid-template-columns:auto 1fr;gap:5px 10px;color:var(--text2);word-break:break-all">
+        ${rows.map(([k,v]) => `<span style="color:var(--text3);white-space:nowrap">${k}</span><span>${v}</span>`).join('')}
+      </div>
+      ${isAgent && n.agent_id ? `<button class="btn btn-sm" style="margin-top:12px;width:100%" onclick="showView('session','${n.agent_id}')">Abrir sesión →</button>` : ''}`;
   });
 }
 
 async function _topoScanAll() {
   const btn = document.getElementById('topo-scan-btn');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Sending...'; }
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Enviando...'; }
   const res = await apiFetch('/api/agents');
-  if (!res || !res.ok) { if (btn) { btn.disabled = false; btn.textContent = '⚡ Scan all online'; } return; }
+  if (!res || !res.ok) { if (btn) { btn.disabled = false; btn.textContent = '⚡ Escanear activos'; } return; }
   const agents = await res.json();
   const online = agents.filter(a => a.online);
   for (const a of online) {
@@ -5807,8 +5807,8 @@ async function _topoScanAll() {
   }
   if (btn) {
     btn.disabled = false;
-    btn.textContent = `✓ Sent to ${online.length} agent(s)`;
-    setTimeout(() => { if (btn) btn.textContent = '⚡ Scan all online'; }, 3000);
+    btn.textContent = `✓ Enviado a ${online.length} agente(s)`;
+    setTimeout(() => { if (btn) btn.textContent = '⚡ Escanear activos'; }, 3000);
   }
 }
 
