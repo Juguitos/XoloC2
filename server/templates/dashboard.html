@@ -5700,6 +5700,11 @@ async function renderTopologyView() {
       </div>
       <div style="position:relative;flex:1;min-height:0">
         <div id="topo-container" style="width:100%;height:100%"></div>
+        <div style="position:absolute;bottom:14px;left:14px;display:flex;flex-direction:column;gap:6px;font-size:11px;color:var(--text3);background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 12px;pointer-events:none">
+          <span style="display:flex;align-items:center;gap:7px"><span style="width:10px;height:10px;border-radius:50%;background:#22c55e;flex-shrink:0"></span>Agente en línea</span>
+          <span style="display:flex;align-items:center;gap:7px"><span style="width:10px;height:10px;border-radius:50%;background:#ef4444;flex-shrink:0"></span>Agente sin conexión</span>
+          <span style="display:flex;align-items:center;gap:7px"><span style="width:10px;height:10px;background:#1e293b;border:1px solid #334155;flex-shrink:0"></span>Host descubierto</span>
+        </div>
         <div id="topo-panel" style="display:none;position:absolute;top:14px;right:14px;width:210px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px 16px;font-size:12px;box-shadow:0 4px 16px rgba(0,0,0,0.4)"></div>
       </div>
     </div>`;
