@@ -2220,20 +2220,21 @@ function renderGenerateView() {
     <!-- ── Left column: all config inputs ─────────────────────────── -->
     <div style="flex:1;min-width:0;display:flex;flex-direction:column;max-height:calc(100vh - 80px)">
 
+    <!-- static header: title + lang selector -->
+    <div style="flex-shrink:0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding-bottom:12px">
+      <div>
+        <h2 style="font-size:15px;font-weight:700;color:var(--text)">${t('gen_title')}</h2>
+        <p style="color:var(--text3);font-size:12px;margin-top:4px">${t('gen_subtitle')}</p>
+      </div>
+      <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden">
+        <button id="lang-py-btn"   onclick="setBeaconLang('py')"   style="padding:6px 16px;font-size:12px;font-weight:600;background:var(--accent);color:#fff;border:none;cursor:pointer">Python</button>
+        <button id="lang-java-btn" onclick="setBeaconLang('java')" style="padding:6px 16px;font-size:12px;font-weight:600;background:var(--bg3);color:var(--text2);border:none;cursor:pointer">Java</button>
+        <button id="lang-go-btn"   onclick="setBeaconLang('go')"   style="padding:6px 16px;font-size:12px;font-weight:600;background:var(--bg3);color:var(--text2);border:none;cursor:pointer">Go</button>
+      </div>
+    </div>
+
     <!-- scrollable form area — button stays pinned below -->
     <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding-right:6px;padding-bottom:4px">
-
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
-        <div>
-          <h2 style="font-size:15px;font-weight:700;color:var(--text)">${t('gen_title')}</h2>
-          <p style="color:var(--text3);font-size:12px;margin-top:4px">${t('gen_subtitle')}</p>
-        </div>
-        <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden">
-          <button id="lang-py-btn"   onclick="setBeaconLang('py')"   style="padding:6px 16px;font-size:12px;font-weight:600;background:var(--accent);color:#fff;border:none;cursor:pointer">Python</button>
-          <button id="lang-java-btn" onclick="setBeaconLang('java')" style="padding:6px 16px;font-size:12px;font-weight:600;background:var(--bg3);color:var(--text2);border:none;cursor:pointer">Java</button>
-          <button id="lang-go-btn"   onclick="setBeaconLang('go')"   style="padding:6px 16px;font-size:12px;font-weight:600;background:var(--bg3);color:var(--text2);border:none;cursor:pointer">Go</button>
-        </div>
-      </div>
 
       <div class="info-card" style="margin:0">
           <h3>${t('gen_connection')}</h3>
