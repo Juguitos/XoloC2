@@ -20,6 +20,7 @@ from routers.pty_router import router as pty_router
 from routers.tunnel_router import router as tunnel_router
 from routers.audit_router import router as audit_router
 from routers.webhook_router import router as webhook_router
+from routers.topology_router import router as topology_router
 from websocket_manager import manager as ws_manager
 from auth import decode_token
 
@@ -46,6 +47,7 @@ app.include_router(pty_router)
 app.include_router(tunnel_router)
 app.include_router(audit_router)
 app.include_router(webhook_router)
+app.include_router(topology_router)
 
 
 @app.middleware("http")

