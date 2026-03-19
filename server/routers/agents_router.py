@@ -13,6 +13,7 @@ from auth import require_auth, User
 import asyncio
 from routers.audit_router import log_event
 from routers.webhook_router import notify as wh_notify
+from websocket_manager import manager as ws_manager
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 
@@ -143,6 +144,11 @@ async def create_task(
             "operator": current_user.username,
             "command": req.command[:200],
         }))
+    asyncio.create_task(ws_manager.broadcast({
+        "type": "task_created",
+        "agent_id": agent_id,
+        "task_id": task.id,
+    }))
     return {"task_id": task.id, "command": task.command, "status": task.status}
 
 

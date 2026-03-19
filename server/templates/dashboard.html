@@ -486,7 +486,7 @@ function connectWS() {
       if (msg.type === 'agent_checkin') {
         if (currentView === 'agents') refreshAgentList();
         if (msg.is_new) showToast(`⚡ Nuevo agente: ${msg.hostname}`, 'success');
-      } else if (msg.type === 'task_result') {
+      } else if (msg.type === 'task_result' || msg.type === 'task_created') {
         if (currentView === 'session' && currentAgentId === msg.agent_id) {
           refreshTaskResults(msg.agent_id);
         }
