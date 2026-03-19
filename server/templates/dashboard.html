@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css">
   <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
@@ -98,15 +99,15 @@
 
 <!-- PTY Shell Modal -->
 <div class="modal-overlay" id="pty-modal">
-  <div class="modal" style="max-width:900px;width:95vw;max-height:92vh;padding:16px">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+  <div class="modal" style="max-width:1000px;width:95vw;max-height:92vh;padding:16px;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-shrink:0">
       <h2 style="margin:0;font-size:14px" data-i18n="pty_title">🖥 Interactive Shell</h2>
       <div style="display:flex;gap:10px;align-items:center">
         <span id="pty-status" style="font-size:11px;color:var(--text3)" data-i18n="pty_connecting">Connecting...</span>
         <button class="btn btn-sm btn-ghost" onclick="closePtyShell()" data-i18n="pty_close">✕ Close</button>
       </div>
     </div>
-    <div id="pty-terminal" style="height:500px;background:#0d0d0d;border-radius:6px;overflow:hidden;padding:4px"></div>
+    <div id="pty-terminal" style="flex:1;min-height:0;background:#0d0d0d;border-radius:6px;overflow:hidden;padding:4px"></div>
   </div>
 </div>
 
@@ -4998,6 +4999,9 @@ async function downloadBeacon(type) {
 let _ptyTerm = null;
 let _ptySessId = null;
 let _ptyAgentId = null;
+let _ptyFitAddon = null;
+let _ptyIsWin = false;
+let _ptyResizeObs = null;
 
 async function openPtyShell(agentId) {
   const modal = document.getElementById('pty-modal');
@@ -5006,11 +5010,15 @@ async function openPtyShell(agentId) {
   document.getElementById('pty-status').style.color = 'var(--warning)';
 
   // Destroy previous terminal
-  if (_ptyTerm) {
-    _ptyTerm.dispose();
-    _ptyTerm = null;
-  }
+  if (_ptyResizeObs) { _ptyResizeObs.disconnect(); _ptyResizeObs = null; }
+  if (_ptyTerm) { _ptyTerm.dispose(); _ptyTerm = null; }
+  _ptyFitAddon = null;
   document.getElementById('pty-terminal').innerHTML = '';
+
+  // Fetch agent OS to know if Windows (for local echo)
+  const agentRes = await apiFetch('/api/agents/' + agentId);
+  const agentInfo = agentRes && agentRes.ok ? await agentRes.json() : {};
+  _ptyIsWin = (agentInfo.os_info || '').toLowerCase().includes('windows');
 
   // Start PTY session on server
   const res = await apiFetch(`/api/pty/${agentId}/start`, { method: 'POST' });
@@ -5043,20 +5051,46 @@ async function openPtyShell(agentId) {
     scrollback: 2000,
   });
 
+  // FitAddon — fills the container and computes correct cols/rows
+  _ptyFitAddon = new FitAddon.FitAddon();
+  _ptyTerm.loadAddon(_ptyFitAddon);
+
   _ptyTerm.open(document.getElementById('pty-terminal'));
+  _ptyFitAddon.fit();
+
+  // Refit on container resize (handles window resize and modal open)
+  _ptyResizeObs = new ResizeObserver(() => { if (_ptyFitAddon) _ptyFitAddon.fit(); });
+  _ptyResizeObs.observe(document.getElementById('pty-terminal'));
+
   _ptyTerm.writeln('\x1b[1;32mPTY session started. Waiting for beacon to connect...\x1b[0m');
   _ptyTerm.writeln('\x1b[2m(The beacon will connect on its next check-in cycle)\x1b[0m');
   _ptyTerm.writeln('');
 
   // User keystrokes → server → beacon
-  _ptyTerm.onData((data) => {
-    if (_ptySessId && _ptyAgentId) {
-      const b64 = btoa(data);
-      apiFetch(`/api/pty/${_ptyAgentId}/${_ptySessId}/input`, {
-        method: 'POST',
-        body: JSON.stringify({ data: b64 }),
-      });
+  _ptyTerm.onData((key) => {
+    if (!_ptySessId || !_ptyAgentId) return;
+    let toSend = key;
+    if (_ptyIsWin) {
+      // PowerShell in pipe mode has no echo — handle locally
+      if (key === '\r') {
+        _ptyTerm.write('\r\n');
+        toSend = '\r\n';
+      } else if (key === '\x7f') {
+        // Backspace: erase char in terminal; send \x08 (BS) not \x7f (DEL)
+        _ptyTerm.write('\b \b');
+        toSend = '\x08';
+      } else if (key.length === 1 && key >= ' ') {
+        _ptyTerm.write(key);
+      }
+    } else {
+      // Linux real PTY — bash handles echo; just fix backspace byte
+      if (key === '\x7f') toSend = '\x08';
     }
+    const b64 = btoa(Array.from(new TextEncoder().encode(toSend)).map(b => String.fromCharCode(b)).join(''));
+    apiFetch(`/api/pty/${_ptyAgentId}/${_ptySessId}/input`, {
+      method: 'POST',
+      body: JSON.stringify({ data: b64 }),
+    });
   });
 
   _ptyTerm.focus();
@@ -5065,15 +5099,14 @@ async function openPtyShell(agentId) {
 }
 
 async function closePtyShell() {
+  if (_ptyResizeObs) { _ptyResizeObs.disconnect(); _ptyResizeObs = null; }
+  _ptyFitAddon = null;
   if (_ptySessId && _ptyAgentId) {
     apiFetch(`/api/pty/${_ptyAgentId}/${_ptySessId}`, { method: 'DELETE' });
   }
   _ptySessId = null;
   _ptyAgentId = null;
-  if (_ptyTerm) {
-    _ptyTerm.dispose();
-    _ptyTerm = null;
-  }
+  if (_ptyTerm) { _ptyTerm.dispose(); _ptyTerm = null; }
   document.getElementById('pty-modal').classList.remove('open');
 }
 
