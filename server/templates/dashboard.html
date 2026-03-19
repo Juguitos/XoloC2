@@ -4296,9 +4296,9 @@ public class Beacon {
                 first = false;
                 String t = f.isDirectory() ? "dir" : "file";
                 long sz = f.isFile() ? f.length() : 0L;
-                sb.append("{\"name\":\"").append(jsonEscape(f.getName()))
-                  .append("\",\"type\":\"").append(t)
-                  .append("\",\"size\":").append(sz).append("}");
+                sb.append("{\\"name\\":\\"").append(jsonEscape(f.getName()))
+                  .append("\\",\\"type\\":\\"").append(t)
+                  .append("\\",\\"size\\":").append(sz).append("}");
             }
             sb.append("]");
             return sb.toString();
