@@ -3571,8 +3571,8 @@ def run_command(cmd, task_id=None):
         _sid = cmd[8:]
         def _pty_run(sid=_sid):
             if _WIN:
-                _proc = subprocess.Popen(['powershell.exe', '-NoProfile', '-NoLogo'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0, creationflags=0x08000000)
-                # PowerShell in pipe mode skips the prompt — inject one so the user sees output
+                _proc = subprocess.Popen(['powershell.exe', '-NoProfile', '-NoLogo', '-NonInteractive'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0, creationflags=0x08000000)
+                # -NonInteractive suppresses PS own prompt and command echo — inject initial prompt manually
                 try: _proc.stdin.write(b'Write-Host ("PS " + $PWD.Path + "> ") -NoNewline\\r\\n'); _proc.stdin.flush()
                 except: pass
                 def _rd():
