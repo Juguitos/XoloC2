@@ -236,6 +236,13 @@ const LANG = {
     rep_no_cmds:'No commands recorded.', rep_files:'Exfiltrated Files',
     rep_generated:'Generated:', rep_select_hint:'Select at least one agent.',
     loading:'Loading...', no_available:'N/A',
+    topo_online:'Online', topo_offline:'Offline', topo_host:'Host',
+    topo_refresh:'↺ Refresh', topo_scan:'⚡ Scan online',
+    topo_empty_title:'No agents registered.', topo_empty_hint:'Run <code style="color:var(--accent)">neighbors</code> on an agent to discover nearby hosts.',
+    topo_err:'Failed to load topology.', topo_scan_sending:'⏳ Sending...', topo_scan_sent:'✓ Sent to',
+    topo_agent:'Agent', topo_host_label:'Host', topo_ip:'IP', topo_hostname:'Hostname',
+    topo_user:'User', topo_os:'OS', topo_status:'Status', topo_status_on:'● Online', topo_status_off:'● Offline',
+    topo_open_session:'Open session →',
   },
   es: {
     nav_sessions:'Sesiones', nav_map:'Mapa', nav_topology:'Topología', nav_generate:'Generar Beacon', nav_redirector:'Redirector',
@@ -331,6 +338,13 @@ const LANG = {
     rep_no_cmds:'Sin comandos registrados.', rep_files:'Archivos exfiltrados',
     rep_generated:'Generado:', rep_select_hint:'Selecciona al menos un agente.',
     loading:'Cargando...', no_available:'No disponible',
+    topo_online:'En línea', topo_offline:'Sin conexión', topo_host:'Host',
+    topo_refresh:'↺ Actualizar', topo_scan:'⚡ Escanear activos',
+    topo_empty_title:'Sin agentes registrados.', topo_empty_hint:'Ejecuta <code style="color:var(--accent)">neighbors</code> en un agente para descubrir hosts vecinos.',
+    topo_err:'Error al cargar la topología.', topo_scan_sending:'⏳ Enviando...', topo_scan_sent:'✓ Enviado a',
+    topo_agent:'Agente', topo_host_label:'Host', topo_ip:'IP', topo_hostname:'Hostname',
+    topo_user:'Usuario', topo_os:'SO', topo_status:'Estado', topo_status_on:'● En línea', topo_status_off:'● Sin conexión',
+    topo_open_session:'Abrir sesión →',
   }
 };
 
@@ -5693,18 +5707,20 @@ async function renderTopologyView() {
     <div style="display:flex;flex-direction:column;height:100%">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
         <span style="font-size:13px;font-weight:600;color:var(--text)">${t('title_topology')}</span>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-sm btn-ghost" onclick="renderTopologyView()">↺ Actualizar</button>
-          <button class="btn btn-sm" onclick="_topoScanAll()" id="topo-scan-btn">⚡ Escanear activos</button>
+        <div style="display:flex;align-items:center;gap:16px">
+          <div style="display:flex;align-items:center;gap:12px;font-size:11px;color:var(--text3)">
+            <span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0"></span>${t('topo_online')}</span>
+            <span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:#ef4444;flex-shrink:0"></span>${t('topo_offline')}</span>
+            <span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;background:#1e293b;border:1px solid #334155;flex-shrink:0"></span>${t('topo_host')}</span>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-sm btn-ghost" onclick="renderTopologyView()">${t('topo_refresh')}</button>
+            <button class="btn btn-sm" onclick="_topoScanAll()" id="topo-scan-btn">${t('topo_scan')}</button>
+          </div>
         </div>
       </div>
       <div style="position:relative;flex:1;min-height:0">
         <div id="topo-container" style="width:100%;height:100%"></div>
-        <div style="position:absolute;bottom:14px;left:14px;display:flex;flex-direction:column;gap:6px;font-size:11px;color:var(--text3);background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 12px;pointer-events:none">
-          <span style="display:flex;align-items:center;gap:7px"><span style="width:10px;height:10px;border-radius:50%;background:#22c55e;flex-shrink:0"></span>Agente en línea</span>
-          <span style="display:flex;align-items:center;gap:7px"><span style="width:10px;height:10px;border-radius:50%;background:#ef4444;flex-shrink:0"></span>Agente sin conexión</span>
-          <span style="display:flex;align-items:center;gap:7px"><span style="width:10px;height:10px;background:#1e293b;border:1px solid #334155;flex-shrink:0"></span>Host descubierto</span>
-        </div>
         <div id="topo-panel" style="display:none;position:absolute;top:14px;right:14px;width:210px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px 16px;font-size:12px;box-shadow:0 4px 16px rgba(0,0,0,0.4)"></div>
       </div>
     </div>`;
@@ -5712,7 +5728,7 @@ async function renderTopologyView() {
   const res = await apiFetch('/api/topology');
   if (!res || !res.ok) {
     document.getElementById('topo-container').innerHTML =
-      '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--danger)">Error al cargar la topología.</div>';
+      `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--danger)">${t('topo_err')}</div>`;
     return;
   }
   const data = await res.json();
@@ -5722,8 +5738,8 @@ async function renderTopologyView() {
   if (!data.nodes.length) {
     container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:10px;color:var(--text3)">
       <div style="font-size:32px">🕸</div>
-      <div style="font-size:13px">Sin agentes registrados.</div>
-      <div style="font-size:11px">Ejecuta <code style="color:var(--accent)">neighbors</code> en un agente para descubrir hosts vecinos.</div>
+      <div style="font-size:13px">${t('topo_empty_title')}</div>
+      <div style="font-size:11px">${t('topo_empty_hint')}</div>
     </div>`;
     return;
   }
@@ -5776,29 +5792,29 @@ async function renderTopologyView() {
     const n = nd._data;
     const isAgent = n.type === 'agent';
     const rows = [
-      ['IP', n.ip],
-      n.label !== n.ip ? ['Hostname', n.label] : null,
-      n.user ? ['Usuario', n.user] : null,
-      n.os   ? ['SO', n.os.substring(0, 55)] : null,
-      isAgent ? ['Estado', `<span style="color:${n.online ? 'var(--online)' : 'var(--danger)'}">${n.online ? '● En línea' : '● Sin conexión'}</span>`] : null,
+      [t('topo_ip'), n.ip],
+      n.label !== n.ip ? [t('topo_hostname'), n.label] : null,
+      n.user ? [t('topo_user'), n.user] : null,
+      n.os   ? [t('topo_os'), n.os.substring(0, 55)] : null,
+      isAgent ? [t('topo_status'), `<span style="color:${n.online ? 'var(--online)' : 'var(--danger)'}">${n.online ? t('topo_status_on') : t('topo_status_off')}</span>`] : null,
     ].filter(Boolean);
 
     panel.style.display = 'block';
     panel.innerHTML =
       `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <span style="font-weight:600;color:var(--text);font-size:11px">${isAgent ? '⚡ Agente' : '🖥 Host'}</span>
+        <span style="font-weight:600;color:var(--text);font-size:11px">${isAgent ? '⚡ ' + t('topo_agent') : '🖥 ' + t('topo_host_label')}</span>
         <button onclick="document.getElementById('topo-panel').style.display='none'" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;line-height:1">✕</button>
       </div>
       <div style="display:grid;grid-template-columns:auto 1fr;gap:5px 10px;color:var(--text2);word-break:break-all">
         ${rows.map(([k,v]) => `<span style="color:var(--text3);white-space:nowrap">${k}</span><span>${v}</span>`).join('')}
       </div>
-      ${isAgent && n.agent_id ? `<button class="btn btn-sm" style="margin-top:12px;width:100%" onclick="showView('session','${n.agent_id}')">Abrir sesión →</button>` : ''}`;
+      ${isAgent && n.agent_id ? `<button class="btn btn-sm" style="margin-top:12px;width:100%" onclick="showView('session','${n.agent_id}')">${t('topo_open_session')}</button>` : ''}`;
   });
 }
 
 async function _topoScanAll() {
   const btn = document.getElementById('topo-scan-btn');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Enviando...'; }
+  if (btn) { btn.disabled = true; btn.textContent = t('topo_scan_sending'); }
   const res = await apiFetch('/api/agents');
   if (!res || !res.ok) { if (btn) { btn.disabled = false; btn.textContent = '⚡ Escanear activos'; } return; }
   const agents = await res.json();
@@ -5812,8 +5828,8 @@ async function _topoScanAll() {
   }
   if (btn) {
     btn.disabled = false;
-    btn.textContent = `✓ Enviado a ${online.length} agente(s)`;
-    setTimeout(() => { if (btn) btn.textContent = '⚡ Escanear activos'; }, 3000);
+    btn.textContent = `${t('topo_scan_sent')} ${online.length}`;
+    setTimeout(() => { if (btn) btn.textContent = t('topo_scan'); }, 3000);
   }
 }
 
