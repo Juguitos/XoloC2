@@ -75,6 +75,15 @@ class AuditLog(Base):
     timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+class OperatorMessage(Base):
+    __tablename__ = "operator_messages"
+
+    id        = Column(String,   primary_key=True, default=lambda: str(uuid.uuid4()))
+    author    = Column(String,   nullable=False)
+    text      = Column(Text,     nullable=False)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 class BeaconKey(Base):
     __tablename__ = "beacon_keys"
 

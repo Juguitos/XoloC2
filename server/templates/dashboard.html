@@ -236,6 +236,8 @@ const LANG = {
     rep_no_cmds:'No commands recorded.', rep_files:'Exfiltrated Files',
     rep_generated:'Generated:', rep_select_hint:'Select at least one agent.',
     loading:'Loading...', no_available:'N/A',
+    chat_title:'Operators', chat_placeholder:'Message...', chat_send:'Send',
+    chat_you:'you',
     topo_online:'Online', topo_offline:'Offline', topo_host:'Host',
     topo_refresh:'↺ Refresh', topo_scan:'⚡ Scan online',
     topo_empty_title:'No agents registered.', topo_empty_hint:'Run <code style="color:var(--accent)">neighbors</code> on an agent to discover nearby hosts.',
@@ -338,6 +340,8 @@ const LANG = {
     rep_no_cmds:'Sin comandos registrados.', rep_files:'Archivos exfiltrados',
     rep_generated:'Generado:', rep_select_hint:'Selecciona al menos un agente.',
     loading:'Cargando...', no_available:'No disponible',
+    chat_title:'Operadores', chat_placeholder:'Mensaje...', chat_send:'Enviar',
+    chat_you:'tú',
     topo_online:'En línea', topo_offline:'Sin conexión', topo_host:'Host',
     topo_refresh:'↺ Actualizar', topo_scan:'⚡ Escanear activos',
     topo_empty_title:'Sin agentes registrados.', topo_empty_hint:'Ejecuta <code style="color:var(--accent)">neighbors</code> en un agente para descubrir hosts vecinos.',
@@ -474,6 +478,12 @@ function connectWS() {
           try {
             _ptyTerm.write(Uint8Array.from(atob(msg.data), c => c.charCodeAt(0)));
           } catch (_) {}
+        }
+      } else if (msg.type === 'chat_message') {
+        const box = document.getElementById('chat-messages');
+        if (box) {
+          _chatAppendMsg(msg, box);
+          box.scrollTop = box.scrollHeight;
         }
       }
     } catch (_) {}
@@ -713,6 +723,18 @@ async function renderSessionView(agentId) {
           <textarea id="agent-note" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--font-mono);font-size:11px;padding:8px;resize:none;height:80px;outline:none" placeholder="${t('note_placeholder')}"></textarea>
           <button class="btn btn-sm" style="margin-top:6px;width:100%" onclick="saveNote('${escapeHtml(agentId)}')">${t('save_note')}</button>
         </div>
+        <div class="info-card" id="chat-card" style="display:none;padding:0;overflow:hidden">
+          <div style="padding:10px 14px;border-bottom:1px solid var(--border)">
+            <h3 style="margin:0">💬 ${t('chat_title')}</h3>
+          </div>
+          <div id="chat-messages" style="height:180px;overflow-y:auto;padding:10px 14px;display:flex;flex-direction:column;gap:6px;font-size:11px"></div>
+          <div style="display:flex;gap:6px;padding:8px 10px;border-top:1px solid var(--border)">
+            <input id="chat-input" type="text" placeholder="${t('chat_placeholder')}"
+              style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--font-mono);font-size:11px;padding:5px 8px;outline:none"
+              onkeydown="if(event.key==='Enter')_chatSend()">
+            <button class="btn btn-sm" onclick="_chatSend()">${t('chat_send')}</button>
+          </div>
+        </div>
       </div>
       <div class="session-terminal">
         <div class="terminal-wrap">
@@ -753,6 +775,52 @@ async function renderSessionView(agentId) {
   refreshSocks5Status();
 
   document.getElementById('term-input').focus();
+
+  // Chat: show only if >1 operator account
+  const ucRes = await apiFetch('/api/chat/user-count');
+  if (ucRes && ucRes.ok) {
+    const uc = await ucRes.json();
+    if (uc.count > 1) {
+      const chatCard = document.getElementById('chat-card');
+      if (chatCard) chatCard.style.display = '';
+      await _chatLoad();
+    }
+  }
+}
+
+async function _chatLoad() {
+  const res = await apiFetch('/api/chat');
+  if (!res || !res.ok) return;
+  const msgs = await res.json();
+  const box = document.getElementById('chat-messages');
+  if (!box) return;
+  box.innerHTML = '';
+  msgs.forEach(m => _chatAppendMsg(m, box));
+  box.scrollTop = box.scrollHeight;
+}
+
+function _chatAppendMsg(msg, box) {
+  if (!box) box = document.getElementById('chat-messages');
+  if (!box) return;
+  const me = document.getElementById('sidebar-user')?.textContent?.trim();
+  const isMe = msg.author === me;
+  const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;flex-direction:column;gap:2px;' + (isMe ? 'align-items:flex-end' : 'align-items:flex-start');
+  row.innerHTML = `
+    <span style="font-size:10px;color:var(--text3)">${escapeHtml(isMe ? t('chat_you') : msg.author)} · ${time}</span>
+    <span style="background:${isMe ? 'var(--accent)' : 'var(--bg3)'};color:${isMe ? '#fff' : 'var(--text)'};border-radius:8px;padding:4px 10px;max-width:90%;word-break:break-word">${escapeHtml(msg.text)}</span>`;
+  box.appendChild(row);
+}
+
+async function _chatSend() {
+  const input = document.getElementById('chat-input');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  const res = await apiFetch('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text})});
+  if (!res || !res.ok) { input.value = text; showToast('Error sending message', 'error'); }
 }
 
 async function loadAgentInfo(agentId) {
