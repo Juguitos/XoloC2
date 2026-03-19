@@ -179,6 +179,7 @@ const LANG = {
     feat_screenshot_sched:'Screenshot schedule', feat_screenshot_sched_desc:'screenshot <N> — auto-capture every N min (0 to stop)',
     feat_keylogger:'Keylogger', feat_keylogger_desc:'keylog start|stop|dump — capture keystrokes in background',
     feat_portfwd:'Port forwarding', feat_portfwd_desc:'portfwd <lport> <rhost>:<rport> — static TCP tunnel',
+    gen_output_name:'Output filename', gen_output_name_ph:'beacon (no extension)',
     gen_btn:'⚡ Generate Beacon', save_as:'Save as',
     info_title:'Info', info_type_py:'Python 3 beacon', info_type_java:'Java 11 beacon',
     info_out_py:'.py / Linux ELF', info_cross_yes:'Yes — Windows/Linux/macOS',
@@ -275,6 +276,7 @@ const LANG = {
     feat_screenshot_sched:'Screenshot automático', feat_screenshot_sched_desc:'screenshot <N> — captura cada N minutos (0 para detener)',
     feat_keylogger:'Keylogger', feat_keylogger_desc:'keylog start|stop|dump — captura teclas en background',
     feat_portfwd:'Port forwarding', feat_portfwd_desc:'portfwd <lport> <rhost>:<rport> — túnel TCP estático',
+    gen_output_name:'Nombre del archivo', gen_output_name_ph:'beacon (sin extensión)',
     gen_btn:'⚡ Generar Beacon', save_as:'Guardar como',
     info_title:'Info', info_type_py:'Python 3 beacon', info_type_java:'Java 11 beacon',
     info_out_py:'.py / Linux ELF', info_cross_yes:'Sí — Windows/Linux/macOS',
@@ -2333,8 +2335,14 @@ function renderGenerateView() {
 
     </div><!-- end scrollable form area -->
 
-    <!-- Generate button — always visible at bottom of left column -->
-    <div style="flex-shrink:0;padding-top:10px">
+    <!-- Filename + Generate button — always visible at bottom of left column -->
+    <div style="flex-shrink:0;padding-top:10px;display:flex;flex-direction:column;gap:8px">
+      <div class="form-group" style="margin:0">
+        <label>${t('gen_output_name')}</label>
+        <input type="text" id="gen-output-name" placeholder="${t('gen_output_name_ph')}"
+          style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:13px;padding:8px 12px;outline:none;width:100%"
+          oninput="this.value=this.value.replace(/[/\\\\:*?&quot;&lt;&gt;|]/g,'')">
+      </div>
       <button class="btn" onclick="generateBeacon()" style="width:100%;justify-content:center;padding:12px">
         ${t('gen_btn')}
       </button>
@@ -3134,15 +3142,15 @@ async function generateBeacon() {
   document.getElementById('beacon-dl-buttons-go').style.display   = 'none';
   if (_beaconLang === 'java') {
     code = generateJavaBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey, hbDays, features);
-    filename = 'Beacon.java';
+    filename = `${_getBeaconName()}.java`;
     document.getElementById('beacon-dl-buttons-java').style.display = 'flex';
   } else if (_beaconLang === 'go') {
     code = generateGoBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey, hbDays, features);
-    filename = 'main.go';
+    filename = `${_getBeaconName()}.go`;
     document.getElementById('beacon-dl-buttons-go').style.display = 'flex';
   } else {
     code = generateBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey, hbDays, features);
-    filename = 'beacon.py';
+    filename = `${_getBeaconName()}.py`;
     document.getElementById('beacon-dl-buttons-py').style.display   = 'flex';
   }
   document.getElementById('beacon-filename-label').innerHTML = `${t('save_as')} <code style="color:var(--accent)">${filename}</code>`;
@@ -5130,27 +5138,32 @@ function showWindowsInstructions() {
 }
 
 
+function _getBeaconName() {
+  return (document.getElementById('gen-output-name')?.value || '').trim() || 'beacon';
+}
+
 async function downloadBeacon(type) {
   const code = document.getElementById('beacon-code').textContent;
   if (!code) return;
 
+  const name = _getBeaconName();
   const statusEl = document.getElementById('compile-status');
 
   if (type === 'py') {
     const blob = new Blob([code], { type: 'text/plain' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'beacon.py'; a.click();
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${name}.py`; a.click();
     return;
   }
 
   if (type === 'java-src') {
     const blob = new Blob([code], { type: 'text/plain' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'Beacon.java'; a.click();
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${name}.java`; a.click();
     return;
   }
 
   if (type === 'go-src') {
     const blob = new Blob([code], { type: 'text/plain' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'main.go'; a.click();
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${name}.go`; a.click();
     return;
   }
 
@@ -5169,10 +5182,10 @@ async function downloadBeacon(type) {
       return;
     }
     const blob = await res.blob();
-    const ext = platform === 'windows' ? '.exe' : '';
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `beacon${ext}`; a.click();
+    const fname = platform === 'windows' ? `${name}.exe` : name;
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fname; a.click();
     statusEl.style.color = 'var(--online)';
-    statusEl.textContent = `✓ beacon${ext} downloaded.`;
+    statusEl.textContent = `✓ ${fname} downloaded.`;
     setTimeout(() => statusEl.style.display = 'none', 3000);
     return;
   }
@@ -5191,14 +5204,14 @@ async function downloadBeacon(type) {
       return;
     }
     const blob = await res.blob();
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'beacon.jar'; a.click();
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${name}.jar`; a.click();
     statusEl.style.color = 'var(--online)';
-    statusEl.textContent = '✓ beacon.jar descargado. Ejecutar con: java -jar beacon.jar';
+    statusEl.textContent = `✓ ${name}.jar descargado. Ejecutar con: java -jar ${name}.jar`;
     setTimeout(() => statusEl.style.display = 'none', 4000);
     return;
   }
 
-  // Linux ELF via PyInstaller
+  // Linux ELF / Windows EXE via PyInstaller
   statusEl.style.cssText = 'display:block;background:var(--bg3);color:var(--text2);padding:10px 14px;border-radius:6px;font-size:12px';
   statusEl.textContent = `⏳ Compiling for ${type === 'linux' ? 'Linux' : 'Windows'}... this may take ~30s`;
 
@@ -5215,10 +5228,10 @@ async function downloadBeacon(type) {
   }
 
   const blob = await res.blob();
-  const ext = type === 'windows' ? '.exe' : '';
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `beacon${ext}`; a.click();
+  const fname = type === 'windows' ? `${name}.exe` : name;
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fname; a.click();
   statusEl.style.color = 'var(--online)';
-  statusEl.textContent = '✓ Binary downloaded.';
+  statusEl.textContent = `✓ ${fname} downloaded.`;
   setTimeout(() => statusEl.style.display = 'none', 3000);
 }
 
