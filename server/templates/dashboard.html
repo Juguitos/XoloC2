@@ -750,11 +750,10 @@ async function loadAgentInfo(agentId) {
 
   const ptyBtn = document.getElementById('pty-btn');
   if (ptyBtn) {
-    const isWin = (a.os_info || '').toLowerCase().includes('windows');
-    ptyBtn.disabled = isWin;
-    ptyBtn.title = isWin ? 'PTY no disponible en Windows' : 'Abrir shell interactiva';
-    ptyBtn.style.opacity = isWin ? '0.4' : '';
-    ptyBtn.style.cursor = isWin ? 'not-allowed' : '';
+    ptyBtn.disabled = false;
+    ptyBtn.title = 'Abrir shell interactiva';
+    ptyBtn.style.opacity = '';
+    ptyBtn.style.cursor = '';
   }
 }
 
@@ -1766,6 +1765,8 @@ function fbSetView(mode, rerender = true) {
 }
 
 function fbIsReadable(name) {
+  // Office temp lock files (e.g. ~$file.docx) — binary, not previewable
+  if (name.startsWith('~$')) return false;
   // Excludes only formats that cannot be previewed at all
   const nonViewable = new Set([
     'exe','dll','so','dylib','obj','o','bin','class','jar','pyc','pyd',
@@ -1870,6 +1871,8 @@ async function fbRead(agentId, fullPath, filename) {
   const contentEl = document.getElementById('fb-read-content');
   if (!modal) return;
   titleEl.textContent = filename;
+  // Reset any inline styles left by previous file (e.g. PDF sets overflow:hidden)
+  contentEl.style.cssText = '';
   contentEl.innerHTML = `<span style="color:var(--text2);padding:8px">${_lang === 'es' ? 'Leyendo archivo...' : 'Reading file...'}</span>`;
   modal.style.display = 'flex';
 
@@ -1943,9 +1946,13 @@ async function fbRead(agentId, fullPath, filename) {
               onclick="_fbShowXlsxSheet(${i})">${escapeHtml(n)}</button>`
           ).join('')
         : '';
+      contentEl.style.display = 'flex';
+      contentEl.style.flexDirection = 'column';
+      contentEl.style.padding = '0';
+      contentEl.style.overflow = 'hidden';
       contentEl.innerHTML = `
         ${tabs ? `<div style="padding:8px 8px 0;flex-shrink:0">${tabs}</div>` : ''}
-        <div class="xlsx-sheet-content" style="overflow:auto;padding:8px"></div>`;
+        <div class="xlsx-sheet-content" style="flex:1;min-height:0;overflow:auto;padding:8px"></div>`;
       _fbShowXlsxSheet(0);
     } catch (e) {
       contentEl.innerHTML = errHtml('Error rendering spreadsheet: ' + e);
