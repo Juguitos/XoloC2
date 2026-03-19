@@ -5004,6 +5004,7 @@ let _ptyAgentId = null;
 let _ptyFitAddon = null;
 let _ptyIsWin = false;
 let _ptyResizeObs = null;
+let _ptyLine = '';  // Windows line buffer (pipe mode — only send on Enter)
 
 async function openPtyShell(agentId) {
   const modal = document.getElementById('pty-modal');
@@ -5082,30 +5083,41 @@ async function openPtyShell(agentId) {
   _ptyTerm.writeln('');
 
   // User keystrokes → server → beacon
+  _ptyLine = '';
   _ptyTerm.onData((key) => {
     if (!_ptySessId || !_ptyAgentId) return;
-    let toSend = key;
     if (_ptyIsWin) {
-      // PowerShell in pipe mode has no echo — handle locally
+      // PowerShell pipe mode: buffer input locally, only send complete line on Enter.
+      // Arrow keys / escape sequences are ignored — pipe mode doesn't support them.
       if (key === '\r') {
         _ptyTerm.write('\r\n');
-        toSend = '\r\n';
+        // Send the buffered line + a prompt command so PS prints a prompt after the output
+        const toSend = _ptyLine + '\r\nWrite-Host ("PS " + $PWD.Path + "> ") -NoNewline\r\n';
+        _ptyLine = '';
+        const b64 = btoa(Array.from(new TextEncoder().encode(toSend)).map(b => String.fromCharCode(b)).join(''));
+        apiFetch(`/api/pty/${_ptyAgentId}/${_ptySessId}/input`, {
+          method: 'POST', body: JSON.stringify({ data: b64 }),
+        });
       } else if (key === '\x7f') {
-        // Backspace: erase char in terminal; send \x08 (BS) not \x7f (DEL)
-        _ptyTerm.write('\b \b');
-        toSend = '\x08';
+        // Backspace: erase last char from local buffer and terminal only — never send to PS
+        if (_ptyLine.length > 0) {
+          _ptyLine = _ptyLine.slice(0, -1);
+          _ptyTerm.write('\b \b');
+        }
       } else if (key.length === 1 && key >= ' ') {
+        // Printable character: buffer and echo
+        _ptyLine += key;
         _ptyTerm.write(key);
       }
+      // All other keys (arrows, ctrl sequences) are swallowed — not supported in pipe mode
     } else {
-      // Linux real PTY — bash handles echo; just fix backspace byte
-      if (key === '\x7f') toSend = '\x08';
+      // Linux real PTY — bash handles echo and line editing; send everything as-is
+      const toSend = key === '\x7f' ? '\x08' : key;
+      const b64 = btoa(Array.from(new TextEncoder().encode(toSend)).map(b => String.fromCharCode(b)).join(''));
+      apiFetch(`/api/pty/${_ptyAgentId}/${_ptySessId}/input`, {
+        method: 'POST', body: JSON.stringify({ data: b64 }),
+      });
     }
-    const b64 = btoa(Array.from(new TextEncoder().encode(toSend)).map(b => String.fromCharCode(b)).join(''));
-    apiFetch(`/api/pty/${_ptyAgentId}/${_ptySessId}/input`, {
-      method: 'POST',
-      body: JSON.stringify({ data: b64 }),
-    });
   });
 
   _ptyTerm.focus();
@@ -5121,6 +5133,7 @@ async function closePtyShell() {
   }
   _ptySessId = null;
   _ptyAgentId = null;
+  _ptyLine = '';
   if (_ptyTerm) { _ptyTerm.dispose(); _ptyTerm = null; }
   document.getElementById('pty-modal').classList.remove('open');
 }
