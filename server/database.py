@@ -49,6 +49,7 @@ class Agent(Base):
     city = Column(String, default="")
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
+    beacon_lang = Column(String, default="")
 
 
 class Task(Base):
@@ -107,6 +108,7 @@ def init_db():
             "ALTER TABLE users ADD COLUMN totp_secret TEXT DEFAULT NULL",
             "ALTER TABLE users ADD COLUMN totp_enabled INTEGER DEFAULT 0",
             "ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0",
+            "ALTER TABLE agents ADD COLUMN beacon_lang TEXT DEFAULT ''",
             # Grant admin to the first-created user named 'admin' on upgrade
             "UPDATE users SET is_admin = 1 WHERE username = 'admin' AND is_admin = 0",
         ]:

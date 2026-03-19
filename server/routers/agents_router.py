@@ -51,6 +51,7 @@ def agent_to_dict(a: Agent) -> dict:
         "city": a.city or "",
         "latitude": a.latitude,
         "longitude": a.longitude,
+        "beacon_lang": a.beacon_lang or "",
     }
 
 

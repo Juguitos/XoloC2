@@ -119,6 +119,7 @@ class CheckinRequest(BaseModel):
     pid: int
     sleep_interval: int = 5
     cwd: str = ""
+    beacon_lang: str = ""
 
 
 @router.post("/checkin")
@@ -176,6 +177,8 @@ async def checkin(
 
     if req.cwd:
         agent.cwd = req.cwd
+    if req.beacon_lang:
+        agent.beacon_lang = req.beacon_lang
     agent.last_seen = datetime.now(timezone.utc)
     db.commit()
 
