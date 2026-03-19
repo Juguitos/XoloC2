@@ -2211,22 +2211,24 @@ function copyRedirector() {
 function renderGenerateView() {
   const content = document.getElementById('content');
   content.innerHTML = `
-    <div style="max-width:860px;margin:0 auto">
+    <div style="display:flex;gap:20px;align-items:flex-start;padding-bottom:40px">
 
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+    <!-- ── Left column: all config inputs ─────────────────────────── -->
+    <div style="width:460px;flex-shrink:0;display:flex;flex-direction:column;gap:12px">
+
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
         <div>
           <h2 style="font-size:15px;font-weight:700;color:var(--text)">${t('gen_title')}</h2>
           <p style="color:var(--text3);font-size:12px;margin-top:4px">${t('gen_subtitle')}</p>
         </div>
         <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden">
-          <button id="lang-py-btn"   onclick="setBeaconLang('py')"   style="padding:6px 18px;font-size:12px;font-weight:600;background:var(--accent);color:#fff;border:none;cursor:pointer">Python</button>
-          <button id="lang-java-btn" onclick="setBeaconLang('java')" style="padding:6px 18px;font-size:12px;font-weight:600;background:var(--bg3);color:var(--text2);border:none;cursor:pointer">Java</button>
-          <button id="lang-go-btn"   onclick="setBeaconLang('go')"   style="padding:6px 18px;font-size:12px;font-weight:600;background:var(--bg3);color:var(--text2);border:none;cursor:pointer">Go</button>
+          <button id="lang-py-btn"   onclick="setBeaconLang('py')"   style="padding:6px 16px;font-size:12px;font-weight:600;background:var(--accent);color:#fff;border:none;cursor:pointer">Python</button>
+          <button id="lang-java-btn" onclick="setBeaconLang('java')" style="padding:6px 16px;font-size:12px;font-weight:600;background:var(--bg3);color:var(--text2);border:none;cursor:pointer">Java</button>
+          <button id="lang-go-btn"   onclick="setBeaconLang('go')"   style="padding:6px 16px;font-size:12px;font-weight:600;background:var(--bg3);color:var(--text2);border:none;cursor:pointer">Go</button>
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
-        <div class="info-card" style="margin:0">
+      <div class="info-card" style="margin:0">
           <h3>${t('gen_connection')}</h3>
           <div class="form-group" style="margin-bottom:8px">
             <label>${t('gen_c2_label')}</label>
@@ -2276,38 +2278,7 @@ function renderGenerateView() {
           </div>
         </div>
 
-        <div class="info-card" style="margin:0" id="beacon-info-card">
-          <h3>${t('info_title')}</h3>
-          <div id="beacon-info-py">
-            <div class="info-row"><span class="key">Type</span><span class="val">${t('info_type_py')}</span></div>
-            <div class="info-row"><span class="key">Protocol</span><span class="val">HTTPS polling</span></div>
-            <div class="info-row"><span class="key">Auth</span><span class="val">X-Agent-Secret header</span></div>
-            <div class="info-row"><span class="key">TLS</span><span class="val">Self-signed accepted</span></div>
-            <div class="info-row"><span class="key">Deps</span><span class="val">None (stdlib only)</span></div>
-            <div class="info-row"><span class="key">Output</span><span class="val">${t('info_out_py')}</span></div>
-          </div>
-          <div id="beacon-info-java" style="display:none">
-            <div class="info-row"><span class="key">Type</span><span class="val">${t('info_type_java')}</span></div>
-            <div class="info-row"><span class="key">Protocol</span><span class="val">HTTPS polling</span></div>
-            <div class="info-row"><span class="key">Auth</span><span class="val">X-Agent-Secret header</span></div>
-            <div class="info-row"><span class="key">TLS</span><span class="val">Self-signed accepted</span></div>
-            <div class="info-row"><span class="key">Deps</span><span class="val">None (stdlib only)</span></div>
-            <div class="info-row"><span class="key">Output</span><span class="val">Fat JAR (JRE required)</span></div>
-            <div class="info-row"><span class="key">Cross-compile</span><span class="val" style="color:var(--online)">${t('info_cross_yes')}</span></div>
-          </div>
-          <div id="beacon-info-go" style="display:none">
-            <div class="info-row"><span class="key">Type</span><span class="val">Go 1.21+ beacon</span></div>
-            <div class="info-row"><span class="key">Protocol</span><span class="val">HTTPS polling</span></div>
-            <div class="info-row"><span class="key">Auth</span><span class="val">X-Agent-Secret header</span></div>
-            <div class="info-row"><span class="key">TLS</span><span class="val">Self-signed accepted</span></div>
-            <div class="info-row"><span class="key">Deps</span><span class="val">None (stdlib only)</span></div>
-            <div class="info-row"><span class="key">Output</span><span class="val">Native binary (no runtime)</span></div>
-            <div class="info-row"><span class="key">Cross-compile</span><span class="val" style="color:var(--online)">${t('info_cross_yes')}</span></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="info-card" style="margin:0 0 16px 0">
+      <div class="info-card" style="margin:0">
         <h3>${t('gen_evasion')}</h3>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;margin-top:4px">
           <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
@@ -2333,7 +2304,7 @@ function renderGenerateView() {
         </div>
       </div>
 
-      <div class="info-card" style="margin:0 0 16px 0">
+      <div class="info-card" style="margin:0">
         <h3>${t('gen_features')}</h3>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;margin-top:4px">
           <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
@@ -2359,38 +2330,89 @@ function renderGenerateView() {
         ${t('gen_btn')}
       </button>
 
-      <div id="gen-output" style="display:none;margin-top:20px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-          <span style="color:var(--text2);font-size:12px" id="beacon-filename-label">Save as <code style="color:var(--accent)">beacon.py</code></span>
-          <div style="display:flex;gap:8px" id="beacon-dl-buttons-py">
-            <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('py')">⬇ .py</button>
-            <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('linux')">⬇ Linux ELF</button>
-            <button class="btn btn-sm btn-ghost" onclick="showWindowsInstructions()">🪟 Windows EXE</button>
-            <button class="btn btn-sm btn-ghost" onclick="copyBeacon()" id="copy-btn">⎘ Copy</button>
-          </div>
-          <div style="display:flex;gap:8px;display:none" id="beacon-dl-buttons-java">
-            <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('java-src')">⬇ .java</button>
-            <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('jar')">⬇ .jar</button>
-            <button class="btn btn-sm btn-ghost" onclick="copyBeacon()" id="copy-btn-java">⎘ Copy</button>
-          </div>
-          <div style="display:flex;gap:8px;display:none" id="beacon-dl-buttons-go">
-            <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('go-src')">⬇ .go</button>
-            <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('go-linux')">⬇ Linux ELF</button>
-            <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('go-windows')">⬇ Windows EXE</button>
-            <button class="btn btn-sm btn-ghost" onclick="copyBeacon()" id="copy-btn-go">⎘ Copy</button>
+    </div><!-- end left column -->
+
+    <!-- ── Right column: info + code output ────────────────────────── -->
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:12px;position:sticky;top:16px;align-self:flex-start">
+
+      <!-- Info card — compact grid -->
+      <div class="info-card" style="margin:0" id="beacon-info-card">
+        <h3 style="margin-bottom:10px">${t('info_title')}</h3>
+        <div id="beacon-info-py">
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:5px 14px;font-size:11px">
+            <span style="color:var(--text3)">Type</span><span style="color:var(--text2)">${t('info_type_py')}</span>
+            <span style="color:var(--text3)">Protocol</span><span style="color:var(--text2)">HTTPS polling</span>
+            <span style="color:var(--text3)">Auth</span><span style="color:var(--text2)">X-Agent-Secret header</span>
+            <span style="color:var(--text3)">TLS</span><span style="color:var(--text2)">Self-signed accepted</span>
+            <span style="color:var(--text3)">Deps</span><span style="color:var(--text2)">None (stdlib only)</span>
+            <span style="color:var(--text3)">Output</span><span style="color:var(--text2)">${t('info_out_py')}</span>
           </div>
         </div>
-        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden">
-          <div style="padding:8px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
-            <span style="width:10px;height:10px;border-radius:50%;background:#ef4444;display:inline-block"></span>
-            <span style="width:10px;height:10px;border-radius:50%;background:#f59e0b;display:inline-block"></span>
-            <span style="width:10px;height:10px;border-radius:50%;background:#22c55e;display:inline-block"></span>
-            <span style="color:var(--text3);font-size:11px;margin-left:4px" id="beacon-tab-label">beacon.py</span>
+        <div id="beacon-info-java" style="display:none">
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:5px 14px;font-size:11px">
+            <span style="color:var(--text3)">Type</span><span style="color:var(--text2)">${t('info_type_java')}</span>
+            <span style="color:var(--text3)">Protocol</span><span style="color:var(--text2)">HTTPS polling</span>
+            <span style="color:var(--text3)">Auth</span><span style="color:var(--text2)">X-Agent-Secret header</span>
+            <span style="color:var(--text3)">TLS</span><span style="color:var(--text2)">Self-signed accepted</span>
+            <span style="color:var(--text3)">Deps</span><span style="color:var(--text2)">None (stdlib only)</span>
+            <span style="color:var(--text3)">Output</span><span style="color:var(--text2)">Fat JAR (JRE required)</span>
+            <span style="color:var(--text3)">Cross-compile</span><span style="color:var(--online)">${t('info_cross_yes')}</span>
           </div>
-          <pre id="beacon-code" style="margin:0;padding:16px;font-size:11px;line-height:1.6;color:var(--accent2);overflow-x:auto;max-height:420px;overflow-y:auto"></pre>
         </div>
-        <div id="compile-status" style="display:none;margin-top:10px;padding:10px 14px;border-radius:6px;font-size:12px"></div>
+        <div id="beacon-info-go" style="display:none">
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:5px 14px;font-size:11px">
+            <span style="color:var(--text3)">Type</span><span style="color:var(--text2)">Go 1.21+ beacon</span>
+            <span style="color:var(--text3)">Protocol</span><span style="color:var(--text2)">HTTPS polling</span>
+            <span style="color:var(--text3)">Auth</span><span style="color:var(--text2)">X-Agent-Secret header</span>
+            <span style="color:var(--text3)">TLS</span><span style="color:var(--text2)">Self-signed accepted</span>
+            <span style="color:var(--text3)">Deps</span><span style="color:var(--text2)">None (stdlib only)</span>
+            <span style="color:var(--text3)">Output</span><span style="color:var(--text2)">Native binary (no runtime)</span>
+            <span style="color:var(--text3)">Cross-compile</span><span style="color:var(--online)">${t('info_cross_yes')}</span>
+          </div>
+        </div>
       </div>
+
+      <!-- Code output — always visible, placeholder until generated -->
+      <div id="gen-output">
+        <div id="gen-placeholder" style="border:2px dashed var(--border);border-radius:8px;padding:52px 24px;text-align:center;color:var(--text3)">
+          <div style="font-size:32px;margin-bottom:10px">⚡</div>
+          <div style="font-size:13px">${_lang==='es'?'Configura las opciones y genera un beacon':'Configure the options and generate a beacon'}</div>
+        </div>
+        <div id="gen-output-inner" style="display:none">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px">
+            <span style="color:var(--text2);font-size:12px" id="beacon-filename-label">Save as <code style="color:var(--accent)">beacon.py</code></span>
+            <div style="display:flex;gap:6px;flex-wrap:wrap" id="beacon-dl-buttons-py">
+              <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('py')">⬇ .py</button>
+              <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('linux')">⬇ Linux ELF</button>
+              <button class="btn btn-sm btn-ghost" onclick="showWindowsInstructions()">🪟 Windows EXE</button>
+              <button class="btn btn-sm btn-ghost" onclick="copyBeacon()" id="copy-btn">⎘ Copy</button>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;display:none" id="beacon-dl-buttons-java">
+              <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('java-src')">⬇ .java</button>
+              <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('jar')">⬇ .jar</button>
+              <button class="btn btn-sm btn-ghost" onclick="copyBeacon()" id="copy-btn-java">⎘ Copy</button>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;display:none" id="beacon-dl-buttons-go">
+              <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('go-src')">⬇ .go</button>
+              <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('go-linux')">⬇ Linux ELF</button>
+              <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('go-windows')">⬇ Windows EXE</button>
+              <button class="btn btn-sm btn-ghost" onclick="copyBeacon()" id="copy-btn-go">⎘ Copy</button>
+            </div>
+          </div>
+          <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+            <div style="padding:8px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
+              <span style="width:10px;height:10px;border-radius:50%;background:#ef4444;display:inline-block"></span>
+              <span style="width:10px;height:10px;border-radius:50%;background:#f59e0b;display:inline-block"></span>
+              <span style="width:10px;height:10px;border-radius:50%;background:#22c55e;display:inline-block"></span>
+              <span style="color:var(--text3);font-size:11px;margin-left:4px" id="beacon-tab-label">beacon.py</span>
+            </div>
+            <pre id="beacon-code" style="margin:0;padding:16px;font-size:11px;line-height:1.6;color:var(--accent2);overflow-x:auto;max-height:calc(100vh - 280px);overflow-y:auto"></pre>
+          </div>
+          <div id="compile-status" style="display:none;margin-top:10px;padding:10px 14px;border-radius:6px;font-size:12px"></div>
+        </div>
+      </div>
+
+    </div><!-- end right column -->
     </div>`;
 
   document.querySelectorAll('.gen-url-input')[0].value = window.location.origin;
@@ -3026,7 +3048,10 @@ function setBeaconLang(lang) {
   document.getElementById('beacon-info-py').style.display   = lang === 'py'   ? '' : 'none';
   document.getElementById('beacon-info-java').style.display = lang === 'java' ? '' : 'none';
   document.getElementById('beacon-info-go').style.display   = lang === 'go'   ? '' : 'none';
-  document.getElementById('gen-output').style.display = 'none';
+  const _gp = document.getElementById('gen-placeholder');
+  const _gi = document.getElementById('gen-output-inner');
+  if (_gp) _gp.style.display = '';
+  if (_gi) _gi.style.display = 'none';
 }
 
 async function rotateSecret() {
@@ -3102,7 +3127,10 @@ async function generateBeacon() {
   document.getElementById('beacon-filename-label').innerHTML = `${t('save_as')} <code style="color:var(--accent)">${filename}</code>`;
   document.getElementById('beacon-tab-label').textContent = filename;
   document.getElementById('beacon-code').textContent = code;
-  document.getElementById('gen-output').style.display = 'block';
+  const _gp = document.getElementById('gen-placeholder');
+  const _gi = document.getElementById('gen-output-inner');
+  if (_gp) _gp.style.display = 'none';
+  if (_gi) _gi.style.display = '';
 }
 
 // ── Pure-JS SHA-256 (synchronous, no SubtleCrypto) ──────────────────────────
