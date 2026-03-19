@@ -5706,17 +5706,14 @@ async function renderTopologyView() {
   content.innerHTML = `
     <div style="display:flex;flex-direction:column;height:100%">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
-        <span style="font-size:13px;font-weight:600;color:var(--text)">${t('title_topology')}</span>
-        <div style="display:flex;align-items:center;gap:16px">
-          <div style="display:flex;align-items:center;gap:12px;font-size:11px;color:var(--text3)">
-            <span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0"></span>${t('topo_online')}</span>
-            <span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:#ef4444;flex-shrink:0"></span>${t('topo_offline')}</span>
-            <span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;background:#1e293b;border:1px solid #334155;flex-shrink:0"></span>${t('topo_host')}</span>
-          </div>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-sm btn-ghost" onclick="renderTopologyView()">${t('topo_refresh')}</button>
-            <button class="btn btn-sm" onclick="_topoScanAll()" id="topo-scan-btn">${t('topo_scan')}</button>
-          </div>
+        <div style="display:flex;align-items:center;gap:12px;font-size:11px;color:var(--text3)">
+          <span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0"></span>${t('topo_online')}</span>
+          <span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:#ef4444;flex-shrink:0"></span>${t('topo_offline')}</span>
+          <span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;background:#1e293b;border:1px solid #334155;flex-shrink:0"></span>${t('topo_host')}</span>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm btn-ghost" onclick="renderTopologyView()">${t('topo_refresh')}</button>
+          <button class="btn btn-sm" onclick="_topoScanAll()" id="topo-scan-btn">${t('topo_scan')}</button>
         </div>
       </div>
       <div style="position:relative;flex:1;min-height:0">
