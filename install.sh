@@ -90,6 +90,69 @@ source "$VENV/bin/activate"
 "$VENV/bin/pip" install --quiet -r "$SERVER_DIR/requirements.txt"
 echo -e "${GRN}[✓] Dependencies installed${RST}"
 
+# ── Optional: JDK (for server-side JAR compilation) ──────
+echo ""
+echo -e "${CYN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RST}"
+echo -e "  ${BLD}Java JDK${RST} — necesario para compilar beacons ${YLW}.jar${RST} en el servidor."
+if command -v javac &>/dev/null; then
+  echo -e "  ${GRN}[✓] JDK ya instalado: $(javac -version 2>&1)${RST}"
+else
+  read -rp "$(echo -e "  ¿Instalar JDK? [${YLW}s/N${RST}] (default: N): ")" _INST_JDK
+  _INST_JDK="${_INST_JDK:-N}"
+  if [[ "$_INST_JDK" =~ ^[sS]$ ]]; then
+    echo -e "${YLW}[*] Instalando default-jdk...${RST}"
+    apt-get install -y default-jdk 2>/dev/null || { echo -e "${RED}[!] Fallo al instalar JDK. Instálalo manualmente: apt install default-jdk${RST}"; }
+    command -v javac &>/dev/null && echo -e "${GRN}[✓] JDK instalado: $(javac -version 2>&1)${RST}" || echo -e "${RED}[!] javac no encontrado tras instalación${RST}"
+  else
+    echo -e "${YLW}[~] JDK omitido — compilación de .jar no disponible${RST}"
+  fi
+fi
+echo -e "${CYN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RST}"
+
+# ── Optional: Go (for server-side Go beacon compilation) ─
+echo ""
+echo -e "${CYN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RST}"
+echo -e "  ${BLD}Go compiler${RST} — necesario para compilar beacons Go ${YLW}Linux ELF / Windows EXE${RST}."
+echo -e "  ${YLW}Nota:${RST} Se requiere Go ≥ 1.21. Se instalará desde go.dev si no está presente."
+_GO_OK=0
+if command -v go &>/dev/null; then
+  _GOVER=$(go version | awk '{print $3}' | sed 's/go//')
+  _GOMAJ=$(echo "$_GOVER" | cut -d. -f1)
+  _GOMIN=$(echo "$_GOVER" | cut -d. -f2)
+  if (( _GOMAJ > 1 || (_GOMAJ == 1 && _GOMIN >= 21) )); then
+    echo -e "  ${GRN}[✓] Go $_GOVER ya instalado y es compatible${RST}"
+    _GO_OK=1
+  else
+    echo -e "  ${YLW}[~] Go $_GOVER encontrado pero es < 1.21 — se recomienda actualizar${RST}"
+  fi
+fi
+if [[ $_GO_OK -eq 0 ]]; then
+  read -rp "$(echo -e "  ¿Instalar Go 1.22.4 desde go.dev? [${YLW}s/N${RST}] (default: N): ")" _INST_GO
+  _INST_GO="${_INST_GO:-N}"
+  if [[ "$_INST_GO" =~ ^[sS]$ ]]; then
+    _GO_TAR="go1.22.4.linux-amd64.tar.gz"
+    _GO_URL="https://go.dev/dl/${_GO_TAR}"
+    _GO_TMP="/tmp/${_GO_TAR}"
+    echo -e "${YLW}[*] Descargando Go 1.22.4...${RST}"
+    if curl -fsSL "$_GO_URL" -o "$_GO_TMP"; then
+      rm -rf /usr/local/go
+      tar -C /usr/local -xzf "$_GO_TMP"
+      rm -f "$_GO_TMP"
+      # Add to PATH for current session and for start.sh
+      export PATH=$PATH:/usr/local/go/bin
+      # Persist in /etc/profile.d
+      echo 'export PATH=$PATH:/usr/local/go/bin' > /etc/profile.d/golang.sh
+      command -v go &>/dev/null && echo -e "${GRN}[✓] Go instalado: $(go version)${RST}" || echo -e "${RED}[!] go no encontrado tras instalación${RST}"
+    else
+      echo -e "${RED}[!] Descarga fallida. Instala Go manualmente desde https://go.dev/dl/${RST}"
+    fi
+  else
+    echo -e "${YLW}[~] Go omitido — compilación de beacons Go no disponible${RST}"
+  fi
+fi
+echo -e "${CYN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RST}"
+echo ""
+
 # ── TLS certificate ────────────────────────────────────────
 mkdir -p "$CERT_DIR"
 CERT="$CERT_DIR/cert.pem"
