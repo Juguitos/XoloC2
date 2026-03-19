@@ -177,8 +177,6 @@ const LANG = {
     gen_features:'Features',
     feat_find:'File search', feat_find_desc:'find [path] <pattern> — search files on target',
     feat_screenshot_sched:'Screenshot schedule', feat_screenshot_sched_desc:'screenshot <N> — auto-capture every N min (0 to stop)',
-    feat_keylogger:'Keylogger', feat_keylogger_desc:'keylog start|stop|dump — capture keystrokes in background',
-    feat_portfwd:'Port forwarding', feat_portfwd_desc:'portfwd <lport> <rhost>:<rport> — static TCP tunnel',
     gen_output_name:'Output filename', gen_output_name_ph:'beacon (no extension)',
     gen_btn:'⚡ Generate Beacon', save_as:'Save as',
     info_title:'Info', info_type_py:'Python 3 beacon', info_type_java:'Java 11 beacon',
@@ -274,8 +272,6 @@ const LANG = {
     gen_features:'Features',
     feat_find:'Búsqueda de archivos', feat_find_desc:'find [ruta] <patrón> — busca archivos en el target',
     feat_screenshot_sched:'Screenshot automático', feat_screenshot_sched_desc:'screenshot <N> — captura cada N minutos (0 para detener)',
-    feat_keylogger:'Keylogger', feat_keylogger_desc:'keylog start|stop|dump — captura teclas en background',
-    feat_portfwd:'Port forwarding', feat_portfwd_desc:'portfwd <lport> <rhost>:<rport> — túnel TCP estático',
     gen_output_name:'Nombre del archivo', gen_output_name_ph:'beacon (sin extensión)',
     gen_btn:'⚡ Generar Beacon', save_as:'Guardar como',
     info_title:'Info', info_type_py:'Python 3 beacon', info_type_java:'Java 11 beacon',
@@ -2329,14 +2325,6 @@ function renderGenerateView() {
             <input type="checkbox" id="feat-screenshot-sched" style="margin-top:2px;accent-color:var(--accent)">
             <div><div style="color:var(--text)">${t('feat_screenshot_sched')}</div><div style="color:var(--text3);font-size:11px">${t('feat_screenshot_sched_desc')}</div></div>
           </label>
-          <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
-            <input type="checkbox" id="feat-keylogger" style="margin-top:2px;accent-color:var(--accent)">
-            <div><div style="color:var(--text)">${t('feat_keylogger')}</div><div style="color:var(--text3);font-size:11px">${t('feat_keylogger_desc')}</div></div>
-          </label>
-          <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
-            <input type="checkbox" id="feat-portfwd" style="margin-top:2px;accent-color:var(--accent)">
-            <div><div style="color:var(--text)">${t('feat_portfwd')}</div><div style="color:var(--text3);font-size:11px">${t('feat_portfwd_desc')}</div></div>
-          </label>
         </div>
       </div>
 
@@ -3120,8 +3108,6 @@ async function generateBeacon() {
   const features = {
     find:           document.getElementById('feat-find').checked,
     screenshotSched: document.getElementById('feat-screenshot-sched').checked,
-    keylogger:      document.getElementById('feat-keylogger').checked,
-    portfwd:        document.getElementById('feat-portfwd').checked,
   };
 
   const res = await apiFetch('/api/info/agent-secret');
