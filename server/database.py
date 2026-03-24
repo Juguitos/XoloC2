@@ -60,6 +60,7 @@ class Task(Base):
     command = Column(Text, nullable=False)
     output = Column(Text, default="")
     status = Column(String, default="pending")  # pending | running | done | error
+    operator = Column(String, default="")       # username who sent this task
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     completed_at = Column(DateTime, nullable=True)
 
@@ -118,6 +119,7 @@ def init_db():
             "ALTER TABLE users ADD COLUMN totp_enabled INTEGER DEFAULT 0",
             "ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0",
             "ALTER TABLE agents ADD COLUMN beacon_lang TEXT DEFAULT ''",
+            "ALTER TABLE tasks ADD COLUMN operator TEXT DEFAULT ''",
             # Grant admin to the first-created user named 'admin' on upgrade
             "UPDATE users SET is_admin = 1 WHERE username = 'admin' AND is_admin = 0",
         ]:

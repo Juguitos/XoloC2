@@ -1104,11 +1104,13 @@ function _renderReportPreview(container) {
           const outHtml = okOut
             ? `<div style="font-family:var(--font-mono);font-size:11px;background:var(--bg);padding:6px 10px;border-left:2px solid var(--border);white-space:pre-wrap;word-break:break-all;color:var(--text2);margin-top:3px;max-height:120px;overflow:hidden">${escapeHtml((c.output||'').slice(0,maxOutput))}</div>`:'';
           const sc = c.status==='done'?'var(--success)':c.status==='error'?'var(--danger)':'var(--text3)';
+          const opBadge = c.operator ? `<span style="font-size:10px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:1px 6px;color:var(--text3)">@${escapeHtml(c.operator)}</span>` : '';
           return `<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)">
             <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
               <span style="color:var(--text3);font-size:10px;font-family:var(--font-mono)">[${fmtDate(c.created_at)}]</span>
               <span style="font-family:var(--font-mono);font-weight:600;color:var(--accent2);font-size:12px">${escapeHtml(c._label||c.command)}</span>
               <span style="font-size:10px;color:${sc}">${c.status}</span>
+              ${opBadge}
             </div>${outHtml}</div>`;
         }).join('');
     const filesHtml = a.files.length===0?'':a.files.map(f=>`
@@ -1176,11 +1178,13 @@ function _buildReportHtml(data,logoB64){
       outHtml = `<div class="cmd-output${trunc?' truncated':''}">${_repEsc(c.output.slice(0,maxOutput))}</div>`;
     }
     const sc = c.status==='done'?'status-done':c.status==='error'?'status-error':'status-pending';
+    const opSpan = c.operator ? `<span class="cmd-operator">@${_repEsc(c.operator)}</span>` : '';
     return `<div class="cmd-entry">
       <div class="cmd-header">
         <span class="cmd-ts">[${fmtDt(c.created_at)}]</span>
         <span class="cmd-text">${_repEsc(c._label||c.command)}</span>
         <span class="${sc}">${c.status}</span>
+        ${opSpan}
       </div>${outHtml}</div>`;
   }
 
@@ -1293,6 +1297,7 @@ h2.section-title{font-size:18px;font-weight:600;margin:32px 0 16px;padding-botto
 .cmd-ts{color:#9ca3af;font-size:11px;font-family:monospace}
 .cmd-text{font-family:'Consolas','Courier New',monospace;font-weight:600;color:#1d4ed8}
 .status-done{color:#16a34a;font-size:10px}.status-error{color:#dc2626;font-size:10px}.status-pending{color:#9ca3af;font-size:10px}
+.cmd-operator{font-size:10px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:4px;padding:1px 6px;color:#6b7280;font-family:monospace}
 .cmd-output{font-family:'Consolas','Courier New',monospace;font-size:11px;background:#f8fafc;border-left:3px solid #e2e8f0;padding:8px 12px;margin-top:3px;white-space:pre-wrap;word-break:break-all;color:#374151;overflow:hidden}
 .cmd-output.truncated::after{content:' ... [truncated]';color:#9ca3af;font-style:italic}
 .file-entry{display:flex;align-items:center;gap:8px;padding:6px 10px;background:#fef9ee;border:1px solid #fde68a;border-radius:4px;margin-bottom:4px;font-size:12px}
@@ -1344,7 +1349,8 @@ function _buildReportMd(data){
     else{
       md+=`### Commands\n\n`;
       a.cmds.forEach(c=>{
-        md+=`**\`[${fmtDt(c.created_at)}]\`** \`${c._label||c.command}\` — *${c.status}*\n`;
+        const opMd = c.operator ? ` · \`@${c.operator}\`` : '';
+        md+=`**\`[${fmtDt(c.created_at)}]\`** \`${c._label||c.command}\` — *${c.status}*${opMd}\n`;
         if(includeOutput&&c.output&&!c.output.startsWith('__b64file__:')){
           const out=c.output.slice(0,maxOutput);
           md+=`\`\`\`\n${out}${c.output.length>maxOutput?'\n... [truncated]':''}\n\`\`\`\n`;

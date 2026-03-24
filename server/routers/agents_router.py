@@ -131,7 +131,7 @@ async def create_task(
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    task = Task(agent_id=agent_id, command=req.command)
+    task = Task(agent_id=agent_id, command=req.command, operator=current_user.username)
     db.add(task)
     db.commit()
     db.refresh(task)
@@ -167,6 +167,7 @@ def list_tasks(agent_id: str, db: Session = Depends(get_db), _: User = Depends(r
             "command": t.command,
             "output": t.output,
             "status": t.status,
+            "operator": t.operator or "",
             "created_at": t.created_at.isoformat() if t.created_at else None,
             "completed_at": t.completed_at.isoformat() if t.completed_at else None,
         }
@@ -184,6 +185,7 @@ def get_task(agent_id: str, task_id: str, db: Session = Depends(get_db), _: User
         "command": task.command,
         "output": task.output,
         "status": task.status,
+        "operator": task.operator or "",
         "created_at": task.created_at.isoformat() if task.created_at else None,
         "completed_at": task.completed_at.isoformat() if task.completed_at else None,
     }
