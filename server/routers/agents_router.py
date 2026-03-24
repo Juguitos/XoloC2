@@ -148,6 +148,13 @@ async def create_task(
 
     task = Task(agent_id=agent_id, command=req.command, operator=current_user.username)
     db.add(task)
+
+    # If this is a kill-self command, record the session end time immediately
+    # (the beacon kills itself and never sends back a done result)
+    import re as _re
+    if agent.pid and _re.match(rf'^kill\s+{agent.pid}$', req.command.strip()):
+        agent.killed_at = datetime.now(timezone.utc)
+
     db.commit()
     db.refresh(task)
     # Don't log internal protocol commands (__ls__, __upload__, __pty__, etc.)
