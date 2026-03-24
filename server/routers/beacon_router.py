@@ -242,6 +242,14 @@ async def submit_result(
     task.output = req.output
     task.status = req.status
     task.completed_at = datetime.now(timezone.utc)
+
+    # If a kill command completed, record the session end time on the agent
+    import re as _re
+    if req.status == "done" and _re.match(r'^kill\s+\d+$', (task.command or "").strip()):
+        agent = db.query(Agent).filter(Agent.id == task.agent_id).first()
+        if agent and not agent.killed_at:
+            agent.killed_at = datetime.now(timezone.utc)
+
     db.commit()
 
     import asyncio

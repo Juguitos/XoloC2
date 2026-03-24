@@ -170,6 +170,9 @@ const LANG = {
     badge_online:'ONLINE', badge_offline:'OFFLINE',
     del_session_confirm:'Delete this session? All tasks will be removed.',
     back:'← Back', session_info:'Session Info', note_label:'Note',
+    lbl_executed:'Beacon executed', lbl_killed:'Session killed', lbl_detected:'Detection',
+    lbl_not_killed:'Active / not killed', lbl_not_detected:'Not detected',
+    btn_mark_detected:'⚠️ Mark as detected', btn_clear_detected:'✕ Clear',
     note_placeholder:'Add a note...', save_note:'Save Note',
     socks5_label:'SOCKS5 Tunnel', socks5_port:'Port',
     socks5_start:'▶ Start', socks5_stop:'■ Stop',
@@ -274,6 +277,9 @@ const LANG = {
     badge_online:'EN LÍNEA', badge_offline:'OFFLINE',
     del_session_confirm:'¿Eliminar esta sesión? Se borrarán todas las tareas.',
     back:'← Volver', session_info:'Info de Sesión', note_label:'Nota',
+    lbl_executed:'Beacon ejecutado', lbl_killed:'Sesión terminada', lbl_detected:'Detección',
+    lbl_not_killed:'Activo / no terminado', lbl_not_detected:'No detectado',
+    btn_mark_detected:'⚠️ Marcar como detectado', btn_clear_detected:'✕ Limpiar',
     note_placeholder:'Añade una nota...', save_note:'Guardar Nota',
     socks5_label:'Túnel SOCKS5', socks5_port:'Puerto',
     socks5_start:'▶ Iniciar', socks5_stop:'■ Detener',
@@ -883,7 +889,20 @@ async function loadAgentInfo(agentId) {
     <div class="info-row"><span class="key">${t('col_os')}</span><span class="val">${escapeHtml(a.os_info || '—')}</span></div>
     <div class="info-row"><span class="key">PID</span><span class="val">${a.pid || '—'}</span></div>
     <div class="info-row"><span class="key">Sleep</span><span class="val">${a.sleep_interval}s</span></div>
-    <div class="info-row"><span class="key">${t('col_last_seen')}</span><span class="val">${a.seconds_ago !== null ? formatAgo(a.seconds_ago) : '—'}</span></div>`;
+    <div class="info-row"><span class="key">${t('col_last_seen')}</span><span class="val">${a.seconds_ago !== null ? formatAgo(a.seconds_ago) : '—'}</span></div>
+    <hr style="border:none;border-top:1px solid var(--border);margin:8px 0">
+    <div class="info-row"><span class="key">${t('lbl_executed')}</span><span class="val" style="color:var(--text2)">${fmtDate(a.registered_at)}</span></div>
+    <div class="info-row"><span class="key">${t('lbl_killed')}</span><span class="val" style="color:${a.killed_at ? 'var(--danger)' : 'var(--text3)'}">${a.killed_at ? fmtDate(a.killed_at) : t('lbl_not_killed')}</span></div>
+    <div class="info-row" style="align-items:flex-start">
+      <span class="key">${t('lbl_detected')}</span>
+      <span class="val" style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
+        <span id="detected-label" style="color:${a.detected_by ? 'var(--danger)' : 'var(--text3)'};font-weight:${a.detected_by ? '600' : 'normal'}">${a.detected_by ? '⚠️ ' + escapeHtml(a.detected_by) : t('lbl_not_detected')}</span>
+        <span style="display:flex;gap:4px">
+          <button class="btn btn-sm btn-ghost" style="font-size:10px;padding:2px 6px" onclick="markDetected('${escapeHtml(a.id)}')">${t('btn_mark_detected')}</button>
+          ${a.detected_by ? `<button class="btn btn-sm btn-ghost" style="font-size:10px;padding:2px 6px;color:var(--text3)" onclick="clearDetected('${escapeHtml(a.id)}')">${t('btn_clear_detected')}</button>` : ''}
+        </span>
+      </span>
+    </div>`;
 
   const noteEl = document.getElementById('agent-note');
   if (noteEl) noteEl.value = a.note || '';
@@ -1122,6 +1141,7 @@ function _renderReportPreview(container) {
           <span style="font-size:14px;font-weight:600;color:var(--text)">${escapeHtml(a.info.hostname)}</span>
           <span class="badge ${a.info.online?'badge-online':'badge-offline'}" style="font-size:9px">${a.info.online?t('badge_online'):t('badge_offline')}</span>
           <span style="font-size:11px;color:var(--text3)">${escapeHtml(a.info.username)} · ${escapeHtml((a.info.os_info||'').split(' ').slice(0,2).join(' '))}</span>
+          ${a.info.detected_by ? `<span style="font-size:10px;background:rgba(239,68,68,.15);color:var(--danger);border-radius:4px;padding:1px 7px;font-weight:600">⚠️ ${escapeHtml(a.info.detected_by)}</span>` : ''}
           <span style="margin-left:auto;font-size:11px;color:var(--text3)">${a.cmds.length} cmds${a.files.length?` · ${a.files.length} files`:''}</span>
         </div>
         ${cmdHtml}
@@ -1243,6 +1263,9 @@ function _buildReportHtml(data,logoB64){
             <span>📅 <strong>First Seen:</strong> ${fmtDt(a.info.registered_at)}</span>
             <span>🕐 <strong>Last Seen:</strong> ${fmtDt(a.info.last_seen)}</span>
             ${a.info.country?`<span>🌍 <strong>Location:</strong> ${_repEsc(a.info.city||'')} ${_repEsc(a.info.country||'')}</span>`:''}
+            <span>🚀 <strong>Beacon executed:</strong> ${fmtDt(a.info.registered_at)}</span>
+            <span style="color:${a.info.killed_at?'#dc2626':'#6b7280'}">💀 <strong>Session killed:</strong> ${a.info.killed_at ? fmtDt(a.info.killed_at) : 'Active / not killed'}</span>
+            ${a.info.detected_by ? `<span style="color:#dc2626;font-weight:600">⚠️ <strong>Detected by:</strong> ${_repEsc(a.info.detected_by)}</span>` : '<span style="color:#16a34a">✅ <strong>Detection:</strong> Not detected</span>'}
           </div>
         </div>
         <div style="text-align:right;color:#6b7280;font-size:12px;margin-left:auto;flex-shrink:0">
@@ -1345,6 +1368,9 @@ function _buildReportMd(data){
   agents.forEach(a=>{
     md+=`## ${a.info.hostname}\n\n- **User:** ${a.info.username}\n- **OS:** ${a.info.os_info||'—'}\n- **IP Ext:** ${a.info.ip_external||'—'}\n- **IP Int:** ${a.info.ip_internal||'—'}\n- **First Seen:** ${fmtDt(a.info.registered_at)}\n- **Last Seen:** ${fmtDt(a.info.last_seen)}\n`;
     if(a.info.country) md+=`- **Location:** ${a.info.city||''} ${a.info.country||''}\n`;
+    md+=`- **Beacon executed:** ${fmtDt(a.info.registered_at)}\n`;
+    md+=`- **Session killed:** ${a.info.killed_at ? fmtDt(a.info.killed_at) : 'Active / not killed'}\n`;
+    md+=`- **Detection:** ${a.info.detected_by ? '⚠️ ' + a.info.detected_by : 'Not detected'}\n`;
     md+=`\n`;
     if(a.cmds.length===0){ md+=`*No commands recorded.*\n\n`; }
     else{
@@ -1624,6 +1650,26 @@ async function saveNote(agentId) {
 }
 
 // ── Quick Controls ────────────────────────────────────────
+async function markDetected(agentId) {
+  const name = prompt(_lang === 'es' ? 'Nombre del EDR/AV que detectó el beacon:' : 'EDR/AV name that detected the beacon:');
+  if (name === null) return;
+  const res = await apiFetch('/api/agents/' + agentId + '/detection', {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({detected_by: name.trim()}),
+  });
+  if (res && res.ok) { await loadAgentInfo(agentId); showToast(_lang === 'es' ? 'Detección registrada' : 'Detection recorded', 'warning'); }
+}
+
+async function clearDetected(agentId) {
+  const res = await apiFetch('/api/agents/' + agentId + '/detection', {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({detected_by: ''}),
+  });
+  if (res && res.ok) { await loadAgentInfo(agentId); }
+}
+
 async function killBeacon(agentId) {
   const res = await apiFetch('/api/agents/' + agentId);
   if (!res || !res.ok) return;

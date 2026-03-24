@@ -50,6 +50,8 @@ class Agent(Base):
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
     beacon_lang = Column(String, default="")
+    killed_at   = Column(DateTime, nullable=True)
+    detected_by = Column(String, default="")  # EDR/AV name if detected, empty = not detected
 
 
 class Task(Base):
@@ -122,6 +124,8 @@ def init_db():
             "ALTER TABLE agents ADD COLUMN beacon_lang TEXT DEFAULT ''",
             "ALTER TABLE tasks ADD COLUMN operator TEXT DEFAULT ''",
             "ALTER TABLE operator_messages ADD COLUMN agent_id TEXT DEFAULT ''",
+            "ALTER TABLE agents ADD COLUMN killed_at TIMESTAMP DEFAULT NULL",
+            "ALTER TABLE agents ADD COLUMN detected_by TEXT DEFAULT ''",
             # Grant admin to the first-created user named 'admin' on upgrade
             "UPDATE users SET is_admin = 1 WHERE username = 'admin' AND is_admin = 0",
         ]:

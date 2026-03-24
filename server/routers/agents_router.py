@@ -53,6 +53,8 @@ def agent_to_dict(a: Agent) -> dict:
         "latitude": a.latitude,
         "longitude": a.longitude,
         "beacon_lang": a.beacon_lang or "",
+        "killed_at":   a.killed_at.isoformat() if a.killed_at else None,
+        "detected_by": a.detected_by or "",
     }
 
 
@@ -68,6 +70,19 @@ def get_agent(agent_id: str, db: Session = Depends(get_db), _: User = Depends(re
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     return agent_to_dict(agent)
+
+
+class DetectionUpdate(BaseModel):
+    detected_by: str = ""
+
+@router.patch("/{agent_id}/detection")
+def update_detection(agent_id: str, req: DetectionUpdate, db: Session = Depends(get_db), _: User = Depends(require_auth)):
+    agent = db.query(Agent).filter(Agent.id == agent_id).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    agent.detected_by = req.detected_by.strip()[:200]
+    db.commit()
+    return {"ok": True}
 
 
 @router.delete("/{agent_id}")
