@@ -453,6 +453,8 @@ let _mapTimer = null;
 let _topoNet = null;
 let _chatUnread = 0;
 let _chatPopupOpen = false;
+let _liveMap = {};          // task_id → row element in live feed
+const _LIVE_MAX = Infinity; // no limit on feed rows
 
 // ── Toast notifications ───────────────────────────────────
 function showToast(msg, type = 'info') {
@@ -492,10 +494,12 @@ function connectWS() {
       if (msg.type === 'agent_checkin') {
         if (currentView === 'agents') refreshAgentList();
         if (msg.is_new) showToast(`⚡ Nuevo agente: ${msg.hostname}`, 'success');
-      } else if (msg.type === 'task_result' || msg.type === 'task_created') {
-        if (currentView === 'session' && currentAgentId === msg.agent_id) {
-          refreshTaskResults(msg.agent_id);
-        }
+      } else if (msg.type === 'task_created') {
+        if (currentView === 'session' && currentAgentId === msg.agent_id) refreshTaskResults(msg.agent_id);
+        _liveFeedEvent(msg);
+      } else if (msg.type === 'task_result') {
+        if (currentView === 'session' && currentAgentId === msg.agent_id) refreshTaskResults(msg.agent_id);
+        _liveFeedEvent(msg);
       } else if (msg.type === 'pty_output') {
         if (_ptyTerm && msg.session_id === _ptySessId && msg.data) {
           try {
@@ -614,6 +618,84 @@ function clearPolling() {
   if (content) { content.style.padding = ''; content.style.overflow = ''; }
 }
 
+// ── Live Activity Feed ───────────────────────────────────
+const _LIVE_SKIP = new Set(['__ls__','__pty_tick__','__tunnel_tick__','screenshot_sched_auto']);
+function _liveFeedSkip(cmd) {
+  if (!cmd) return true;
+  return _LIVE_SKIP.has(cmd) || cmd.startsWith('__ls__:') || cmd.startsWith('__pty__:') || cmd.startsWith('__upload__:');
+}
+
+function _liveFeedEvent(msg) {
+  if (_liveFeedSkip(msg.command)) return;
+  const feed = document.getElementById('live-feed');
+  if (!feed) return;
+
+  const time = msg.ts ? new Date(msg.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '';
+  const host = escapeHtml(msg.hostname || msg.agent_id?.slice(0,8) || '?');
+  const op   = msg.operator ? `<span style="color:var(--accent2)">@${escapeHtml(msg.operator)}</span> ` : '';
+
+  if (msg.type === 'task_created') {
+    const row = document.createElement('div');
+    row.dataset.taskId = msg.task_id;
+    row.style.cssText = 'padding:6px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s';
+    row.onmouseenter = () => row.style.background = 'var(--bg3)';
+    row.onmouseleave = () => row.style.background = '';
+    row.onclick = () => showView('session', msg.agent_id);
+    row.innerHTML = `
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px">
+        <span style="color:var(--text3);font-size:10px">${time}</span>
+        <span style="color:var(--accent);font-weight:600">${host}</span>
+        ${op}
+        <span id="live-status-${escapeHtml(msg.task_id)}" style="font-size:10px;color:var(--text3);margin-left:auto">⏳ pending</span>
+      </div>
+      <div style="color:var(--text2);padding-left:2px">${escapeHtml(msg.command || '')}</div>
+      <div id="live-out-${escapeHtml(msg.task_id)}" style="display:none;color:var(--text3);white-space:pre-wrap;word-break:break-all;margin-top:3px;padding:4px 6px;background:var(--bg);border-radius:4px;border-left:2px solid var(--border)"></div>`;
+    feed.appendChild(row);
+    _liveMap[msg.task_id] = row;
+    // trim old entries
+    while (feed.children.length > _LIVE_MAX) feed.removeChild(feed.firstChild);
+    feed.scrollTop = feed.scrollHeight;
+
+  } else if (msg.type === 'task_result') {
+    const row = _liveMap[msg.task_id] || feed.querySelector(`[data-task-id="${CSS.escape(msg.task_id)}"]`);
+    const stEl = row ? row.querySelector(`#live-status-${CSS.escape(msg.task_id)}`) : null;
+    const outEl = row ? row.querySelector(`#live-out-${CSS.escape(msg.task_id)}`) : null;
+
+    // status color
+    const sc = msg.status === 'done' ? 'var(--success)' : msg.status === 'error' ? 'var(--danger)' : 'var(--text3)';
+    const icon = msg.status === 'done' ? '✓' : msg.status === 'error' ? '✗' : '⏳';
+
+    if (stEl) { stEl.style.color = sc; stEl.textContent = `${icon} ${msg.status}`; }
+
+    // show output snippet if available and not a file
+    const out = msg.output || '';
+    if (outEl && out && !out.startsWith('__b64file__:')) {
+      outEl.textContent = out;
+      outEl.style.display = '';
+      if (row) { feed.scrollTop = feed.scrollHeight; }
+    }
+
+    // if no row existed (result came before feed was open), add a compact entry
+    if (!row) {
+      const compact = document.createElement('div');
+      compact.style.cssText = 'padding:6px 12px;border-bottom:1px solid var(--border);cursor:pointer';
+      compact.onclick = () => showView('session', msg.agent_id);
+      compact.innerHTML = `
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+          <span style="color:var(--text3);font-size:10px">${time}</span>
+          <span style="color:var(--accent);font-weight:600">${host}</span>
+          ${op}
+          <span style="font-size:10px;color:${sc};margin-left:auto">${icon} ${msg.status}</span>
+        </div>
+        <div style="color:var(--text2)">${escapeHtml(msg.command || '')}</div>
+        ${out && !out.startsWith('__b64file__:') ? `<div style="color:var(--text3);white-space:pre-wrap;word-break:break-all;margin-top:3px;padding:4px 6px;background:var(--bg);border-radius:4px;border-left:2px solid var(--border)">${escapeHtml(out)}</div>` : ''}`;
+      feed.appendChild(compact);
+      while (feed.children.length > _LIVE_MAX) feed.removeChild(feed.firstChild);
+      feed.scrollTop = feed.scrollHeight;
+    }
+  }
+}
+
 // ── Agents List View ─────────────────────────────────────
 async function renderAgentsView() {
   const content = document.getElementById('content');
@@ -623,12 +705,21 @@ async function renderAgentsView() {
       <div class="stat-card"><div class="label">${t('stat_online')}</div><div class="value online" id="stat-online">—</div></div>
       <div class="stat-card"><div class="label">${t('stat_offline')}</div><div class="value" id="stat-offline" style="color:var(--text3)">—</div></div>
     </div>
-    <div class="table-wrap">
-      <div class="table-header">
-        <h2>${t('agents_title')}</h2>
-        <button class="btn btn-sm btn-ghost" onclick="refreshAgentList()">${t('agents_refresh')}</button>
+    <div style="display:grid;grid-template-columns:1fr 380px;gap:16px;align-items:start">
+      <div class="table-wrap" style="min-width:0">
+        <div class="table-header">
+          <h2>${t('agents_title')}</h2>
+          <button class="btn btn-sm btn-ghost" onclick="refreshAgentList()">${t('agents_refresh')}</button>
+        </div>
+        <div id="agent-table-body"></div>
       </div>
-      <div id="agent-table-body"></div>
+      <div class="info-card" style="padding:0;overflow:hidden;position:sticky;top:16px">
+        <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:12px;font-weight:600">⚡ Live Activity</span>
+          <button class="btn btn-sm btn-ghost" style="font-size:10px;padding:2px 8px" onclick="document.getElementById('live-feed').innerHTML='';">Clear</button>
+        </div>
+        <div id="live-feed" style="height:calc(100vh - 220px);overflow-y:auto;display:flex;flex-direction:column;font-size:11px;font-family:var(--font-mono)"></div>
+      </div>
     </div>`;
   await refreshAgentList();
 }

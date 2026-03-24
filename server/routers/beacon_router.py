@@ -252,12 +252,18 @@ async def submit_result(
 
     db.commit()
 
+    _agent = db.query(Agent).filter(Agent.id == task.agent_id).first()
     import asyncio
     asyncio.create_task(ws_manager.broadcast({
-        "type": "task_result",
-        "task_id": req.task_id,
+        "type":     "task_result",
+        "task_id":  req.task_id,
         "agent_id": task.agent_id,
-        "status": req.status,
+        "hostname": (_agent.hostname if _agent else task.agent_id[:8]) or task.agent_id[:8],
+        "status":   req.status,
+        "command":  task.command or "",
+        "operator": task.operator or "",
+        "output":   req.output or "",
+        "ts":       task.completed_at.isoformat() if task.completed_at else None,
     }))
     return {"message": "Result saved"}
 

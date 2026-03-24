@@ -160,9 +160,13 @@ async def create_task(
             "command": req.command[:200],
         }))
     asyncio.create_task(ws_manager.broadcast({
-        "type": "task_created",
+        "type":     "task_created",
         "agent_id": agent_id,
-        "task_id": task.id,
+        "task_id":  task.id,
+        "command":  req.command,
+        "operator": current_user.username,
+        "hostname": agent.hostname or agent_id[:8],
+        "ts":       task.created_at.isoformat() if task.created_at else None,
     }))
     return {"task_id": task.id, "command": task.command, "status": task.status}
 
