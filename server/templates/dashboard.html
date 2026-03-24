@@ -1652,9 +1652,12 @@ async function handleTermKey(event, agentId) {
   if (!res || !res.ok) return;
   const task = await res.json();
 
-  // API returns task_id, normalize to id so refreshTaskResults can find it
-  taskHistory.push({ id: task.task_id, command: cmd, status: task.status, output: '' });
-  renderTerminal();
+  // WS task_created may have already added this — avoid duplicate
+  if (!taskHistory.find(t => t.id === task.task_id)) {
+    const me = document.getElementById('sidebar-user')?.textContent?.trim() || '';
+    taskHistory.push({ id: task.task_id, command: cmd, operator: me, status: task.status, output: '' });
+    renderTerminal();
+  }
 }
 
 async function saveNote(agentId) {
@@ -1701,8 +1704,11 @@ async function killBeacon(agentId) {
   });
   if (r && r.ok) {
     const task = await r.json();
-    taskHistory.push({ id: task.task_id, command: `kill ${agent.pid}`, status: 'pending', output: '' });
-    renderTerminal();
+    if (!taskHistory.find(t => t.id === task.task_id)) {
+      const me = document.getElementById('sidebar-user')?.textContent?.trim() || '';
+      taskHistory.push({ id: task.task_id, command: `kill ${agent.pid}`, operator: me, status: 'pending', output: '' });
+      renderTerminal();
+    }
     showToast(_lang==='es'?'Comando kill enviado al beacon':'Kill command sent to beacon', 'warning');
   }
 }
@@ -1715,8 +1721,11 @@ async function quickSleep(agentId) {
   });
   if (r && r.ok) {
     const task = await r.json();
-    taskHistory.push({ id: task.task_id, command: `sleep ${secs}`, status: 'pending', output: '' });
-    renderTerminal();
+    if (!taskHistory.find(t => t.id === task.task_id)) {
+      const me = document.getElementById('sidebar-user')?.textContent?.trim() || '';
+      taskHistory.push({ id: task.task_id, command: `sleep ${secs}`, operator: me, status: 'pending', output: '' });
+      renderTerminal();
+    }
     showToast(`Sleep → ${secs}s`, 'info');
   }
 }
@@ -5757,13 +5766,11 @@ async function submitUpload() {
   }
 
   const data = await res.json();
-  // Add to task history so it shows up in the terminal
-  taskHistory.push({
-    id: data.task_id,
-    command: `__upload__:${data.filename}:${data.dest_path}`,
-    status: 'pending',
-    output: '',
-  });
+  // Add to task history so it shows up in the terminal (WS may have already added it)
+  if (!taskHistory.find(t => t.id === data.task_id)) {
+    const me = document.getElementById('sidebar-user')?.textContent?.trim() || '';
+    taskHistory.push({ id: data.task_id, command: `__upload__:${data.filename}:${data.dest_path}`, operator: me, status: 'pending', output: '' });
+  }
   renderTerminal();
   closeUploadModal();
 }
