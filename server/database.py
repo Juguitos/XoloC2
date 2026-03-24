@@ -80,6 +80,7 @@ class OperatorMessage(Base):
     __tablename__ = "operator_messages"
 
     id        = Column(String,   primary_key=True, default=lambda: str(uuid.uuid4()))
+    agent_id  = Column(String,   default="")      # session scope
     author    = Column(String,   nullable=False)
     text      = Column(Text,     nullable=False)
     timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -120,6 +121,7 @@ def init_db():
             "ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0",
             "ALTER TABLE agents ADD COLUMN beacon_lang TEXT DEFAULT ''",
             "ALTER TABLE tasks ADD COLUMN operator TEXT DEFAULT ''",
+            "ALTER TABLE operator_messages ADD COLUMN agent_id TEXT DEFAULT ''",
             # Grant admin to the first-created user named 'admin' on upgrade
             "UPDATE users SET is_admin = 1 WHERE username = 'admin' AND is_admin = 0",
         ]:

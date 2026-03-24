@@ -497,6 +497,7 @@ function connectWS() {
           } catch (_) {}
         }
       } else if (msg.type === 'chat_message') {
+        if (msg.agent_id !== (currentAgentId || '')) return;
         const box = document.getElementById('chat-messages');
         if (box) _chatAppendMsg(msg, box);
         if (_chatPopupOpen) {
@@ -823,7 +824,7 @@ function _chatTogglePopup() {
 }
 
 async function _chatLoad() {
-  const res = await apiFetch('/api/chat');
+  const res = await apiFetch('/api/chat?agent_id=' + encodeURIComponent(currentAgentId || ''));
   if (!res || !res.ok) return;
   const msgs = await res.json();
   const box = document.getElementById('chat-messages');
@@ -852,7 +853,7 @@ async function _chatSend() {
   const text = input.value.trim();
   if (!text) return;
   input.value = '';
-  const res = await apiFetch('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text})});
+  const res = await apiFetch('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text, agent_id: currentAgentId || ''})});
   if (!res || !res.ok) { input.value = text; showToast('Error sending message', 'error'); }
 }
 

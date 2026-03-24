@@ -1,7 +1,7 @@
-"""Operator real-time chat — persisted messages, broadcast via WebSocket."""
+"""Operator real-time chat — persisted messages, scoped per session (agent_id)."""
 import asyncio
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from database import get_db, OperatorMessage, User
@@ -13,6 +13,7 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 class SendMessage(BaseModel):
     text: str
+    agent_id: str = ""
 
 
 @router.get("/user-count")
@@ -21,9 +22,14 @@ def user_count(db: Session = Depends(get_db), _: User = Depends(require_auth)):
 
 
 @router.get("")
-def get_messages(db: Session = Depends(get_db), _: User = Depends(require_auth)):
+def get_messages(
+    agent_id: str = Query(default=""),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_auth),
+):
     msgs = (
         db.query(OperatorMessage)
+        .filter(OperatorMessage.agent_id == agent_id)
         .order_by(OperatorMessage.timestamp.asc())
         .limit(100)
         .all()
@@ -31,6 +37,7 @@ def get_messages(db: Session = Depends(get_db), _: User = Depends(require_auth))
     return [
         {
             "id":        m.id,
+            "agent_id":  m.agent_id,
             "author":    m.author,
             "text":      m.text,
             "timestamp": m.timestamp.isoformat() if m.timestamp else None,
@@ -51,13 +58,14 @@ async def send_message(
     if len(text) > 1000:
         raise HTTPException(status_code=400, detail="Message too long")
 
-    msg = OperatorMessage(author=current_user.username, text=text)
+    msg = OperatorMessage(agent_id=req.agent_id, author=current_user.username, text=text)
     db.add(msg)
     db.commit()
     db.refresh(msg)
 
     asyncio.create_task(ws_manager.broadcast({
         "type":      "chat_message",
+        "agent_id":  msg.agent_id,
         "id":        msg.id,
         "author":    msg.author,
         "text":      msg.text,
