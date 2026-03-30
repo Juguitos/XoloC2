@@ -5519,12 +5519,12 @@ function openStagerModal() {
   document.getElementById('stager-oneliners').style.display = 'none';
   document.getElementById('stager-max-uses').value = '0';
   document.getElementById('stager-expire-h').value = '0';
-  document.getElementById('stager-modal').classList.add('active');
+  document.getElementById('stager-modal').classList.add('open');
   _loadStagerList();
 }
 
 function closeStagerModal() {
-  document.getElementById('stager-modal').classList.remove('active');
+  document.getElementById('stager-modal').classList.remove('open');
 }
 
 function _stagerBackToForm() {
