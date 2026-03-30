@@ -5608,6 +5608,10 @@ async function _loadStagerList() {
   });
 }
 
+function _escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 function _stagerShowOneliners(token) {
   const base = window.location.origin;
   const url = `${base}/s/${token}`;
@@ -5665,7 +5669,7 @@ function _stagerShowOneliners(token) {
       return `<div style="margin-bottom:10px">
         <div style="color:var(--text3);font-size:12px;margin-bottom:4px">${ol.label}</div>
         <div style="display:flex;gap:6px;align-items:flex-start">
-          <code style="flex:1;background:var(--bg);border-radius:4px;padding:8px 12px;font-size:14px;word-break:break-all;color:var(--accent2);line-height:1.7;text-decoration:none">${ol.cmd}</code>
+          <code style="flex:1;background:var(--bg);border-radius:4px;padding:8px 12px;font-size:14px;word-break:break-all;color:var(--accent2);line-height:1.7;text-decoration:none">${_escHtml(ol.cmd)}</code>
           <button class="btn btn-sm btn-ghost" style="flex-shrink:0;font-size:11px" data-stager-idx="${flatIdx}">⎘</button>
         </div>
       </div>`;
