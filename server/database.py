@@ -3,6 +3,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from datetime import datetime, timezone
 from pathlib import Path
 import uuid
+import secrets
 
 # Absolute path so DB location is always next to this file,
 # regardless of where uvicorn is launched from.
@@ -96,6 +97,19 @@ class BeaconKey(Base):
     fp_hash = Column(String, nullable=True)          # SHA-256(hostname+mac), locked on first use
     used_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class StagerToken(Base):
+    __tablename__ = "stager_tokens"
+
+    token      = Column(String, primary_key=True, default=lambda: secrets.token_urlsafe(16))
+    code       = Column(Text,   nullable=False)       # full beacon code to serve
+    lang       = Column(String, default="py")         # py (only for now)
+    max_uses   = Column(Integer, default=0)           # 0 = unlimited
+    used_count = Column(Integer, default=0)
+    expires_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_by = Column(String,  default="")
 
 
 def get_db():
