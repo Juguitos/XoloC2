@@ -26,6 +26,7 @@
       </div>
     </div>
     <nav class="sidebar-nav">
+      <div class="nav-section" data-i18n="nav_sec_ops">Operaciones</div>
       <button class="nav-item active" onclick="showView('agents')" id="nav-agents">
         <span class="icon">⚡</span> <span data-i18n="nav_sessions">Sessions</span>
       </button>
@@ -35,6 +36,8 @@
       <button class="nav-item" onclick="showView('topology')" id="nav-topology">
         <span class="icon">🕸</span> <span data-i18n="nav_topology">Topology</span>
       </button>
+
+      <div class="nav-section" data-i18n="nav_sec_payloads">Payloads</div>
       <button class="nav-item" onclick="showView('generate')" id="nav-generate">
         <span class="icon">⚙</span> <span data-i18n="nav_generate">Generate Beacon</span>
       </button>
@@ -44,6 +47,8 @@
       <button class="nav-item" onclick="showView('redirector')" id="nav-redirector">
         <span class="icon">↪</span> <span data-i18n="nav_redirector">Redirector</span>
       </button>
+
+      <div class="nav-section" data-i18n="nav_sec_analysis">Análisis</div>
       <button class="nav-item" onclick="showView('reports')" id="nav-reports">
         <span class="icon">📊</span> <span data-i18n="nav_reports">Reports</span>
       </button>
@@ -204,6 +209,7 @@
 // ── i18n ─────────────────────────────────────────────────
 const LANG = {
   en: {
+    nav_sec_ops:'Operations', nav_sec_payloads:'Payloads', nav_sec_analysis:'Analysis',
     nav_sessions:'Sessions', nav_map:'Map', nav_topology:'Topology', nav_generate:'Generate Beacon', nav_stager:'Stager', nav_redirector:'Redirector',
     nav_settings:'Settings', nav_logout:'Logout',
     title_sessions:'Sessions', title_map:'Agent Map', title_topology:'Network Topology', title_generate:'Generate Beacon',
@@ -312,6 +318,7 @@ const LANG = {
     topo_open_session:'Open session →',
   },
   es: {
+    nav_sec_ops:'Operaciones', nav_sec_payloads:'Payloads', nav_sec_analysis:'Análisis',
     nav_sessions:'Sesiones', nav_map:'Mapa', nav_topology:'Topología', nav_generate:'Generar Beacon', nav_stager:'Stager', nav_redirector:'Redirector',
     nav_settings:'Ajustes', nav_logout:'Salir',
     title_sessions:'Sesiones', title_map:'Mapa de Agentes', title_topology:'Topología de Red', title_generate:'Generar Beacon',

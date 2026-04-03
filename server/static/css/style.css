@@ -244,6 +244,16 @@ body {
 .nav-item.active { background: rgba(124, 58, 237, 0.2); color: var(--accent); }
 .nav-item .icon { width: 16px; text-align: center; }
 
+.nav-section {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text3);
+  padding: 12px 10px 4px;
+  margin-top: 4px;
+}
+
 .sidebar-footer {
   padding: 12px 8px;
   border-top: 1px solid var(--border);
