@@ -1,5 +1,7 @@
 import sys
 import os
+import socket
+import time
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -25,6 +27,24 @@ from routers.chat_router import router as chat_router
 from routers.stager_router import router as stager_router
 from websocket_manager import manager as ws_manager
 from auth import decode_token
+
+# ── DNS resolution cache for IP whitelist ────────────────────────────────────
+_DNS_CACHE: dict[str, tuple[set[str], float]] = {}  # entry -> (ips, expires_at)
+_DNS_TTL = 60  # seconds
+
+def _resolve_entry(entry: str) -> set[str]:
+    """Resolve a hostname/FQDN to its IPs. Returns the entry as-is if already an IP.
+    Results are cached for _DNS_TTL seconds to avoid resolving on every request."""
+    now = time.monotonic()
+    cached = _DNS_CACHE.get(entry)
+    if cached and now < cached[1]:
+        return cached[0]
+    try:
+        ips = {r[4][0] for r in socket.getaddrinfo(entry, None)}
+    except socket.gaierror:
+        ips = {entry}
+    _DNS_CACHE[entry] = (ips, now + _DNS_TTL)
+    return ips
 
 
 @asynccontextmanager
@@ -87,7 +107,9 @@ async def ip_whitelist_middleware(request: Request, call_next):
     if not wl.get("enabled", False):
         return await call_next(request)
 
-    allowed = {e["ip"] for e in wl.get("entries", [])}
+    allowed: set[str] = set()
+    for e in wl.get("entries", []):
+        allowed.update(_resolve_entry(e["ip"]))
 
     # IP extraction strategy depends on deployment mode:
     # - TRUST_PROXY=True  → behind nginx/Caddy: trust X-Real-IP (nginx sets it to $remote_addr)
