@@ -5909,7 +5909,7 @@ function _Run{param($cmd,$tid)
     $cwdl=$lines|?{$_ -match '^__CWD__:'}|select -Last 1
     if($cwdl){$nc=$cwdl.Substring(8).Trim();if(Test-Path $nc -PathType Container -EA 0){$script:_cwd=$nc;_SaveCwd $nc}}
     $out=($lines|?{$_ -notmatch '^__CWD__:'})-join"\`n"
-    return if($out.Trim()){$out.Trim()}else{'(no output)'}
+    return $(if($out.Trim()){$out.Trim()}else{'(no output)'})
   }catch{return "Error: $_"}
 }
 # ── Main loop ──────────────────────────────────────────────────────────────────
