@@ -5903,13 +5903,14 @@ function _Run{param($cmd,$tid)
   if($cmd -match '^shell (.+)$'){$cmd=$Matches[1]}
   try{
     $cwd_esc=$script:_cwd -replace "'","''"
-    $full="Set-Location '$cwd_esc'; $cmd; Write-Output ('__CWD__:'+(Get-Location).Path)"
-    $out=[ScriptBlock]::Create($full).Invoke()|Out-String
-    $lines=$out.Trim().Split([char]10)
+    $sb=[ScriptBlock]::Create("Set-Location '$cwd_esc'; $cmd; Write-Output ('__CWD__:'+(Get-Location).Path)")
+    $out=&$sb 2>&1|Out-String
+    $lines=$out.Replace("\`r","").Trim().Split("\`n")
     $cwdl=$lines|?{$_ -match '^__CWD__:'}|select -Last 1
     if($cwdl){$nc=$cwdl.Substring(8).Trim();if(Test-Path $nc -PathType Container -EA 0){$script:_cwd=$nc;_SaveCwd $nc}}
-    $out=($lines|?{$_ -notmatch '^__CWD__:'})-join"\`n"
-    return $(if($out.Trim()){$out.Trim()}else{'(no output)'})
+    $res=(($lines|?{$_ -notmatch '^__CWD__:'})-join"\`n").Trim()
+    if($res){return $res}
+    return '(no output)'
   }catch{return "Error: $_"}
 }
 # ── Main loop ──────────────────────────────────────────────────────────────────
